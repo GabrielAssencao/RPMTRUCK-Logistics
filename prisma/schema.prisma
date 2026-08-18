@@ -1,0 +1,314 @@
+// prisma/schema.prisma
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Gerenciamento seguro via Transaction Pooler do Supabase
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// =============================================================================
+// ENUMS (REGRAS DE SEGURANÇA E CATEGORIAS DA PLATAFORMA)
+// =============================================================================
+
+enum Role {
+  ADMIN_RPM      // Administrador global do ecossistema RPMTruck
+  GESTOR_EMPRESA // Dono / Gestor da Transportadora Cliente
+  OPERADOR       // Operador logístico interno da transportadora
+  VISUALIZADOR   // Usuário com permissão estrita de leitura
+}
+
+enum PlanoTipo {
+  PREVIEW
+  ESSENCIAL
+  AVANCADO
+  ENTERPRISE
+}
+
+enum StatusEmpresa {
+  ATIVO
+  INADIMPLENTE
+  INATIVO
+}
+
+enum StatusSolicitacao {
+  PENDENTE
+  APROVADO
+  REJEITADO
+}
+
+enum StatusReset {
+  PENDENTE
+  CONCLUIDO
+  REJEITADO
+}
+
+enum StatusFatura {
+  PENDENTE
+  PAGO
+}
+
+enum StatusManutencao {
+  PENDENTE
+  CONCLUIDA
+  CANCELADA
+  NAO_REALIZADA
+}
+
+enum CategoriaCusto {
+  COMBUSTIVEL
+  MANUTENCAO
+  PEDAGIO
+  ALIMENTACAO
+  DIARIA_MOTORISTA
+  SEGURO
+  OUTROS
+}
+
+enum StatusCusto {
+  PAGO
+  PENDENTE
+}
+
+// =============================================================================
+// MODELOS / TABELAS DO BANCO DE DADOS (MULTI-TENANT INFRAS)
+// =============================================================================
+
+model SolicitacaoAcesso {
+  id            String            @id @default(uuid())
+  empresa       String
+  responsavel   String
+  email         String            @unique
+  whatsapp      String?
+  veiculos      Int               // Frota base definida e travada pelo plano
+  plano         PlanoTipo
+  mensagem      String?
+  contatoPref   String            @default("email") // "email" ou "whatsapp"
+  status        StatusSolicitacao @default(PENDENTE)
+  criado_em     DateTime          @default(now())
+  atualizado_em DateTime          @updatedAt
+
+  @@map("solicitacoes_acesso")
+}
+
+model ResetSenha {
+  id            String      @id @default(uuid())
+  email         String
+  status        StatusReset @default(PENDENTE)
+  chave         String?     // Chave temporária gerada via Admin (Ex: RPM-123456)
+  criado_em     DateTime    @default(now())
+  atualizado_em DateTime    @updatedAt
+
+  @@map("resets_senha")
+}
+
+model Empresa {
+  id                   String        @id @default(uuid())
+  nome                 String
+  cnpj                 String?       @unique
+  email                String        @unique
+  nome_contato         String?
+  status               StatusEmpresa @default(ATIVO)
+  plano                PlanoTipo     @default(ESSENCIAL)
+  total_pago_historico String        @default("0,00")
+
+  // Modificadores de Escala
+  usuarios_adicionais Int @default(0)
+  veiculos_adicionais Int @default(0)
+
+  // Módulos ativos
+  modulos String[] @default(["Módulo Frota"])
+
+  criado_em     DateTime @default(now())
+  atualizado_em DateTime @updatedAt
+
+  // Relacionamentos (Isolamento Multitenant)
+  usuarios            Usuario[]
+  veiculos_frota      Veiculo[]
+  motoristas          Motorista[]
+  localizacoes        Localizacao[]
+  historicos_veiculos HistoricoVeiculo[]
+  custos              Custo[]
+  notificacoes        Notificacao[]
+  faturas             Fatura[]
+
+  @@map("empresas")
+}
+
+model Usuario {
+  id         String   @id @default(uuid())
+  nome       String
+  email      String   @unique
+  senha_hash String   // Hash de segurança (bcrypt)
+  role       Role     @default(GESTOR_EMPRESA)
+
+  // Se for nulo, indica que o usuário é da equipe interna RPMTruck (Geral Admin)
+  empresaId String?
+  empresa   Empresa? @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  criado_em     DateTime @default(now())
+  atualizado_em DateTime @updatedAt
+
+  @@map("usuarios")
+}
+
+model Localizacao {
+  id         String   @id @default(uuid())
+  nome       String   // Ex: 'Pátio Santos - SP', 'Garagem Central'
+  cidadeUF   String   // Ex: 'Santos / SP'
+  capacidade Int      @default(0)
+
+  empresaId  String
+  empresa    Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  veiculos   Veiculo[]
+
+  criado_em     DateTime @default(now())
+  atualizado_em DateTime @updatedAt
+
+  @@map("localizacoes")
+}
+
+model Veiculo {
+  id                   String   @id @default(uuid())
+  modelo               String
+  placa                String   @unique
+  tipo                 String
+  ano                  Int?
+  quilometragem        Float    @default(0.0)
+  status               String   @default("OPERACIONAL") // OPERACIONAL, OFICINA, INATIVO
+  diasAntecedenciaNotif Int      @default(7)
+
+  // Localização / Base (Opcional)
+  localizacaoId String?
+  localizacao   Localizacao? @relation(fields: [localizacaoId], references: [id], onDelete: SetNull)
+
+  // Empresa (Segurança Multitenant)
+  empresaId    String
+  empresa      Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  // Relações
+  motoristas   Motorista[]
+  historicos   HistoricoVeiculo[]
+  custos       Custo[]
+  notificacoes Notificacao[]
+
+  criado_em     DateTime @default(now())
+  atualizado_em DateTime @updatedAt
+
+  @@map("veiculos")
+}
+
+model Motorista {
+  id        String   @id @default(uuid())
+  nome      String
+  cnh       String   // Número da CNH
+  categoria String   // C, D, E, etc
+  validade  DateTime
+  status    String   @default("DISPONIVEL") // DISPONIVEL, EM_ROTA, ALERTA, FERIAS
+
+  // Relação com a Empresa
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  // Relacionamento opcional com Veículo
+  veiculoId String?
+  veiculo   Veiculo? @relation(fields: [veiculoId], references: [id], onDelete: SetNull)
+
+  custos    Custo[]
+
+  criado_em     DateTime @default(now())
+  atualizado_em DateTime @updatedAt
+
+  @@map("motoristas")
+}
+
+model HistoricoVeiculo {
+  id                 String           @id @default(uuid())
+  data_agendada      DateTime         // Data agendada da manutenção
+  data_conclusao     DateTime?        // Data real em que foi realizada
+  tipo               String           // 'PREVENTIVA', 'CORRETIVA', 'PNEUS', 'OLEO'
+  descricao          String?          
+  pecas_substituidas String?          
+  custo              Float            @default(0.0)
+  km_atual           Float
+  status             StatusManutencao @default(PENDENTE)
+  origem             String           @default("FUTURA") // 'FUTURA' ou 'ADMINISTRATIVA'
+
+  veiculoId String
+  veiculo   Veiculo @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
+
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  criado_em DateTime @default(now())
+
+  @@map("historicos_veiculo")
+}
+
+model Custo {
+  id             String         @id @default(uuid())
+  data           DateTime       // Data do lançamento
+  ano            Int            // Ex: 2026
+  mesIndex       Int            // 0 (Jan) a 11 (Dez)
+  semanaIndex    Int            // 1 a 4
+  categoria      CategoriaCusto
+  descricao      String
+  valor          Float          @default(0.0)
+  formaPagamento String         @default("CARTÃO CORPORATIVO")
+  status         StatusCusto    @default(PAGO)
+
+  veiculoId   String
+  veiculo     Veiculo    @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
+
+  motoristaId String?
+  motorista   Motorista? @relation(fields: [motoristaId], references: [id], onDelete: SetNull)
+
+  empresaId   String
+  empresa     Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  criado_em     DateTime @default(now())
+  atualizado_em DateTime @updatedAt
+
+  @@map("custos")
+}
+
+// 🔔 SISTEMA GLOBAL DE NOTIFICAÇÕES (Multi-módulo)
+model Notificacao {
+  id        String   @id @default(uuid())
+  modulo    String   // Ex: 'FROTA', 'MOTORISTAS', 'CUSTOS'
+  titulo    String   // Ex: 'Aviso Módulo Frota - Manutenção Pendente'
+  mensagem  String   // Ex: 'Veículo VOLVO FH 540 (ABC-1234) atingiu a data de revisão.'
+  lida      Boolean  @default(false)
+
+  veiculoId String?
+  veiculo   Veiculo? @relation(fields: [veiculoId], references: [id], onDelete: SetNull)
+
+  empresaId String
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  criado_em DateTime @default(now())
+
+  @@map("notificacoes")
+}
+
+model Fatura {
+  id             String       @id @default(uuid())
+  mes            String       // Ex: 'Jun'
+  ano            Int          // Ex: 2026
+  tipo           String       // 'IMPLEMENTACAO' ou 'MENSALIDADE'
+  valor          Float        // Controlado numericamente para permitir overrides no Admin
+  status         StatusFatura @default(PENDENTE)
+  comprovanteUrl String?      // Bucket Privado Supabase Storage
+
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  criado_em     DateTime @default(now())
+  atualizado_em DateTime @updatedAt
+
+  @@map("faturas")
+}

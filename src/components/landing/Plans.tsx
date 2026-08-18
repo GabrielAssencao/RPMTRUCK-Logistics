@@ -1,0 +1,177 @@
+'use client'
+
+import { useRef } from 'react'
+import { motion, useInView } from 'framer-motion'
+import { Check, Star, Lock } from 'lucide-react'
+import Link from 'next/link'
+import { useTheme } from '@/contexts/ThemeContext'
+
+// ─── Planos disponíveis (Sincronizados com SolicitarAcesso e Banco de Dados) ───────────────
+const PLANS = [
+  { 
+    id: 'ESSENCIAL', 
+    name: 'ESSENCIAL', 
+    desc: 'Gestão completa e controle operacional para frotas em crescimento', 
+    price: 'R$ 450/mês', 
+    setup: 300, users: 4, vehicles: 10,
+    modules: [
+      'Gestão completa do catálogo de veículos e motoristas',
+      'Até 1 ano (365 dias) de histórico e auditoria',
+      'Dashboard analítica de custos e combustível (R$)',
+      'Controle básico de manutenção preventiva e corretiva',
+      'Até 4 usuários administradores e 10 veículos'
+    ], 
+    restricted: false 
+  },
+  { 
+    id: 'AVANCADO', 
+    name: 'AVANÇADO', 
+    desc: 'Precisão operacional e gestão multi-bases/pátios', 
+    price: 'R$ 650/mês', 
+    setup: 500, users: 10, vehicles: 25,
+    modules: [
+      'Tudo do plano Essencial',
+      'Até 2 anos (730 dias) de histórico analítico',
+      'Delegação direta de tarefas e alertas entre operadores',
+      'Vincular custos por Veículo + Condutor específico',
+      'Gestão de Bases, Pátios e Unidades Operacionais',
+      'Até 10 usuários e 25 veículos inclusos'
+    ], 
+    featured: true, tag: 'MAIS POPULAR', restricted: false 
+  },
+  { 
+    id: 'ENTERPRISE', 
+    name: 'ENTERPRISE', 
+    desc: 'Inteligência de frota de alta escala com delegação e APIs', 
+    price: 'R$ 1.250/mês', 
+    setup: 1000, users: 25, vehicles: 80,
+    modules: [
+      'Tudo do plano Avançado',
+      'Até 3 anos (1.095 dias) de histórico de dados',
+      'Relatórios e Filtros de Data 100% Personalizados',
+      'Notificações e delegações avançadas prioritárias',
+      'Até 25 usuários, 80 veículos e Gerente Dedicado'
+    ], 
+    restricted: false 
+  },
+  { 
+    id: 'PREVIEW', 
+    name: 'PREVIEW', 
+    desc: 'Acesso de teste — somente via Admin', 
+    price: 'Sob Consulta', 
+    setup: 0, users: 'Ilimitado', vehicles: 'Ilimitado',
+    modules: [
+      'Ambiente Sandbox de homologação',
+      'Acesso antecipado a módulos beta',
+      'Testes de novas rotinas operacionais'
+    ], 
+    restricted: true 
+  },
+]
+
+export default function Plans() {
+  const { primary, isLight } = useTheme()
+  const ref    = useRef<HTMLDivElement>(null)
+  const inView = useInView(ref, { once: true })
+
+  const btnVars = `
+    .plan-btn {
+      --btn-color: ${primary};
+      --btn-hover-bg: ${primary};
+      --btn-hover-text: ${isLight ? '#000000' : '#ffffff'};
+    }
+    .plan-btn:not(:disabled):hover {
+      background-color: var(--btn-hover-bg) !important;
+      color: var(--btn-hover-text) !important;
+    }
+  `
+
+  return (
+    <section id="planos" className="relative py-32 bg-background transition-colors duration-500 border-t border-border">
+      <style>{btnVars}</style>
+
+      <div className="max-w-7xl mx-auto px-6" ref={ref}>
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="text-center mb-20"
+        >
+          <div className="text-xs tracking-[0.3em] uppercase mb-4 font-bold" style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}>
+            PLANOS & NÍVEIS
+          </div>
+          <h2 className="text-5xl md:text-7xl font-bold text-foreground font-rajdhani">
+            ESCOLHA SEU<br />
+            <span style={{ color: primary }}>NÍVEL DE PERFORMANCE</span>
+          </h2>
+        </motion.div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {PLANS.map((plan, i) => (
+            <motion.div
+              key={plan.name}
+              initial={{ opacity: 0, y: 30 }}
+              animate={inView ? { opacity: 1, y: 0 } : {}}
+              transition={{ duration: 0.5, delay: i * 0.1 }}
+              className="relative p-8 border transition-all duration-300 flex flex-col justify-between"
+              style={{
+                borderColor: plan.featured ? primary : 'var(--border)',
+                backgroundColor: 'var(--card)',
+                marginTop: plan.featured ? '16px' : '0',
+              }}
+            >
+              <div>
+                {/* Badge */}
+                {plan.featured && plan.tag && (
+                  <div className="absolute left-1/2 -translate-x-1/2" style={{ top: '-14px' }}>
+                    <span
+                      className="inline-flex items-center px-3 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em] whitespace-nowrap border font-mono"
+                      style={{ backgroundColor: 'var(--card)', borderColor: primary, color: primary }}
+                    >
+                      {plan.tag}
+                    </span>
+                  </div>
+                )}
+
+                <Star className="w-6 h-6 mb-4" style={{ color: plan.featured ? primary : 'var(--muted)' }} fill="none" />
+
+                <h3 className="text-2xl font-bold mb-1 font-rajdhani" style={{ color: plan.featured ? primary : 'var(--foreground)' }}>
+                  {plan.name}
+                </h3>
+                <p className="text-foreground-muted text-sm mb-6">{plan.desc}</p>
+                <div className="text-3xl font-bold mb-8 text-foreground font-rajdhani">{plan.price}</div>
+
+                <ul className="space-y-3 mb-8 font-mono">
+                  {plan.modules.map((m) => (
+                    <li key={m} className="flex gap-3 text-xs text-foreground-muted leading-snug">
+                      <Check className="w-4 h-4 shrink-0 mt-0.5" style={{ color: primary }} />
+                      <span>{m}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {plan.restricted ? (
+                <button
+                  disabled
+                  className="plan-btn w-full py-3 font-bold uppercase tracking-widest text-sm border flex items-center justify-center gap-2 opacity-50 cursor-not-allowed font-rajdhani"
+                  style={{ backgroundColor: 'transparent', borderColor: 'var(--border)', color: 'var(--foreground-muted)' }}
+                >
+                  <Lock size={14} /> RESTRITO (ADMIN)
+                </button>
+              ) : (
+                <Link
+                  href={`/auth/solicitar-acesso?plano=${plan.id}`}
+                  className="plan-btn w-full py-3 font-bold uppercase tracking-widest text-sm border flex items-center justify-center gap-2 transition-all duration-200 font-rajdhani cursor-pointer"
+                  style={{ backgroundColor: 'transparent', borderColor: primary, color: primary }}
+                >
+                  Solicitar Acesso →
+                </Link>
+              )}
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}

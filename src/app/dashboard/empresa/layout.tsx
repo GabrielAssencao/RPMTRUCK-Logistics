@@ -1,0 +1,377 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useTheme } from '@/contexts/ThemeContext'
+import { obterLogoPorTema } from '@/data/temasELogos'
+import { ContainersProvider, useContainers } from '@/contexts/ContainersContext'
+import { 
+  LayoutDashboard, 
+  Truck, 
+  Users, 
+  DollarSign, 
+  FilePieChart, 
+  UserSquare2, 
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  Bell,
+  CheckCheck,
+  Container as ContainerIcon
+} from 'lucide-react'
+import ThemeToggle from '@/components/landing/ThemeToggle'
+
+// ─── Marcadores Operacionais do Cliente (Empresa) ─────────────────────────────
+const NAV_EMPRESA = [
+  { path: '/dashboard/empresa', icon: LayoutDashboard, label: 'PAINEL OPERACIONAL' },
+  { path: '/dashboard/empresa/frota', icon: Truck, label: 'FROTA / VEÍCULOS' },
+  { path: '/dashboard/empresa/motoristas', icon: Users, label: 'MOTORISTAS' },
+  { path: '/dashboard/empresa/containers', icon: ContainerIcon, label: 'CONTAINERS' },
+  { path: '/dashboard/empresa/custos', icon: DollarSign, label: 'CUSTOS / DESPESAS' },
+  { path: '/dashboard/empresa/relatorios', icon: FilePieChart, label: 'RELATÓRIOS' },
+  { path: '/dashboard/empresa/usuarios', icon: UserSquare2, label: 'OPERADORES' },
+]
+
+const CONFIG_ITEM = { path: '/dashboard/empresa/configuracoes', icon: Settings, label: 'CONFIGURAÇÕES' }
+
+// Larguras da sidebar recolhida (só ícones) e expandida (ícones + texto)
+const LARGURA_RECOLHIDA = '72px'
+const LARGURA_EXPANDIDA = '16rem'
+
+export default function EmpresaLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ContainersProvider>
+      <EmpresaLayoutInterno>{children}</EmpresaLayoutInterno>
+    </ContainersProvider>
+  )
+}
+
+function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
+  const { primary, isLight } = useTheme()
+  const pathname = usePathname()
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [sidebarExpandida, setSidebarExpandida] = useState(false)
+  const [nomeEmpresa, setNomeEmpresa] = useState('Minha Empresa')
+
+  // Resgata os dados da sessão guardada no login
+  useEffect(() => {
+    const userData = localStorage.getItem('@rpmtruck:user')
+    if (userData) {
+      const parsed = JSON.parse(userData)
+      if (parsed.empresaInfo?.nome) {
+        setNomeEmpresa(parsed.empresaInfo.nome)
+      }
+    }
+  }, [])
+
+  const handleLogout = () => {
+    localStorage.removeItem('@rpmtruck:user')
+    window.location.href = '/login'
+  }
+
+  // ─── Conteúdo Interno da Sidebar ───────────────────────────────────────────
+  const SidebarContent = ({ expandida }: { expandida: boolean }) => {
+    const { totalEmTransito } = useContainers()
+
+    return (
+      <div className="flex flex-col h-full justify-between p-4 font-mono">
+        <div>
+          {/* Header da Sidebar com Logo Ajustada */}
+          <div className="mb-6 py-3 border-b border-white/10 flex items-center justify-center min-h-[64px]">
+            {expandida ? (
+              <div className="w-full px-2 flex flex-col justify-center">
+                <div className="flex items-center gap-2">
+                  <img
+                    src={`/logos/${obterLogoPorTema(primary)}`}
+                    alt="RPMTRUCK"
+                    className="h-7 w-auto object-contain transition-all duration-300"
+                  />
+                  <span className="font-black text-xl tracking-tight whitespace-nowrap" style={{ color: 'var(--foreground)' }}>
+                    RPM<span style={{ color: primary }}>TRUCK</span>
+                  </span>
+                </div>
+                <div className="text-[9px] uppercase tracking-[0.2em] text-foreground-muted mt-1 truncate pl-0.5">
+                  {nomeEmpresa}
+                </div>
+              </div>
+            ) : (
+              /* Logo em destaque quando a Sidebar está recolhida */
+              <div className="w-10 h-10 flex items-center justify-center shrink-0 p-1 rounded bg-white/5 hover:bg-white/10 transition-all">
+                <img
+                  src={`/logos/${obterLogoPorTema(primary)}`}
+                  alt="RPMTRUCK"
+                  className="h-full w-full object-contain transition-all duration-300"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Links de Navegação */}
+          <nav className="space-y-1">
+            {NAV_EMPRESA.map((item) => {
+              const active = pathname === item.path
+              const Icon = item.icon
+              const mostrarBadgeContainers = item.path === '/dashboard/empresa/containers' && totalEmTransito > 0
+
+              return (
+                <Link 
+                  key={item.path} 
+                  href={item.path}
+                  onClick={() => setMobileOpen(false)}
+                  title={!expandida ? item.label : undefined}
+                  className={`relative flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${
+                    active 
+                      ? 'text-black font-black' 
+                      : 'text-foreground-muted hover:text-foreground hover:bg-white/5'
+                  }`}
+                  style={{ 
+                    backgroundColor: active ? primary : 'transparent',
+                    clipPath: active ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
+                  }}
+                >
+                  <span className="relative shrink-0 flex items-center justify-center w-5">
+                    <Icon size={18} className={active ? 'text-black' : 'text-foreground-muted'} />
+                    {!expandida && mostrarBadgeContainers && (
+                      <span
+                        className="absolute -top-1 -right-1.5 w-2.5 h-2.5 rounded-full border border-black animate-pulse"
+                        style={{ backgroundColor: primary }}
+                      />
+                    )}
+                  </span>
+                  {expandida && <span className="flex-1 truncate">{item.label}</span>}
+                  {expandida && mostrarBadgeContainers && (
+                    <span
+                      className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0"
+                      style={{ backgroundColor: active ? '#000' : primary, color: active ? primary : '#000' }}
+                      title={`${totalEmTransito} container(s) em trânsito`}
+                    >
+                      {totalEmTransito}
+                    </span>
+                  )}
+                </Link>
+              )
+            })}
+          </nav>
+        </div>
+
+        {/* ─── RODAPÉ: CONFIGURAÇÕES + SAIR ─── */}
+        <div className="space-y-1 pt-4 border-t border-white/10">
+          <Link
+            href={CONFIG_ITEM.path}
+            onClick={() => setMobileOpen(false)}
+            title={!expandida ? CONFIG_ITEM.label : undefined}
+            className={`flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${
+              pathname === CONFIG_ITEM.path
+                ? 'text-black font-black'
+                : 'text-foreground-muted hover:text-foreground hover:bg-white/5'
+            }`}
+            style={{
+              backgroundColor: pathname === CONFIG_ITEM.path ? primary : 'transparent',
+              clipPath: pathname === CONFIG_ITEM.path ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
+            }}
+          >
+            <Settings size={18} className={`shrink-0 ${pathname === CONFIG_ITEM.path ? 'text-black' : 'text-foreground-muted'}`} />
+            {expandida && <span className="flex-1 truncate">{CONFIG_ITEM.label}</span>}
+          </Link>
+
+          <button 
+            onClick={handleLogout}
+            title={!expandida ? 'SAIR DO TERMINAL' : undefined}
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10 transition-all rounded-sm font-mono"
+          >
+            <LogOut size={18} className="shrink-0" />
+            {expandida && <span>SAIR DO TERMINAL</span>}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen flex transition-colors duration-300" style={{ backgroundColor: 'var(--background)' }}>
+      
+      {/* SIDEBAR DESKTOP — RECOLHE QUANDO O MOUSE SAI, EXPANDE NO HOVER */}
+      <aside 
+        onMouseEnter={() => setSidebarExpandida(true)}
+        onMouseLeave={() => setSidebarExpandida(false)}
+        className="hidden md:block border-r shrink-0 z-20 overflow-hidden transition-[width] duration-300 ease-in-out relative"
+        style={{ 
+          backgroundColor: isLight ? '#f9f9f9' : '#090909', 
+          borderColor: 'var(--border)',
+          width: sidebarExpandida ? LARGURA_EXPANDIDA : LARGURA_RECOLHIDA
+        }}
+      >
+        <div style={{ width: LARGURA_EXPANDIDA }} className="h-full">
+          <SidebarContent expandida={sidebarExpandida} />
+        </div>
+      </aside>
+
+      {/* PAINEL DE CONTEÚDO PRINCIPAL */}
+      <div className="flex-1 flex flex-col min-w-0">
+        
+        {/* HEADER TOP OPERACIONAL */}
+        <header 
+          className="h-16 border-b flex items-center justify-between px-6 z-10"
+          style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}
+        >
+          {/* Menu Mobile Button */}
+          <button onClick={() => setMobileOpen(true)} className="md:hidden text-foreground-muted hover:text-foreground">
+            <Menu size={20} />
+          </button>
+
+          {/* Nome do Terminal / Página */}
+          <div className="hidden md:flex items-center gap-2 text-xs font-bold font-mono text-foreground-muted">
+            <span>TERMINAL</span>
+            <span style={{ color: primary }}>/</span>
+            <span className="uppercase text-foreground">{pathname.split('/').pop() || 'PAINEL'}</span>
+          </div>
+
+          {/* Área de Ferramentas (Sininho, Theme e Infos) */}
+          <div className="flex items-center gap-4">
+            <SininhoNotificacoes />
+            <ThemeToggle />
+            <div className="w-px h-6 bg-border hidden sm:block" style={{ backgroundColor: 'var(--border)' }} />
+            <div className="hidden sm:flex flex-col text-right font-mono">
+              <span className="text-[11px] font-bold text-foreground truncate max-w-[150px]">{nomeEmpresa}</span>
+              <span className="text-[9px] text-foreground-muted uppercase tracking-widest">Painel Gestor</span>
+            </div>
+          </div>
+        </header>
+
+        {/* ÁREA DE RENDERIZAÇÃO DA PÁGINA INTERNA */}
+        <main className="flex-1 overflow-y-auto p-6 md:p-8">
+          {children}
+        </main>
+      </div>
+
+      {/* SIDEBAR RESPONSIVA MOBILE (sempre expandida, é um overlay) */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setMobileOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs z-30 md:hidden"
+            />
+            <motion.div 
+              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
+              transition={{ type: 'tween', duration: 0.25 }}
+              className="fixed inset-y-0 left-0 w-64 z-40 md:hidden border-r"
+              style={{ backgroundColor: isLight ? '#ffffff' : '#0a0a0a', borderColor: 'var(--border)' }}
+            >
+              <button 
+                onClick={() => setMobileOpen(false)}
+                className="absolute top-4 right-4 text-foreground-muted hover:text-foreground"
+              >
+                <X size={18} />
+              </button>
+              <SidebarContent expandida={true} />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+    </div>
+  )
+}
+
+// ─── NOVO COMPONENTE DO SININHO (DRAWER LATERAL) ────────────────────────────────────
+function SininhoNotificacoes() {
+  const { primary } = useTheme()
+  const [aberto, setAberto] = useState(false)
+
+  // Em um cenário real, você buscaria do banco e filtraria pelo plano do cliente
+  const [notificacoes, setNotificacoes] = useState([
+    { id: '1', tipo: 'frota', modulo: 'FROTA', titulo: 'Revisão Pendente', mensagem: 'Veículo VOLVO FH 540 atingiu o prazo de revisão de óleo.', tempo: 'Há 10 min', lida: false },
+    { id: '2', tipo: 'tarefa', modulo: 'TAREFAS', titulo: 'Nova Tarefa Atribuída', mensagem: 'Você foi designado para a retirada do Contêiner MSKU1234567.', tempo: 'Há 1 hora', lida: false },
+  ])
+
+  const naoLidas = notificacoes.filter(n => !n.lida).length
+  const marcarTodasComoLidas = () => setNotificacoes(prev => prev.map(n => ({ ...n, lida: true })))
+
+  return (
+    <div className="relative font-mono">
+      {/* Botão do Sininho */}
+      <button 
+        onClick={() => setAberto(true)}
+        className="relative p-2 border rounded-sm transition-all hover:bg-white/5 flex items-center justify-center"
+        style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+      >
+        <Bell size={16} className={naoLidas > 0 ? 'animate-pulse' : ''} style={{ color: naoLidas > 0 ? primary : 'var(--foreground-muted)' }} />
+        {naoLidas > 0 && (
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border border-black" style={{ backgroundColor: primary }} />
+        )}
+      </button>
+
+      {/* Drawer (Modal Lateral) */}
+      <AnimatePresence>
+        {aberto && (
+          <>
+            {/* Fundo Desfocado (Backdrop) */}
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setAberto(false)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+            />
+            
+            {/* Painel Lateral */}
+            <motion.div 
+              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'tween', duration: 0.3 }}
+              className="fixed inset-y-0 right-0 w-80 sm:w-96 border-l shadow-2xl z-50 flex flex-col"
+              style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}
+            >
+              {/* Header do Drawer */}
+              <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex items-center gap-2">
+                  <Bell size={18} style={{ color: primary }} />
+                  <span className="text-sm font-black uppercase tracking-wider" style={{ color: 'var(--foreground)' }}>Central de Alertas</span>
+                </div>
+                <button onClick={() => setAberto(false)} className="text-foreground-muted hover:text-red-500 transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Ações Rápidas */}
+              {naoLidas > 0 && (
+                <div className="px-5 py-3 border-b bg-white/5" style={{ borderColor: 'var(--border)' }}>
+                  <button onClick={marcarTodasComoLidas} className="text-xs flex items-center gap-1 hover:underline font-bold" style={{ color: primary }}>
+                    <CheckCheck size={14} /> Marcar {naoLidas} como lidas
+                  </button>
+                </div>
+              )}
+
+              {/* Lista de Notificações */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {notificacoes.length === 0 ? (
+                  <div className="text-xs text-center py-10 text-foreground-muted">Nenhuma notificação no momento.</div>
+                ) : (
+                  notificacoes.map((n) => (
+                    <div key={n.id} className="p-4 border text-xs transition-colors rounded-sm"
+                      style={{ 
+                        backgroundColor: n.lida ? 'transparent' : `${primary}10`, 
+                        borderColor: n.lida ? 'var(--border)' : primary 
+                      }}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-sm" 
+                              style={{ backgroundColor: 'var(--foreground)', color: 'var(--background)' }}>
+                          {n.modulo}
+                        </span>
+                        <span className="text-[9px] text-foreground-muted">{n.tempo}</span>
+                      </div>
+                      <div className="font-bold text-sm mb-1" style={{ color: 'var(--foreground)' }}>{n.titulo}</div>
+                      <div className="text-[11px] font-sans leading-relaxed" style={{ color: 'var(--foreground-muted)' }}>{n.mensagem}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}

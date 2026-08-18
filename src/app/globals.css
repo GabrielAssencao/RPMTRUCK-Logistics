@@ -1,0 +1,160 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* =============================================
+   TOKENS — Modo escuro (padrão)
+   ============================================= */
+:root {
+  --background: #080808;
+  --background-secondary: #0f0f0f;
+  --foreground: #f0f0f0;
+  --foreground-muted: #888888;
+  
+  /* primary e hover são controlados dinamicamente via ThemeContext */
+  --primary: #22c55e; 
+  --primary-hover: #16a34a;
+  
+  /* Opacidade/Dim dinâmico baseado na cor primary definida */
+  --primary-dim: color-mix(in srgb, var(--primary) 12%, transparent);
+  
+  --accent: #ef4444;
+  --card: #111111;
+  --card-hover: #161616;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --muted: #666666;
+
+  --font-display: 'Rajdhani', sans-serif;
+  --font-body: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* =============================================
+   TOKENS — Modo claro
+   ============================================= */
+:root.light {
+  --background: #f5f5f5;
+  --background-secondary: #ffffff;
+  --foreground: #0a0a0a;
+  --foreground-muted: #555555;
+  --primary: #16a34a;
+  --primary-hover: #15803d;
+  
+  --primary-dim: color-mix(in srgb, var(--primary) 10%, transparent);
+  
+  --accent: #dc2626;
+  --card: #ffffff;
+  --card-hover: #f9f9f9;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  --muted: #888888;
+}
+
+/* =============================================
+   RESET & BASE
+   ============================================= */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 96px;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+}
+
+section[id],
+[id] {
+  scroll-margin-top: 96px;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+/* =============================================
+   UTILITÁRIOS CUSTOMIZADOS
+   ============================================= */
+.grid-bg {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--primary) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--primary) 4%, transparent) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+.glow-border {
+  box-shadow: 0 0 0 1px var(--primary), 0 0 20px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 60%, #fff) 50%, var(--primary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.clip-diagonal {
+  clip-path: polygon(0 0, 100% 0, 100% 92%, 0 100%);
+}
+
+/* =============================================
+   ANIMAÇÕES
+   ============================================= */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 20px color-mix(in srgb, var(--primary) 30%, transparent); }
+  50%      { box-shadow: 0 0 40px color-mix(in srgb, var(--primary) 60%, transparent); }
+}
+
+/* =============================================
+   SCROLLBAR & SELEÇÃO
+   ============================================= */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 2px;
+}
+
+::selection {
+  background: var(--primary);
+  color: #000;
+}
