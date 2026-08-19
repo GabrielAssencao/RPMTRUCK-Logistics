@@ -26,7 +26,7 @@ import Link from 'next/link'
 
 type StatusManutencao = 'PENDENTE' | 'CONCLUIDA' | 'CANCELADA' | 'NAO_REALIZADA'
 type StatusDiagnostico = 'PASSIVO' | 'MONITORADO' | 'ALERTA' | 'CRITICO' | 'NORMAL'
-type SistemaDiagnostico = 'estrutura' | 'motor' | 'oleo' | 'escape' | 'combustivel' | 'arla' | 'rodas' | 'freios' | 'transmissao'
+type SistemaDiagnostico = 'estrutura' | 'lataria' | 'motor' | 'oleo' | 'escape' | 'combustivel' | 'arla' | 'rodas' | 'freios' | 'transmissao'
 
 interface VeiculoSelecao {
   id: string
@@ -89,6 +89,7 @@ function ManutencaoContent() {
 
   const [historico, setHistorico] = useState<RegistroManutencao[]>([
     { id: '101', veiculoPlaca: 'ABC-1234', veiculoModelo: 'VOLVO FH 540', dataAgendada: '2026-08-01', tipo: 'PREVENTIVA', pecas: 'Troca de Óleo de Motor e Filtro RACOR', custo: 1850.00, kmAtual: 126000, status: 'PENDENTE', origem: 'FUTURA' },
+    { id: '104', veiculoPlaca: 'ABC-1234', veiculoModelo: 'VOLVO FH 540', dataAgendada: '2026-08-22', tipo: 'FUNILARIA', pecas: 'Reparo de amassado na porta direita e repintura de arranhados', custo: 2400.00, kmAtual: 125430, status: 'PENDENTE', origem: 'FUTURA' },
     { id: '102', veiculoPlaca: 'ABC-1234', veiculoModelo: 'VOLVO FH 540', dataAgendada: '2026-05-10', tipo: 'PNEUS', pecas: 'Substituição de 2 Pneus Dianteiros', custo: 3200.00, kmAtual: 120000, status: 'CONCLUIDA', origem: 'ADMINISTRATIVA' },
     { id: '103', veiculoPlaca: 'JKL-3456', veiculoModelo: 'VOLVO FH 460', dataAgendada: '2026-07-25', tipo: 'CORRETIVA', pecas: 'Revisão das Lonas de Freio', custo: 1200.00, kmAtual: 89000, status: 'PENDENTE', origem: 'FUTURA' }
   ])
@@ -141,7 +142,8 @@ function ManutencaoContent() {
   const registroAfetaSistema = (registro: RegistroManutencao, sistema: SistemaDiagnostico) => {
     const texto = normalizarDiagnostico(`${registro.tipo} ${registro.pecas}`)
     const termos: Record<SistemaDiagnostico, string[]> = {
-      estrutura: ['CHASSI', 'CABINE', 'LONGARINA', 'QUINTA RODA', 'FAROL', 'PORTA'],
+      estrutura: ['CHASSI', 'ESTRUTURA', 'LONGARINA', 'QUINTA RODA'],
+      lataria: ['LATARIA', 'FUNILARIA', 'AMASSADO', 'BATIDA', 'COLISAO', 'ARRANHAO', 'RISCO', 'PINTURA', 'REPINTURA', 'PARACHOQUE', 'PARALAMA', 'CAPO', 'CORROSAO', 'PORTA', 'CABINE', 'FAROL', 'RETROVISOR'],
       motor: ['MOTOR', 'BLOCO', 'CABECOTE', 'CORREIA', 'INJECAO', 'OLEO', 'FILTRO', 'RACOR'],
       oleo: ['OLEO', 'FILTRO', 'RACOR', 'LUBRIFIC'],
       escape: ['ESCAPE', 'ESCAPAMENTO', 'EXAUST', 'CATALISADOR', 'SILENCIOSO'],
@@ -228,6 +230,7 @@ function ManutencaoContent() {
   }
 
   const estiloEstrutura = aplicarEstiloPeca(obterStatusPeca('estrutura'))
+  const estiloLataria = aplicarEstiloPeca(obterStatusPeca('lataria'))
   const estiloMotor = aplicarEstiloPeca(obterStatusPeca('motor'))
   const estiloOleo = aplicarEstiloPeca(obterStatusPeca('oleo'))
   const estiloEscape = aplicarEstiloPeca(obterStatusPeca('escape'))
@@ -464,12 +467,51 @@ function ManutencaoContent() {
                     <feGaussianBlur stdDeviation="7" result="blur" />
                     <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
                   </filter>
+                  <filter id="engine-color" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
+                    <feFlood floodColor={estiloMotor.stroke} result="engine-status-color" />
+                    <feComposite in="engine-status-color" in2="SourceAlpha" operator="in" />
+                  </filter>
                 </defs>
+
+                {/* Lataria externa: cabine, porta, para-lama e para-choque */}
+                <motion.g
+                  {...estiloLataria}
+                  animate={estiloLataria.anim}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  pointerEvents="none"
+                >
+                  <title>Lataria: {obterStatusPeca('lataria')}</title>
+                  <path
+                    d="M104 335 L111 238 Q114 176 168 151 L411 116 Q477 113 505 178 L510 419 L456 439 L414 326 L304 328 L286 359 L169 366 Z"
+                    strokeWidth="2.2"
+                  />
+                  <path d="M326 205 L450 199 L476 405 L365 431 L322 336 Z" strokeWidth="1.5" />
+                  <path d="M104 337 L286 357 L302 516 L104 501 Z" strokeWidth="1.5" />
+                  <path d="M418 429 Q455 450 482 493" fill="none" strokeWidth="2" />
+                  <path d="M371 273 l24 -9 m-17 22 31 -12 m-22 24 20 -8" fill="none" strokeWidth="1.6" opacity="0.85" />
+                </motion.g>
 
                 {/* Motor e cabeçote, sob a cabine */}
                 <motion.g {...estiloMotor} animate={estiloMotor.anim} transition={{ repeat: Infinity, duration: 1.5 }}>
-                  <path d="M292 348 L405 338 L430 474 L306 500 L278 428 Z" strokeWidth="2.5" />
-                  <path d="M305 370 L392 360 M297 399 L404 386 M299 429 L412 414 M304 459 L419 441" fill="none" strokeWidth="1.2" strokeDasharray="6 4" />
+                  <title>Motor: {obterStatusPeca('motor')}</title>
+                  <image
+                    href="/images/motorcaminhaoestilizado.svg"
+                    x="248"
+                    y="282"
+                    width="210"
+                    height="280"
+                    preserveAspectRatio="xMidYMid meet"
+                    filter="url(#engine-color)"
+                  />
+                  <path
+                    d="M292 348 L405 338 L430 474 L306 500 L278 428 Z"
+                    fill="none"
+                    strokeWidth="1.25"
+                    strokeDasharray="7 6"
+                    opacity="0.55"
+                  />
                 </motion.g>
 
                 {/* Óleo e filtro */}
@@ -486,11 +528,12 @@ function ManutencaoContent() {
 
                 {/* Tanque diesel e ARLA acompanhando o chassi */}
                 <motion.g {...estiloCombustivel} animate={estiloCombustivel.anim} transition={{ repeat: Infinity, duration: 1.5 }}>
-                  <path d="M309 508 L418 493 L430 559 L302 577 Z" strokeWidth="2.5" />
-                  <path d="M334 510 L344 568 M378 501 L389 561" fill="none" strokeWidth="1.2" />
+                  <path d="M505 478 L633 462 L642 526 L510 548 Z" strokeWidth="2.5" />
+                  <path d="M530 477 L536 543 M606 466 L614 531" fill="none" strokeWidth="1.5" />
+                  <path d="M516 493 L631 478" fill="none" strokeWidth="1" strokeDasharray="7 5" opacity="0.7" />
                 </motion.g>
                 <motion.g {...estiloArla} animate={estiloArla.anim} transition={{ repeat: Infinity, duration: 1.5 }}>
-                  <path d="M425 482 L466 474 L479 515 L436 525 Z" strokeWidth="2.5" />
+                  <path d="M477 488 L510 482 L516 526 L482 532 Z" strokeWidth="2.5" />
                 </motion.g>
 
                 {/* Rodagem, transmissão e freios sobre as rodas originais */}
@@ -508,7 +551,7 @@ function ManutencaoContent() {
                 <g fill="none" stroke={primary} strokeWidth="1" opacity="0.75">
                   <path d="M350 387 L235 330 L112 330" />
                   <path d="M520 280 L605 235 L700 235" />
-                  <path d="M362 535 L230 622 L112 622" />
+                  <path d="M552 514 L338 622 L112 622" />
                   <path d="M665 532 L700 592 L724 592" />
                 </g>
                 <g fill={primary} fontSize="12" fontFamily="monospace" fontWeight="700">
