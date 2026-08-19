@@ -20,6 +20,8 @@ import {
 import { 
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend
 } from 'recharts'
+import { exportarExcel } from '@/utils/exportExcel'
+import { exportarPdf } from '@/utils/exportPdf'
 
 type PlanoTipo = 'PREVIEW' | 'ESSENCIAL' | 'AVANCADO' | 'ENTERPRISE'
 
@@ -52,6 +54,7 @@ export default function RelatoriosPage() {
   // Filtro de Tempo e Período
   const [periodo, setPeriodo] = useState('ESTE_MES')
   const [modalPersonalizarOpen, setModalPersonalizarOpen] = useState(false)
+  const [mensagemExportacao, setMensagemExportacao] = useState('')
 
   // Intervalo Personalizado
   const dataHojeStr = new Date().toISOString().split('T')[0]
@@ -128,6 +131,75 @@ export default function RelatoriosPage() {
     setModalPersonalizarOpen(false)
   }
 
+  const periodoDescricao = periodo === 'CUSTOMIZADO'
+    ? `${new Date(`${dataInicio}T00:00:00`).toLocaleDateString('pt-BR')} a ${new Date(`${dataFim}T00:00:00`).toLocaleDateString('pt-BR')}`
+    : OPCOES_PERIODO.find(opcao => opcao.id === periodo)?.label ?? periodo.replace(/_/g, ' ')
+
+  const registrarExportacao = (mensagem: string) => {
+    setMensagemExportacao(mensagem)
+    window.setTimeout(() => setMensagemExportacao(''), 3500)
+  }
+
+  const handleExportarExcel = () => {
+    exportarExcel(`rpmtruck-relatorio-${periodo.toLowerCase()}`, [
+      {
+        nome: 'Custos por veículo',
+        colunas: [
+          { titulo: 'Veículo', chave: 'veiculo' },
+          { titulo: 'Combustível (R$)', chave: 'combustivel', tipo: 'Number' },
+          { titulo: 'Manutenção (R$)', chave: 'manutencao', tipo: 'Number' },
+          { titulo: 'Total (R$)', chave: 'total', tipo: 'Number' },
+        ],
+        linhas: MOCK_CUSTO_VEICULO.map(linha => ({ ...linha, total: linha.combustivel + linha.manutencao })),
+      },
+      {
+        nome: 'Eficiência mensal',
+        colunas: [
+          { titulo: 'Mês', chave: 'mes' },
+          { titulo: 'Custo por KM (R$)', chave: 'custoKm', tipo: 'Number' },
+          { titulo: 'KM total', chave: 'kmTotal', tipo: 'Number' },
+        ],
+        linhas: MOCK_EFICIENCIA_MES.map(linha => ({ ...linha })),
+      },
+    ])
+    registrarExportacao('Planilha Excel gerada com 2 abas.')
+  }
+
+  const handleExportarPdf = () => {
+    try {
+      exportarPdf({
+        titulo: 'Relatório operacional RPMTruck',
+        subtitulo: `Período: ${periodoDescricao} · Plano ${planoEmpresa}`,
+        metricas: [
+          { rotulo: 'Custo médio / KM', valor: 'R$ 4,24' },
+          { rotulo: 'Veículo mais eficiente', valor: 'DEF-5678' },
+          { rotulo: 'Maior gasto manutenção', valor: 'XYZ-9876' },
+          { rotulo: 'KM percorrido', valor: '352.000 KM' },
+        ],
+        secoes: [
+          {
+            titulo: 'Custos por veículo',
+            colunas: ['Veículo', 'Combustível', 'Manutenção', 'Total'],
+            linhas: MOCK_CUSTO_VEICULO.map(linha => [
+              linha.veiculo,
+              linha.combustivel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+              linha.manutencao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+              (linha.combustivel + linha.manutencao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+            ]),
+          },
+          {
+            titulo: 'Eficiência mensal',
+            colunas: ['Mês', 'Custo por KM', 'KM total'],
+            linhas: MOCK_EFICIENCIA_MES.map(linha => [linha.mes, `R$ ${linha.custoKm.toFixed(2)}`, linha.kmTotal.toLocaleString('pt-BR')]),
+          },
+        ],
+      })
+      registrarExportacao('Relatório aberto. Selecione “Salvar como PDF”.')
+    } catch (erro) {
+      registrarExportacao(erro instanceof Error ? erro.message : 'Não foi possível gerar o PDF.')
+    }
+  }
+
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
       
@@ -151,6 +223,7 @@ export default function RelatoriosPage() {
 
           <motion.button 
             whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            onClick={handleExportarExcel}
             className="flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border hover:bg-white/5 cursor-pointer"
             style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
           >
@@ -159,6 +232,7 @@ export default function RelatoriosPage() {
           
           <motion.button 
             whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            onClick={handleExportarPdf}
             className="flex items-center gap-2 px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all cursor-pointer font-extrabold text-black"
             style={{ 
               backgroundColor: primary,
@@ -169,6 +243,12 @@ export default function RelatoriosPage() {
           </motion.button>
         </div>
       </div>
+
+      {mensagemExportacao && (
+        <div className="border px-4 py-3 text-xs font-bold" role="status" style={{ borderColor: `${primary}55`, backgroundColor: `${primary}0d`, color: primary }}>
+          {mensagemExportacao}
+        </div>
+      )}
 
       {/* ─── BARRA DE FILTRO DE TEMPO INTELIGENTE ─── */}
       <div className="flex flex-col md:flex-row gap-4 mb-8">

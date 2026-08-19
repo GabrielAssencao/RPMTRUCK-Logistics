@@ -26,7 +26,11 @@ import {
   TrendingUp,
   Percent,
   ExternalLink,
-  Info
+  Info,
+  Copy,
+  X,
+  Save,
+  RotateCcw
 } from 'lucide-react'
 
 // ─── TIPOS E DADOS ──────────────────────────────────────────────────────────
@@ -52,6 +56,10 @@ interface RegistroCusto {
 // sem misturar os dois modelos de dados.
 interface LinhaExibicao {
   id: string
+  duplaId: string
+  veiculoModelo: string
+  veiculoPlaca: string
+  motoristaNome: string
   data: string
   categoria: CategoriaCusto | 'COMISSAO_TRANSPORTE'
   descricao: string
@@ -85,10 +93,15 @@ export default function CustosPage() {
   // Filtros e Pesquisa
   const [busca, setBusca] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState<string>('TODOS')
+  const [modoConsulta, setModoConsulta] = useState<'SEMANA' | 'DIA'>('SEMANA')
+  const [dataFiltroDia, setDataFiltroDia] = useState(new Date().toISOString().split('T')[0])
+  const [placaFiltroDia, setPlacaFiltroDia] = useState('TODOS')
 
   // Modais e Exclusão
   const [modalRegistroOpen, setModalRegistroOpen] = useState(false)
   const [excluindoId, setExcluindoId] = useState<string | null>(null)
+  const [mensagemSucesso, setMensagemSucesso] = useState('')
+  const [erroFormulario, setErroFormulario] = useState('')
 
   // Lançamento do Formulário
   const [formCusto, setFormCusto] = useState({
@@ -173,6 +186,10 @@ export default function CustosPage() {
   // ─── LINHAS COMBINADAS PRA TABELA ───────────────────────────────────────
   const linhasManual: LinhaExibicao[] = custosFiltrados.map(c => ({
     id: c.id,
+    duplaId: c.duplaId,
+    veiculoModelo: duplaAtiva.veiculoModelo,
+    veiculoPlaca: duplaAtiva.veiculoPlaca,
+    motoristaNome: duplaAtiva.motoristaNome,
     data: c.data,
     categoria: c.categoria,
     descricao: c.descricao,
@@ -197,6 +214,10 @@ export default function CustosPage() {
         })
         .map(c => ({
           id: `container-${c.id}`,
+          duplaId: c.duplaId,
+          veiculoModelo: duplaAtiva.veiculoModelo,
+          veiculoPlaca: duplaAtiva.veiculoPlaca,
+          motoristaNome: duplaAtiva.motoristaNome,
           data: c.data,
           categoria: 'COMISSAO_TRANSPORTE' as const,
           descricao: `Comissão sobre frete — Container ${c.codigo} (${c.terminalInicio} → ${c.terminalFim})`,
@@ -208,32 +229,74 @@ export default function CustosPage() {
     : []
 
   const linhasCombinadas = [...linhasManual, ...linhasComissaoContainer].sort((a, b) => b.data.localeCompare(a.data))
+  const periodoFiltroDia = obterAnoMesSemana(dataFiltroDia || new Date().toISOString().split('T')[0])
+  const termoBusca = busca.trim().toLowerCase()
+  const duplaCorrespondeAoCaminhao = (duplaId: string) => {
+    if (placaFiltroDia === 'TODOS') return true
+    return DUPLAS_OPERACIONAIS.some(dupla => dupla.id === duplaId && dupla.veiculoPlaca === placaFiltroDia)
+  }
+
+  const linhasManualDia: LinhaExibicao[] = custos
+    .filter(custo => {
+      const correspondeCategoria = filtroCategoria === 'TODOS' || custo.categoria === filtroCategoria
+      const correspondeBusca = !termoBusca || custo.descricao.toLowerCase().includes(termoBusca) || custo.categoria.toLowerCase().includes(termoBusca)
+      return custo.data === dataFiltroDia && duplaCorrespondeAoCaminhao(custo.duplaId) && correspondeCategoria && correspondeBusca
+    })
+    .map(custo => {
+      const dupla = DUPLAS_OPERACIONAIS.find(item => item.id === custo.duplaId)
+      return {
+        id: custo.id,
+        duplaId: custo.duplaId,
+        veiculoModelo: dupla?.veiculoModelo ?? 'Veículo não identificado',
+        veiculoPlaca: dupla?.veiculoPlaca ?? '—',
+        motoristaNome: dupla?.motoristaNome ?? 'Não vinculado',
+        data: custo.data,
+        categoria: custo.categoria,
+        descricao: custo.descricao,
+        formaPagamento: custo.formaPagamento,
+        valor: custo.valor,
+        status: custo.status,
+        origem: 'MANUAL' as const,
+      }
+    })
+
+  const linhasComissaoDia: LinhaExibicao[] = mostrarComissoesContainer
+    ? containers
+        .filter(container => {
+          if (container.status === 'CANCELADO' || container.data !== dataFiltroDia || !duplaCorrespondeAoCaminhao(container.duplaId)) return false
+          return !termoBusca || container.codigo.toLowerCase().includes(termoBusca) || container.terminalInicio.toLowerCase().includes(termoBusca) || container.terminalFim.toLowerCase().includes(termoBusca) || 'comissão transporte'.includes(termoBusca)
+        })
+        .map(container => {
+          const dupla = DUPLAS_OPERACIONAIS.find(item => item.id === container.duplaId)
+          return {
+            id: `container-${container.id}`,
+            duplaId: container.duplaId,
+            veiculoModelo: dupla?.veiculoModelo ?? 'Veículo não identificado',
+            veiculoPlaca: dupla?.veiculoPlaca ?? '—',
+            motoristaNome: dupla?.motoristaNome ?? 'Não vinculado',
+            data: container.data,
+            categoria: 'COMISSAO_TRANSPORTE' as const,
+            descricao: `Comissão sobre frete — Container ${container.codigo} (${container.terminalInicio} → ${container.terminalFim})`,
+            formaPagamento: 'AUTOMÁTICO',
+            valor: container.comissao,
+            status: container.status === 'ENTREGUE' ? 'PAGO' as const : 'PENDENTE' as const,
+            origem: 'CONTAINER_AUTO' as const,
+          }
+        })
+    : []
+
+  const linhasDia = [...linhasManualDia, ...linhasComissaoDia].sort((a, b) => b.valor - a.valor)
+  const linhasExibidas = modoConsulta === 'DIA' ? linhasDia : linhasCombinadas
+  const totalExibido = linhasExibidas.reduce((total, linha) => total + linha.valor, 0)
+  const veiculosFiltroDia = DUPLAS_OPERACIONAIS.filter((dupla, index, lista) => lista.findIndex(item => item.veiculoPlaca === dupla.veiculoPlaca) === index)
+  const periodoFormulario = obterAnoMesSemana(formCusto.data || new Date().toISOString().split('T')[0])
 
   // 🔄 ALTERAÇÃO RÁPIDA DE STATUS DO LANÇAMENTO (só afeta lançamentos manuais)
   const handleAlterarStatusRapido = (id: string, novoStatus: 'PAGO' | 'PENDENTE') => {
     setCustos(prev => prev.map(c => c.id === id ? { ...c, status: novoStatus } : c))
   }
 
-  // Salvar Novo Lançamento
-  const handleSalvarDespesa = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    const novoRegistro: RegistroCusto = {
-      id: String(Date.now()),
-      duplaId: duplaAtiva.id,
-      data: formCusto.data,
-      ano: anoSelecionado,
-      mesIndex: mesSelecionadoIndex,
-      semanaIndex: semanaSelecionada,
-      categoria: formCusto.categoria,
-      descricao: formCusto.descricao,
-      valor: Number(formCusto.valor) || 0,
-      formaPagamento: formCusto.formaPagamento,
-      status: formCusto.status
-    }
-
-    setCustos(prev => [novoRegistro, ...prev])
-    setModalRegistroOpen(false)
+  const resetarFormulario = () => {
     setFormCusto({
       data: new Date().toISOString().split('T')[0],
       categoria: 'COMBUSTIVEL',
@@ -242,6 +305,72 @@ export default function CustosPage() {
       formaPagamento: 'CARTÃO CORPORATIVO',
       status: 'PAGO'
     })
+    setErroFormulario('')
+  }
+
+  const abrirNovoLancamento = (categoria?: CategoriaCusto) => {
+    resetarFormulario()
+    setErroFormulario('')
+    if (categoria) setFormCusto(prev => ({ ...prev, categoria }))
+    setModalRegistroOpen(true)
+  }
+
+  const handleRepetirDespesa = (id: string) => {
+    const custo = custos.find(item => item.id === id)
+    if (!custo) return
+    setFormCusto({
+      data: new Date().toISOString().split('T')[0],
+      categoria: custo.categoria,
+      descricao: custo.descricao,
+      valor: String(custo.valor),
+      formaPagamento: custo.formaPagamento,
+      status: custo.status,
+    })
+    setModalRegistroOpen(true)
+  }
+
+  // Salvar Novo Lançamento
+  const handleSalvarDespesa = (e: React.FormEvent) => {
+    e.preventDefault()
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null
+    const continuar = submitter?.value === 'continuar'
+    const valorNumerico = Number(formCusto.valor)
+
+    if (!formCusto.descricao.trim() || !Number.isFinite(valorNumerico) || valorNumerico <= 0) {
+      setErroFormulario('Informe uma descrição válida e um valor maior que zero.')
+      return
+    }
+
+    setErroFormulario('')
+    const periodoDoLancamento = obterAnoMesSemana(formCusto.data)
+
+    const novoRegistro: RegistroCusto = {
+      id: String(Date.now()),
+      duplaId: duplaAtiva.id,
+      data: formCusto.data,
+      ano: periodoDoLancamento.ano,
+      mesIndex: periodoDoLancamento.mesIndex,
+      semanaIndex: periodoDoLancamento.semanaIndex,
+      categoria: formCusto.categoria,
+      descricao: formCusto.descricao.trim(),
+      valor: valorNumerico,
+      formaPagamento: formCusto.formaPagamento,
+      status: formCusto.status
+    }
+
+    setCustos(prev => [novoRegistro, ...prev])
+    setAnoSelecionado(periodoDoLancamento.ano)
+    setMesSelecionadoIndex(periodoDoLancamento.mesIndex)
+    setSemanaSelecionada(periodoDoLancamento.semanaIndex)
+    setMensagemSucesso(continuar ? 'Despesa salva. Formulário pronto para o próximo lançamento.' : 'Despesa lançada com sucesso.')
+    window.setTimeout(() => setMensagemSucesso(''), 3500)
+
+    if (continuar) {
+      setFormCusto(prev => ({ ...prev, descricao: '', valor: '' }))
+    } else {
+      setModalRegistroOpen(false)
+      resetarFormulario()
+    }
   }
 
   const handleConfirmarExclusao = (id: string) => {
@@ -271,7 +400,7 @@ export default function CustosPage() {
 
           <motion.button 
             whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-            onClick={() => setModalRegistroOpen(true)}
+            onClick={() => abrirNovoLancamento()}
             className="flex items-center gap-2 px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all text-black font-extrabold"
             style={{ 
               backgroundColor: primary,
@@ -280,6 +409,40 @@ export default function CustosPage() {
           >
             <Plus size={16} /> Lançar Despesa
           </motion.button>
+        </div>
+      </div>
+
+      {mensagemSucesso && (
+        <div className="border px-4 py-3 text-xs font-bold flex items-center gap-2" role="status" style={{ borderColor: '#22c55e55', backgroundColor: '#22c55e0d', color: '#22c55e' }}>
+          <CheckCircle size={15} /> {mensagemSucesso}
+        </div>
+      )}
+
+      <div className="border p-3" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="min-w-fit">
+            <p className="text-[10px] font-bold uppercase tracking-widest">Lançamento rápido</p>
+            <p className="text-[9px] text-foreground-muted mt-0.5">Comece pela categoria mais usada</p>
+          </div>
+          <div className="flex flex-1 gap-2 overflow-x-auto hide-scrollbar pb-1 lg:pb-0">
+            {([
+              ['COMBUSTIVEL', 'Combustível', <Fuel key="fuel" size={14} />],
+              ['PEDAGIO', 'Pedágio', <CreditCard key="toll" size={14} />],
+              ['MANUTENCAO', 'Manutenção', <Wrench key="maintenance" size={14} />],
+              ['ALIMENTACAO', 'Alimentação', <Utensils key="food" size={14} />],
+              ['DIARIA_MOTORISTA', 'Diária', <User key="driver" size={14} />],
+            ] as Array<[CategoriaCusto, string, React.ReactNode]>).map(([categoria, label, icone]) => (
+              <button
+                key={categoria}
+                onClick={() => abrirNovoLancamento(categoria)}
+                className="min-w-fit px-3 py-2 border text-[10px] font-bold uppercase flex items-center gap-2 transition-colors hover:bg-white/5"
+                style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+              >
+                <span style={{ color: primary }}>{icone}</span>{label}
+              </button>
+            ))}
+          </div>
+          <span className="text-[9px] text-foreground-muted whitespace-nowrap">Data define o período automaticamente</span>
         </div>
       </div>
 
@@ -441,6 +604,71 @@ export default function CustosPage() {
       </div>
 
       {/* ─── 4. FILTROS E TABELA DE LANÇAMENTOS ─── */}
+      <div className="border p-4 space-y-4" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest">Consulta de lançamentos</p>
+            <p className="text-[10px] text-foreground-muted mt-1">Alterne entre o fechamento semanal da dupla e a auditoria geral por data.</p>
+          </div>
+          <div className="inline-flex border p-1 self-start sm:self-auto" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+            <button
+              onClick={() => setModoConsulta('SEMANA')}
+              className="px-4 py-2 text-[10px] font-bold uppercase"
+              style={{ backgroundColor: modoConsulta === 'SEMANA' ? primary : 'transparent', color: modoConsulta === 'SEMANA' ? '#000' : 'var(--foreground-muted)' }}
+            >
+              Por semana
+            </button>
+            <button
+              onClick={() => setModoConsulta('DIA')}
+              className="px-4 py-2 text-[10px] font-bold uppercase"
+              style={{ backgroundColor: modoConsulta === 'DIA' ? primary : 'transparent', color: modoConsulta === 'DIA' ? '#000' : 'var(--foreground-muted)' }}
+            >
+              Por dia
+            </button>
+          </div>
+        </div>
+
+        {modoConsulta === 'DIA' && (
+          <div className="grid grid-cols-1 md:grid-cols-[minmax(180px,0.8fr)_minmax(260px,1.2fr)_auto] gap-3 items-end border-t pt-4" style={{ borderColor: 'var(--border)' }}>
+            <div>
+              <label htmlFor="filtro-data-custos" className="block text-[10px] uppercase font-bold mb-1.5">Data dos lançamentos *</label>
+              <input
+                id="filtro-data-custos"
+                type="date"
+                required
+                value={dataFiltroDia}
+                onChange={event => setDataFiltroDia(event.target.value)}
+                className="w-full p-3 border bg-transparent outline-none text-xs"
+                style={{ borderColor: primary, color: 'var(--foreground)' }}
+              />
+            </div>
+            <div>
+              <label htmlFor="filtro-caminhao-custos" className="block text-[10px] uppercase font-bold mb-1.5">Caminhão <span className="text-foreground-muted normal-case">(opcional)</span></label>
+              <select
+                id="filtro-caminhao-custos"
+                value={placaFiltroDia}
+                onChange={event => setPlacaFiltroDia(event.target.value)}
+                className="w-full p-3 border bg-transparent outline-none text-xs"
+                style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+              >
+                <option value="TODOS" style={{ backgroundColor: 'var(--background)' }}>Todos os caminhões da empresa</option>
+                {veiculosFiltroDia.map(dupla => (
+                  <option key={dupla.veiculoPlaca} value={dupla.veiculoPlaca} style={{ backgroundColor: 'var(--background)' }}>
+                    {dupla.veiculoPlaca} · {dupla.veiculoModelo}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="border px-4 py-2.5 min-w-[210px]" style={{ borderColor: `${primary}45`, backgroundColor: `${primary}08` }}>
+              <span className="block text-[9px] uppercase text-foreground-muted">Período identificado</span>
+              <strong className="block text-[11px] mt-1" style={{ color: primary }}>
+                {MESES[periodoFiltroDia.mesIndex]} · Semana {periodoFiltroDia.semanaIndex} · {periodoFiltroDia.ano}
+              </strong>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-1">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none" style={{ color: 'var(--foreground-muted)' }}>
@@ -475,9 +703,15 @@ export default function CustosPage() {
       </div>
 
       <div className="border overflow-hidden relative" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
-        <div className="p-4 border-b font-bold text-xs uppercase flex justify-between items-center" style={{ borderColor: 'var(--border)' }}>
-          <span>Lançamentos — {duplaAtiva.veiculoModelo} ({duplaAtiva.veiculoPlaca}) com {duplaAtiva.motoristaNome}</span>
-          <span className="text-[10px] text-foreground-muted">{linhasCombinadas.length} Registro(s) na Semana {semanaSelecionada}</span>
+        <div className="p-4 border-b font-bold text-xs uppercase flex flex-col sm:flex-row sm:items-center justify-between gap-2" style={{ borderColor: 'var(--border)' }}>
+          <span>
+            {modoConsulta === 'DIA'
+              ? `Lançamentos de ${new Date(`${dataFiltroDia}T00:00:00`).toLocaleDateString('pt-BR')} — ${placaFiltroDia === 'TODOS' ? 'Todos os caminhões' : placaFiltroDia}`
+              : `Lançamentos — ${duplaAtiva.veiculoModelo} (${duplaAtiva.veiculoPlaca}) com ${duplaAtiva.motoristaNome}`}
+          </span>
+          <span className="text-[10px] text-foreground-muted">
+            {linhasExibidas.length} registro(s) · {totalExibido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          </span>
         </div>
 
         <div className="overflow-x-auto">
@@ -485,6 +719,7 @@ export default function CustosPage() {
             <thead style={{ backgroundColor: 'var(--background)', color: 'var(--foreground-muted)' }}>
               <tr className="text-[10px] uppercase tracking-widest border-b" style={{ borderColor: 'var(--border)' }}>
                 <th className="px-6 py-4">Data</th>
+                <th className="px-6 py-4">Veículo / Condutor</th>
                 <th className="px-6 py-4">Categoria</th>
                 <th className="px-6 py-4">Descrição da Despesa</th>
                 <th className="px-6 py-4">Pagamento</th>
@@ -495,16 +730,22 @@ export default function CustosPage() {
             </thead>
             <tbody className="divide-y [&>tr]:border-[var(--border)]" style={{ color: 'var(--foreground)' }}>
               <AnimatePresence>
-                {linhasCombinadas.length === 0 ? (
+                {linhasExibidas.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-sm font-mono text-foreground-muted">
-                      Nenhum lançamento de custo encontrado para esta semana no período selecionado.
+                    <td colSpan={8} className="px-6 py-12 text-center text-sm font-mono text-foreground-muted">
+                      {modoConsulta === 'DIA'
+                        ? 'Nenhum lançamento encontrado para a data e o caminhão selecionados.'
+                        : 'Nenhum lançamento de custo encontrado para esta semana no período selecionado.'}
                     </td>
                   </tr>
                 ) : (
-                  linhasCombinadas.map((linha) => (
+                  linhasExibidas.map((linha) => (
                     <tr key={linha.id} className="hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4 text-xs font-bold">{linha.data}</td>
+                      <td className="px-6 py-4">
+                        <div className="text-xs font-bold">{linha.veiculoPlaca}</div>
+                        <div className="text-[9px] text-foreground-muted mt-0.5">{linha.veiculoModelo} · {linha.motoristaNome}</div>
+                      </td>
                       <td className="px-6 py-4">
                         <BadgeCategoria categoria={linha.categoria} primary={primary} />
                       </td>
@@ -564,9 +805,24 @@ export default function CustosPage() {
                               <button onClick={() => setExcluindoId(null)} className="px-2 py-0.5 border border-white/20 text-white">Não</button>
                             </div>
                           ) : (
-                            <button onClick={() => setExcluindoId(linha.id)} className="p-2 text-red-400 hover:text-red-500 transition-colors">
-                              <Trash2 size={14} />
-                            </button>
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => handleRepetirDespesa(linha.id)}
+                                className="p-2 text-foreground-muted hover:text-foreground transition-colors"
+                                title="Repetir lançamento com os mesmos dados"
+                                aria-label="Repetir lançamento"
+                              >
+                                <Copy size={14} />
+                              </button>
+                              <button
+                                onClick={() => setExcluindoId(linha.id)}
+                                className="p-2 text-red-400 hover:text-red-500 transition-colors"
+                                title="Excluir lançamento"
+                                aria-label="Excluir lançamento"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           )
                         ) : (
                           <Link
@@ -590,18 +846,53 @@ export default function CustosPage() {
 
       {/* ─── MODAL LANÇAMENTO DE CUSTO ─── */}
       {modalRegistroOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="w-full max-w-lg border p-6 font-mono space-y-4" style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
-            <div className="flex justify-between items-center border-b pb-3" style={{ borderColor: 'var(--border)' }}>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-stretch justify-end" role="dialog" aria-modal="true" aria-labelledby="titulo-lancamento-custo">
+          <motion.div initial={{ x: 60, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="w-full max-w-xl h-full border-l font-mono flex flex-col shadow-2xl" style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+            <div className="flex justify-between items-start border-b p-5" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
               <div>
-                <h3 className="text-sm font-bold uppercase font-rajdhani">Lançar Despesa Operacional</h3>
-                <p className="text-[10px] text-foreground-muted">Vinculado a: {duplaAtiva.veiculoModelo} ({duplaAtiva.veiculoPlaca}) • {duplaAtiva.motoristaNome}</p>
+                <h3 id="titulo-lancamento-custo" className="text-lg font-black uppercase font-rajdhani">Lançar despesa operacional</h3>
+                <p className="text-[10px] text-foreground-muted mt-1">Preencha uma vez ou mantenha o painel aberto para uma sequência de lançamentos.</p>
               </div>
-              <button onClick={() => setModalRegistroOpen(false)}>✕</button>
+              <button onClick={() => setModalRegistroOpen(false)} className="p-2 border hover:bg-white/5" style={{ borderColor: 'var(--border)' }} aria-label="Fechar lançamento"><X size={16} /></button>
             </div>
 
-            <form onSubmit={handleSalvarDespesa} className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSalvarDespesa} className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
+              {erroFormulario && (
+                <div className="border border-red-500/40 bg-red-500/10 px-3 py-2.5 text-red-400 text-[10px] font-bold" role="alert">
+                  {erroFormulario}
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 border" style={{ borderColor: `${primary}45`, backgroundColor: `${primary}08` }}>
+                <div>
+                  <span className="text-[9px] uppercase text-foreground-muted">Veículo e condutor</span>
+                  <p className="font-bold mt-1">{duplaAtiva.veiculoModelo} · {duplaAtiva.veiculoPlaca}</p>
+                  <p className="text-[10px] text-foreground-muted mt-0.5">{duplaAtiva.motoristaNome}</p>
+                </div>
+                <div className="sm:text-right">
+                  <span className="text-[9px] uppercase text-foreground-muted">Período calculado</span>
+                  <p className="font-bold mt-1" style={{ color: primary }}>{MESES[periodoFormulario.mesIndex]} · Semana {periodoFormulario.semanaIndex}</p>
+                  <p className="text-[10px] text-foreground-muted mt-0.5">Ano fiscal {periodoFormulario.ano}</p>
+                </div>
+              </div>
+
+              <fieldset>
+                <legend className="text-[10px] uppercase font-bold mb-2">Categoria da despesa</legend>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {(['COMBUSTIVEL', 'PEDAGIO', 'MANUTENCAO', 'ALIMENTACAO', 'DIARIA_MOTORISTA', 'SEGURO', 'OUTROS'] as CategoriaCusto[]).map(categoria => (
+                    <button
+                      type="button"
+                      key={categoria}
+                      onClick={() => setFormCusto(prev => ({ ...prev, categoria }))}
+                      className="px-2 py-2.5 border text-[9px] font-bold uppercase transition-colors"
+                      style={{ borderColor: formCusto.categoria === categoria ? primary : 'var(--border)', backgroundColor: formCusto.categoria === categoria ? `${primary}15` : 'transparent', color: formCusto.categoria === categoria ? primary : 'var(--foreground-muted)' }}
+                    >
+                      {categoria.replaceAll('_', ' ')}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] uppercase font-bold mb-1">Data do Lançamento *</label>
                   <input 
@@ -645,12 +936,13 @@ export default function CustosPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[10px] uppercase font-bold mb-1">Valor (R$) *</label>
                   <input 
                     type="number" 
                     step="0.01" 
+                    min="0.01"
                     required 
                     placeholder="Ex: 450.00" 
                     value={formCusto.valor} 
@@ -688,9 +980,18 @@ export default function CustosPage() {
                 </div>
               </div>
 
-              <div className="pt-3 flex justify-end gap-2 border-t" style={{ borderColor: 'var(--border)' }}>
-                <button type="button" onClick={() => setModalRegistroOpen(false)} className="px-4 py-2 border uppercase">Cancelar</button>
-                <button type="submit" className="px-6 py-2 uppercase font-bold text-black" style={{ backgroundColor: primary }}>Confirmar Lançamento</button>
+              <div className="sticky bottom-0 -mx-5 -mb-5 mt-6 p-4 border-t flex flex-col sm:flex-row sm:items-center gap-2" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+                <button type="button" onClick={resetarFormulario} className="px-3 py-2.5 border uppercase text-[10px] flex items-center justify-center gap-2" style={{ borderColor: 'var(--border)' }}>
+                  <RotateCcw size={13} /> Limpar
+                </button>
+                <div className="flex-1" />
+                <button type="button" onClick={() => setModalRegistroOpen(false)} className="px-4 py-2.5 border uppercase text-[10px]" style={{ borderColor: 'var(--border)' }}>Cancelar</button>
+                <button type="submit" value="continuar" className="px-4 py-2.5 border uppercase font-bold text-[10px] flex items-center justify-center gap-2" style={{ borderColor: primary, color: primary }}>
+                  <Save size={13} /> Salvar e lançar outro
+                </button>
+                <button type="submit" value="fechar" className="px-5 py-2.5 uppercase font-bold text-black text-[10px] flex items-center justify-center gap-2" style={{ backgroundColor: primary }}>
+                  <CheckCircle size={13} /> Salvar despesa
+                </button>
               </div>
             </form>
           </motion.div>
