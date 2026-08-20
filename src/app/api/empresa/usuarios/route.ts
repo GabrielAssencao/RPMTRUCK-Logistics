@@ -4,14 +4,15 @@ import bcrypt from 'bcryptjs'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { criarNotificacao } from '@/lib/notificacoes'
+import { nomePessoa } from '@/lib/domainValidation'
 
 const criarOperadorSchema = z.object({
-  nome: z.string().trim().min(3).max(100),
+  nome: nomePessoa(3, 100),
   email: z.string().trim().email().toLowerCase(),
   senha: z.string().min(8).max(128),
   role: z.enum(['OPERADOR', 'VISUALIZADOR']),
   acessoDashboardGeral: z.boolean().optional().default(false),
-})
+}).strict()
 
 function gestorAutorizado(role?: string) {
   return role === 'GESTOR_EMPRESA' || role === 'GESTOR'

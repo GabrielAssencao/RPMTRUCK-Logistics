@@ -26,6 +26,7 @@ export interface RegistroContainer {
   motoristaId?: string | null
   frete: number
   comissao: number
+  percentualComissao: number
   status: StatusContainer
   observacoes?: string
   itensConteudo?: Array<{ nome: string; porcentagem: number }>
@@ -36,8 +37,8 @@ interface ContainersContextType {
   duplas: DuplaAlocada[]
   loading: boolean
   erro: string
-  adicionarContainer: (registro: Omit<RegistroContainer, 'id' | 'veiculoId' | 'motoristaId'>) => Promise<boolean>
-  atualizarContainer: (id: string, dados: Partial<RegistroContainer>) => Promise<boolean>
+  adicionarContainer: (registro: Omit<RegistroContainer, 'id' | 'veiculoId' | 'motoristaId' | 'comissao'>) => Promise<boolean>
+  atualizarContainer: (id: string, dados: Partial<Omit<RegistroContainer, 'comissao'>>) => Promise<boolean>
   removerContainer: (id: string) => Promise<boolean>
   totalEmTransito: number
   totalContainersMes: number
@@ -69,10 +70,11 @@ export function ContainersProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { void carregar() }, [carregar])
 
-  const adicionarContainer = async (registro: Omit<RegistroContainer, 'id' | 'veiculoId' | 'motoristaId'>) => {
+  const adicionarContainer = async (registro: Omit<RegistroContainer, 'id' | 'veiculoId' | 'motoristaId' | 'comissao'>) => {
     const dupla = duplas.find(item => item.id === registro.duplaId)
     if (!dupla) { setErro('Selecione um veículo válido.'); return false }
-    const response = await fetch('/api/containers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...registro, veiculoId: dupla.veiculoId, motoristaId: dupla.motoristaId }) })
+    const { duplaId: _duplaId, ...dados } = registro
+    const response = await fetch('/api/containers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...dados, veiculoId: dupla.veiculoId, motoristaId: dupla.motoristaId }) })
     const data = await response.json()
     if (!response.ok) { setErro(data.erro || 'Não foi possível salvar o container.'); return false }
     setErro('')
@@ -80,9 +82,10 @@ export function ContainersProvider({ children }: { children: ReactNode }) {
     return true
   }
 
-  const atualizarContainer = async (id: string, dados: Partial<RegistroContainer>) => {
+  const atualizarContainer = async (id: string, dados: Partial<Omit<RegistroContainer, 'comissao'>>) => {
     const dupla = dados.duplaId ? duplas.find(item => item.id === dados.duplaId) : undefined
-    const response = await fetch(`/api/containers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...dados, ...(dupla ? { veiculoId: dupla.veiculoId, motoristaId: dupla.motoristaId } : {}) }) })
+    const { duplaId: _duplaId, ...alteracoes } = dados
+    const response = await fetch(`/api/containers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...alteracoes, ...(dupla ? { veiculoId: dupla.veiculoId, motoristaId: dupla.motoristaId } : {}) }) })
     const data = await response.json()
     if (!response.ok) { setErro(data.erro || 'Não foi possível atualizar o container.'); return false }
     setErro('')

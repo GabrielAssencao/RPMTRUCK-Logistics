@@ -3,16 +3,17 @@ import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { criarNotificacao } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
+import { nomeOperacional, placaSchema, quilometragemSchema } from '@/lib/domainValidation'
 
 const veiculoSchema = z.object({
-  modelo: z.string().trim().min(2).max(100),
-  tipo: z.string().trim().min(2).max(80),
-  placa: z.string().trim().min(5).max(12).transform(valor => valor.toUpperCase()),
+  modelo: nomeOperacional(2, 100),
+  tipo: z.enum(['Cavalo Mecânico', 'Bitrem', 'Sider', 'Baú', 'Refrigerado']),
+  placa: placaSchema,
   ano: z.coerce.number().int().min(1950).max(new Date().getFullYear() + 1).optional().nullable(),
-  quilometragem: z.coerce.number().min(0).default(0),
+  quilometragem: quilometragemSchema.default(0),
   status: z.enum(['OPERACIONAL', 'OFICINA', 'INATIVO']).default('OPERACIONAL'),
   localizacaoId: z.string().uuid().optional().nullable(),
-})
+}).strict()
 
 export async function GET(request: NextRequest) {
   const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
@@ -44,9 +45,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const novoVeiculo = await prisma.veiculo.create({
-      data: { ...parsed.data, empresaId },
-      include: { localizacao: true, motoristas: { select: { id: true, nome: true } } },
+    const novoVeiculo = await prisma.$transaction(async (tx) => {
+      const veiculo = await tx.veiculo.create({
+        data: { ...parsed.data, empresaId },
+        include: { localizacao: true, motoristas: { select: { id: true, nome: true } } },
+      })
+      await tx.leituraQuilometragem.create({
+        data: { quilometragem: veiculo.quilometragem, origem: 'CADASTRO_VEICULO', veiculoId: veiculo.id, empresaId },
+      })
+      return veiculo
     })
     await criarNotificacao({ titulo: 'Veículo cadastrado', mensagem: `${novoVeiculo.modelo} (${novoVeiculo.placa}) foi adicionado à frota.`, modulo: 'FROTA', empresaId, usuarioId: auth.session.userId, veiculoId: novoVeiculo.id })
     return NextResponse.json(novoVeiculo, { status: 201 })

@@ -145,6 +145,7 @@ export default function NovoMotoristaPage() {
             <input 
               type="text" 
               required
+              maxLength={120}
               placeholder="Ex: Carlos Eduardo Silva Santos"
               value={nomeCompleto}
               onChange={(e) => setNomeCompleto(e.target.value)}
@@ -159,6 +160,9 @@ export default function NovoMotoristaPage() {
               <input 
                 type="text" 
                 required
+                inputMode="numeric"
+                pattern="[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}"
+                maxLength={14}
                 placeholder="000.000.000-00"
                 value={cpf}
                 onChange={(e) => setCpf(e.target.value)}
@@ -170,6 +174,8 @@ export default function NovoMotoristaPage() {
               <label className="block text-[10px] uppercase font-bold mb-1">RG (Opcional)</label>
               <input 
                 type="text" 
+                pattern="[A-Za-z0-9.-]{4,30}"
+                maxLength={30}
                 placeholder="00.000.000-0"
                 value={rg}
                 onChange={(e) => setRg(e.target.value)}
@@ -185,6 +191,9 @@ export default function NovoMotoristaPage() {
               <input 
                 type="text" 
                 required
+                inputMode="numeric"
+                pattern="[0-9]{11}"
+                maxLength={11}
                 placeholder="12345678900"
                 value={cnh}
                 onChange={(e) => setCnh(e.target.value)}

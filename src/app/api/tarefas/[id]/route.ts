@@ -2,15 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
+import { textoOperacional } from '@/lib/domainValidation'
 
 const atualizarSchema = z.object({
-  titulo: z.string().trim().min(3).max(160).optional(),
-  descricao: z.string().trim().max(2000).nullable().optional(),
+  titulo: textoOperacional(3, 160).optional(),
+  descricao: textoOperacional(1, 2000).nullable().optional(),
   prazo: z.string().datetime().nullable().optional(),
   prioridade: z.enum(['BAIXA', 'MEDIA', 'ALTA', 'URGENTE']).optional(),
   status: z.enum(['PENDENTE', 'EM_ANDAMENTO', 'CONCLUIDA', 'CANCELADA']).optional(),
   responsavelId: z.string().uuid().optional(),
-})
+}).strict()
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS' })

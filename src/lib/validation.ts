@@ -2,6 +2,7 @@
 // Schemas Zod para validação de entrada em APIs
 import { z } from 'zod';
 import { MODULOS, PLANOS, STATUS_EMPRESA } from '@/utils/planos';
+import { nomeOperacional, nomePessoa } from '@/lib/domainValidation';
 
 /**
  * Login validation schema
@@ -17,12 +18,12 @@ export type LoginInput = z.infer<typeof loginSchema>;
  * User creation schema
  */
 export const criarUsuarioSchema = z.object({
-  nome: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres').max(100),
+  nome: nomePessoa(3, 100),
   email: z.string().email('Email inválido').toLowerCase().trim(),
   senha: z.string().min(8, 'Senha deve ter pelo menos 8 caracteres').max(128),
   cargo: z.enum(['ADMIN_RPM', 'GESTOR_EMPRESA', 'OPERADOR', 'VISUALIZADOR']).optional().default('OPERADOR'),
   empresaId: z.string().uuid('ID da empresa inválido').optional(),
-});
+}).strict();
 
 export type CriarUsuarioInput = z.infer<typeof criarUsuarioSchema>;
 
@@ -57,7 +58,7 @@ export type CriarVeiculoInput = z.infer<typeof criarVeiculoSchema>;
  * Empresa creation schema
  */
 export const criarEmpresaSchema = z.object({
-  nome: z.string().min(3).max(150),
+  nome: nomeOperacional(3, 150),
   cnpj: z.string().regex(/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/, 'CNPJ inválido'),
   email: z.string().email(),
   telefone: z.string().min(10).max(15),
@@ -65,7 +66,7 @@ export const criarEmpresaSchema = z.object({
   status: z.enum(STATUS_EMPRESA).optional().default('ATIVO'),
   nomeContato: z.string().max(100).optional(),
   modulos: z.array(z.enum(MODULOS)).optional(),
-});
+}).strict();
 
 export type CriarEmpresaInput = z.infer<typeof criarEmpresaSchema>;
 

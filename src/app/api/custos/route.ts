@@ -3,12 +3,13 @@ import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { criarNotificacao } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
+import { dataIsoSchema, nomeOperacional, textoOperacional, valorMonetarioSchema } from '@/lib/domainValidation'
 
 const schema = z.object({
-  veiculoId: z.string().uuid(), motoristaId: z.string().uuid().optional().nullable(), data: z.string().min(10),
+  veiculoId: z.string().uuid(), motoristaId: z.string().uuid().optional().nullable(), data: dataIsoSchema,
   categoria: z.enum(['COMBUSTIVEL', 'MANUTENCAO', 'PEDAGIO', 'ALIMENTACAO', 'DIARIA_MOTORISTA', 'SEGURO', 'OUTROS']),
-  descricao: z.string().trim().min(3).max(500), valor: z.coerce.number().positive(), formaPagamento: z.string().trim().min(2).max(80), status: z.enum(['PAGO', 'PENDENTE']),
-})
+  descricao: textoOperacional(3, 500), valor: valorMonetarioSchema.positive(), formaPagamento: nomeOperacional(2, 80), status: z.enum(['PAGO', 'PENDENTE']),
+}).strict()
 
 const serializar = (c: any) => ({ id: c.id, duplaId: c.veiculoId, veiculoId: c.veiculoId, motoristaId: c.motoristaId, data: c.data.toISOString().slice(0, 10), ano: c.ano, mesIndex: c.mesIndex, semanaIndex: c.semanaIndex, categoria: c.categoria, descricao: c.descricao, valor: c.valor, formaPagamento: c.formaPagamento, status: c.status })
 

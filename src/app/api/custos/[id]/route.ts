@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
+import { textoOperacional, valorMonetarioSchema } from '@/lib/domainValidation'
 
-const schema = z.object({ status: z.enum(['PAGO', 'PENDENTE']).optional(), descricao: z.string().trim().min(3).max(500).optional(), valor: z.coerce.number().positive().optional() })
+const schema = z.object({ status: z.enum(['PAGO', 'PENDENTE']).optional(), descricao: textoOperacional(3, 500).optional(), valor: valorMonetarioSchema.positive().optional() }).strict()
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireEmpresaAuth(request, { modulo: 'GESTAO' })

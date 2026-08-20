@@ -280,7 +280,7 @@ export default function RelatoriosPage() {
           { rotulo: 'Custos no período', valor: metricas.totalCustos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
           { rotulo: 'Menor custo operacional', valor: metricas.veiculoMenorCusto?.placa ?? 'Sem dados' },
           { rotulo: 'Maior gasto manutenção', valor: metricas.veiculoMaiorManutencao?.placa ?? 'Sem dados' },
-          { rotulo: 'KM acumulado da frota', valor: `${metricas.kmAcumulado.toLocaleString('pt-BR')} KM` },
+          { rotulo: 'KM percorridos no período', valor: `${metricas.kmAcumulado.toLocaleString('pt-BR')} KM` },
         ],
         secoes: [
           {
@@ -503,9 +503,9 @@ export default function RelatoriosPage() {
           positivo={false} icone={<AlertTriangle size={20}/>} primary={primary} alerta
         />
         <HighlightCard
-          titulo="KM Acumulado da Frota"
+          titulo="KM Percorridos no Período"
           valor={`${metricas.kmAcumulado.toLocaleString('pt-BR')} KM`}
-          variacao="Hodômetros atuais cadastrados"
+          variacao="Diferença entre leituras de odômetro"
           positivo={true} icone={<TrendingUp size={20}/>} primary={primary}
         />
       </div>

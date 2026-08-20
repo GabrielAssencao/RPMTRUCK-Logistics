@@ -23,6 +23,14 @@ interface ContainerRelatorio {
   motorista: { nome: string } | null
 }
 
+interface MovimentacaoPermanenteRelatorio {
+  id: string
+  codigo_container: string
+  terminal_origem: string
+  terminal_destino: string
+  data_operacao: Date
+}
+
 interface CustoRelatorio {
   data: Date
   categoria: string
@@ -53,6 +61,7 @@ export interface DadosRelatorioOperacional {
   periodoFim: Date
   geradoEm: Date
   geradoPor: string
+  movimentacoesPermanentes: MovimentacaoPermanenteRelatorio[]
   containers: ContainerRelatorio[]
   custos: CustoRelatorio[]
   manutencoes: ManutencaoRelatorio[]
@@ -65,6 +74,8 @@ const CORES = {
   escuro: 'FF111827',
   branco: 'FFFFFFFF',
   verde: 'FFD1FAE5',
+  azulClaro: 'FFE0F7FA',
+  cinzaClaro: 'FFF8FAFC',
 }
 
 const moeda = 'R$ #,##0.00'
@@ -73,8 +84,8 @@ const dataFormato = 'dd/mm/yyyy'
 function aplicarCabecalho(linha: ExcelJS.Row, cor: string) {
   linha.font = { bold: true, color: { argb: CORES.escuro } }
   linha.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: cor } }
-  linha.alignment = { vertical: 'middle', horizontal: 'center' }
-  linha.height = 22
+  linha.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+  linha.height = 30
   linha.eachCell((celula) => {
     celula.border = {
       top: { style: 'thin', color: { argb: CORES.escuro } },
@@ -85,26 +96,60 @@ function aplicarCabecalho(linha: ExcelJS.Row, cor: string) {
   })
 }
 
+function configurarImpressao(planilha: ExcelJS.Worksheet, orientacao: 'portrait' | 'landscape' = 'landscape') {
+  planilha.pageSetup = {
+    orientation: orientacao,
+    paperSize: 9,
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+    horizontalCentered: true,
+    margins: {
+      left: 0.25,
+      right: 0.25,
+      top: 0.5,
+      bottom: 0.5,
+      header: 0.2,
+      footer: 0.2,
+    },
+  }
+  planilha.headerFooter.oddFooter = '&L RPMTruck&C Página &P de &N&R &D'
+}
+
 function prepararTabela(planilha: ExcelJS.Worksheet, colunas: Partial<ExcelJS.Column>[], cor = CORES.azul) {
   planilha.columns = colunas
   aplicarCabecalho(planilha.getRow(1), cor)
-  planilha.views = [{ state: 'frozen', ySplit: 1 }]
+  planilha.views = [{ state: 'frozen', ySplit: 1, showGridLines: false }]
   planilha.autoFilter = { from: 'A1', to: `${planilha.getColumn(colunas.length).letter}1` }
-  planilha.properties.defaultRowHeight = 18
+  planilha.properties.defaultRowHeight = 20
+  planilha.pageSetup.printTitlesRow = '1:1'
+  configurarImpressao(planilha)
 }
 
 function estilizarLinhas(planilha: ExcelJS.Worksheet) {
   planilha.eachRow((linha, numero) => {
     if (numero === 1) return
-    linha.alignment = { vertical: 'middle' }
+    let linhasNecessarias = 1
     linha.eachCell((celula) => {
+      const larguraColuna = Number(planilha.getColumn(celula.col).width ?? 12)
+      const tamanhoTexto = celula.text?.length ?? 0
+      linhasNecessarias = Math.max(linhasNecessarias, Math.ceil(tamanhoTexto / Math.max(larguraColuna - 2, 8)))
+      celula.alignment = {
+        vertical: 'middle',
+        wrapText: true,
+        horizontal: typeof celula.value === 'number' ? 'right' : 'left',
+      }
       celula.border = {
         top: { style: 'hair', color: { argb: 'FF9CA3AF' } },
         left: { style: 'hair', color: { argb: 'FF9CA3AF' } },
         bottom: { style: 'hair', color: { argb: 'FF9CA3AF' } },
         right: { style: 'hair', color: { argb: 'FF9CA3AF' } },
       }
+      if (numero % 2 === 0) {
+        celula.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CORES.cinzaClaro } }
+      }
     })
+    linha.height = Math.min(60, Math.max(20, linhasNecessarias * 15))
   })
 }
 
@@ -131,46 +176,89 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
     empresa: dados.empresa,
     periodoInicio: dataIso(dados.periodoInicio),
     periodoFim: dataIso(dados.periodoFim),
+    movimentacoesPermanentes: dados.movimentacoesPermanentes,
     containers: dados.containers,
     custos: dados.custos,
     manutencoes: dados.manutencoes,
   })).digest('hex')
 
   const resumo = workbook.addWorksheet('Resumo mensal', { views: [{ showGridLines: false }] })
-  resumo.columns = [{ width: 28 }, { width: 24 }, { width: 28 }, { width: 24 }]
-  resumo.mergeCells('A1:D1')
+  resumo.columns = [
+    { width: 20 },
+    { width: 22 },
+    { width: 18 },
+    { width: 20 },
+    { width: 22 },
+    { width: 18 },
+  ]
+  configurarImpressao(resumo, 'portrait')
+  resumo.mergeCells('A1:F2')
   resumo.getCell('A1').value = 'RELATÓRIO OPERACIONAL RPMTRUCK'
-  resumo.getCell('A1').font = { bold: true, size: 16, color: { argb: CORES.branco } }
+  resumo.getCell('A1').font = { bold: true, size: 18, color: { argb: CORES.branco } }
   resumo.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CORES.escuro } }
   resumo.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' }
-  resumo.getRow(1).height = 30
-  const resumoLinhas: Array<[string, string | number | Date, string, string | number | Date]> = [
-    ['Empresa', dados.empresa.nome, 'CNPJ', dados.empresa.cnpj || 'Não informado'],
-    ['Período inicial', dados.periodoInicio, 'Período final', dados.periodoFim],
-    ['Plano', dados.empresa.plano, 'Gerado por', dados.geradoPor],
-    ['Containers', dados.containers.length, 'Abastecimentos', abastecimentos.length],
-    ['Manutenções', dados.manutencoes.length, 'Custos', dados.custos.length],
-    ['Total de fretes', totalFrete, 'Total de comissões', totalComissao],
-    ['Total de custos', totalCustos, 'Total de manutenções', totalManutencoes],
+  resumo.getRow(1).height = 24
+  resumo.getRow(2).height = 24
+
+  const adicionarLinhaIdentificacao = (linha: number, rotuloA: string, valorA: string | Date, rotuloB: string, valorB: string | Date) => {
+    resumo.mergeCells(linha, 2, linha, 3)
+    resumo.mergeCells(linha, 5, linha, 6)
+    resumo.getCell(linha, 1).value = rotuloA
+    resumo.getCell(linha, 2).value = valorA
+    resumo.getCell(linha, 4).value = rotuloB
+    resumo.getCell(linha, 5).value = valorB
+    ;[1, 4].forEach((coluna) => {
+      const celula = resumo.getCell(linha, coluna)
+      celula.font = { bold: true, color: { argb: CORES.escuro } }
+      celula.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CORES.azulClaro } }
+    })
+    ;[2, 5].forEach((coluna) => {
+      resumo.getCell(linha, coluna).alignment = { vertical: 'middle', wrapText: true }
+    })
+    resumo.getRow(linha).height = 28
+  }
+
+  adicionarLinhaIdentificacao(4, 'Empresa', dados.empresa.nome, 'CNPJ', dados.empresa.cnpj || 'Não informado')
+  adicionarLinhaIdentificacao(5, 'Período inicial', dados.periodoInicio, 'Período final', dados.periodoFim)
+  adicionarLinhaIdentificacao(6, 'Plano', dados.empresa.plano, 'Gerado por', dados.geradoPor)
+  resumo.getCell('B5').numFmt = dataFormato
+  resumo.getCell('E5').numFmt = dataFormato
+
+  resumo.mergeCells('A8:F8')
+  resumo.getCell('A8').value = 'RESUMO OPERACIONAL'
+  aplicarCabecalho(resumo.getRow(8), CORES.azul)
+
+  const metricas: Array<[string, number, string, number, string, number]> = [
+    ['Movimentações', dados.movimentacoesPermanentes.length, 'Containers detalhados', dados.containers.length, 'Abastecimentos', abastecimentos.length],
+    ['Manutenções', dados.manutencoes.length, 'Custos', dados.custos.length, 'Total de fretes', totalFrete],
+    ['Total de comissões', totalComissao, 'Total de custos', totalCustos, 'Total de manutenções', totalManutencoes],
   ]
-  resumoLinhas.forEach((valores, indice) => {
-    const linha = resumo.addRow(valores)
-    linha.getCell(1).font = { bold: true }
-    linha.getCell(3).font = { bold: true }
-    if (indice === 1) {
-      linha.getCell(2).numFmt = dataFormato
-      linha.getCell(4).numFmt = dataFormato
-    }
-    if (indice >= 5) {
-      linha.getCell(2).numFmt = moeda
-      linha.getCell(4).numFmt = moeda
-    }
+  metricas.forEach((metrica, indice) => {
+    const linha = 9 + indice
+    metrica.forEach((valor, coluna) => {
+      const celula = resumo.getCell(linha, coluna + 1)
+      celula.value = valor
+      celula.alignment = { vertical: 'middle', wrapText: true, horizontal: coluna % 2 === 0 ? 'left' : 'right' }
+      if (coluna % 2 === 0) {
+        celula.font = { bold: true }
+        celula.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CORES.cinzaClaro } }
+      }
+    })
+    resumo.getRow(linha).height = 30
   })
-  resumo.getCell('A10').value = 'Observação'
-  resumo.getCell('A10').font = { bold: true }
-  resumo.mergeCells('B10:D11')
-  resumo.getCell('B10').value = 'O arquivo é um extrato operacional. Documentos fiscais oficiais devem ser preservados conforme a legislação aplicável.'
-  resumo.getCell('B10').alignment = { wrapText: true, vertical: 'top' }
+  ;['F10', 'B11', 'D11', 'F11'].forEach((endereco) => { resumo.getCell(endereco).numFmt = moeda })
+
+  resumo.mergeCells('A13:F13')
+  resumo.getCell('A13').value = 'PRESERVAÇÃO DOS DADOS'
+  aplicarCabecalho(resumo.getRow(13), CORES.verde)
+  resumo.mergeCells('A14:F16')
+  resumo.getCell('A14').value = 'O código do container, a origem, o destino e a data da operação são preservados no histórico permanente e estão detalhados na aba “Movimentações permanentes”. Este arquivo é um extrato operacional; documentos fiscais oficiais devem ser preservados conforme a legislação aplicável.'
+  resumo.getCell('A14').alignment = { wrapText: true, vertical: 'middle', horizontal: 'left' }
+  resumo.getCell('A14').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CORES.cinzaClaro } }
+  resumo.getRow(14).height = 24
+  resumo.getRow(15).height = 24
+  resumo.getRow(16).height = 24
+  resumo.pageSetup.printArea = 'A1:F16'
 
   const containers = workbook.addWorksheet('Containers')
   prepararTabela(containers, [
@@ -206,6 +294,28 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
   containers.getColumn('frete').numFmt = moeda
   containers.getColumn('comissao').numFmt = moeda
   estilizarLinhas(containers)
+
+  const movimentacoes = workbook.addWorksheet('Movimentações permanentes')
+  prepararTabela(movimentacoes, [
+    { header: 'Nº', key: 'numero', width: 8 },
+    { header: 'DATA DA OPERAÇÃO', key: 'data', width: 20 },
+    { header: 'CÓDIGO DO CONTAINER', key: 'codigo', width: 24 },
+    { header: 'ORIGEM', key: 'origem', width: 34 },
+    { header: 'DESTINO', key: 'destino', width: 34 },
+    { header: 'ID DO REGISTRO PERMANENTE', key: 'id', width: 40 },
+  ], CORES.verde)
+  dados.movimentacoesPermanentes.forEach((movimentacao, indice) => movimentacoes.addRow({
+    numero: indice + 1,
+    data: movimentacao.data_operacao,
+    codigo: movimentacao.codigo_container,
+    origem: movimentacao.terminal_origem,
+    destino: movimentacao.terminal_destino,
+    id: movimentacao.id,
+  }))
+  movimentacoes.getColumn('data').numFmt = dataFormato
+  movimentacoes.getColumn('codigo').numFmt = '@'
+  movimentacoes.getColumn('id').numFmt = '@'
+  estilizarLinhas(movimentacoes)
 
   const combustivel = workbook.addWorksheet('Abastecimentos')
   prepararTabela(combustivel, [
@@ -294,11 +404,12 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
     ['Gerado por', dados.geradoPor],
     ['Plano', dados.empresa.plano],
     ['Checksum dos dados (SHA-256)', checksumDados],
+    ['Movimentações permanentes', dados.movimentacoesPermanentes.length],
     ['Containers', dados.containers.length],
     ['Abastecimentos', abastecimentos.length],
     ['Manutenções', dados.manutencoes.length],
     ['Custos', dados.custos.length],
-    ['Versão do formato', 'RPMTruck Operacional 1.0'],
+    ['Versão do formato', 'RPMTruck Operacional 2.0'],
   ].forEach((linha) => auditoria.addRow(linha))
   auditoria.getColumn(2).alignment = { wrapText: true, vertical: 'top' }
 
@@ -309,6 +420,10 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
     { header: 'DESCRIÇÃO', key: 'descricao', width: 70 },
   ], CORES.cinza)
   ;[
+    ['Movimentações permanentes', 'CÓDIGO DO CONTAINER', 'Identificação do container preservada permanentemente.'],
+    ['Movimentações permanentes', 'ORIGEM', 'Local ou terminal de onde o container saiu.'],
+    ['Movimentações permanentes', 'DESTINO', 'Local ou terminal para onde o container foi enviado.'],
+    ['Movimentações permanentes', 'DATA DA OPERAÇÃO', 'Data da postagem ou movimentação registrada.'],
     ['Containers', 'CONTAINER', 'Código do container preservado como texto.'],
     ['Containers', 'TERMINAL INÍCIO', 'Local de origem da operação.'],
     ['Containers', 'TERMINAL FIM', 'Local de destino da operação.'],
@@ -323,6 +438,7 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
     conteudo: Buffer.from(buffer),
     checksumDados,
     resumo: {
+      movimentacoesPermanentes: dados.movimentacoesPermanentes.length,
       containers: dados.containers.length,
       abastecimentos: abastecimentos.length,
       manutencoes: dados.manutencoes.length,
@@ -334,4 +450,3 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
     },
   }
 }
-

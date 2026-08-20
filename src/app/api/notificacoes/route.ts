@@ -5,16 +5,17 @@ import { isAdminRole, requireAuth } from '@/lib/auth'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { criarNotificacao, escopoNotificacoes, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
+import { textoOperacional } from '@/lib/domainValidation'
 
 export const dynamic = 'force-dynamic'
 
 const criarSchema = z.object({
-  titulo: z.string().trim().min(3).max(120),
-  mensagem: z.string().trim().min(3).max(1000),
-  modulo: z.string().trim().min(2).max(40),
+  titulo: textoOperacional(3, 120),
+  mensagem: textoOperacional(3, 1000),
+  modulo: z.enum(['FROTA', 'MOTORISTAS', 'CONTAINERS', 'CUSTOS', 'TAREFAS', 'RELATORIOS', 'USUARIOS']),
   usuarioId: z.string().uuid().optional(),
   veiculoId: z.string().uuid().optional(),
-})
+}).strict()
 
 type ContagemPorModulo = Array<{
   modulo: string

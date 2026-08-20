@@ -158,6 +158,7 @@ model Empresa {
   movimentacoes_container MovimentacaoContainerPermanente[]
   containers              Container[]
   tarefas                 Tarefa[]
+  leituras_quilometragem  LeituraQuilometragem[]
 
   @@map("empresas")
 }
@@ -224,11 +225,12 @@ model Veiculo {
   empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
   // Relações
-  motoristas   Motorista[]
-  historicos   HistoricoVeiculo[]
-  custos       Custo[]
-  notificacoes Notificacao[]
-  containers   Container[]
+  motoristas             Motorista[]
+  historicos             HistoricoVeiculo[]
+  custos                 Custo[]
+  notificacoes           Notificacao[]
+  containers             Container[]
+  leituras_quilometragem LeituraQuilometragem[]
 
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
@@ -291,6 +293,25 @@ model HistoricoVeiculo {
 
   @@index([relatorioArquivoId])
   @@map("historicos_veiculo")
+}
+
+model LeituraQuilometragem {
+  id            String   @id @default(uuid())
+  quilometragem Float
+  registrada_em DateTime @default(now())
+  origem        String   @default("ATUALIZACAO_VEICULO")
+
+  veiculoId String
+  veiculo   Veiculo @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
+
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  criado_em DateTime @default(now())
+
+  @@index([empresaId, registrada_em])
+  @@index([veiculoId, registrada_em])
+  @@map("leituras_quilometragem")
 }
 
 model Custo {
@@ -382,17 +403,18 @@ model Tarefa {
 }
 
 model Container {
-  id              String   @id @default(uuid())
-  data            DateTime
-  codigo          String
-  tipo            String
-  terminal_inicio String
-  terminal_fim    String
-  frete           Float    @default(0)
-  comissao        Float    @default(0)
-  status          String   @default("AGENDADO")
-  observacoes     String?
-  itens_conteudo  Json?
+  id                  String   @id @default(uuid())
+  data                DateTime
+  codigo              String
+  tipo                String
+  terminal_inicio     String
+  terminal_fim        String
+  frete               Float    @default(0)
+  comissao            Float    @default(0)
+  percentual_comissao Float    @default(10)
+  status              String   @default("AGENDADO")
+  observacoes         String?
+  itens_conteudo      Json?
 
   empresaId String
   empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)

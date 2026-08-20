@@ -2,18 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
+import { textoOperacional } from '@/lib/domainValidation'
 
 export const dynamic = 'force-dynamic'
 
 const criarTarefaSchema = z.object({
-  titulo: z.string().trim().min(3).max(160),
-  descricao: z.string().trim().max(2000).optional().nullable(),
+  titulo: textoOperacional(3, 160),
+  descricao: textoOperacional(1, 2000).optional().nullable(),
   prazo: z.string().datetime().optional().nullable(),
   prioridade: z.enum(['BAIXA', 'MEDIA', 'ALTA', 'URGENTE']).default('MEDIA'),
   responsavelId: z.string().uuid(),
-  modulo: z.string().trim().max(40).optional().nullable(),
-  origemId: z.string().trim().max(100).optional().nullable(),
-})
+  modulo: z.enum(['FROTA', 'GESTAO', 'NOTIFICACOES', 'TAREFAS', 'RELATORIOS']).optional().nullable(),
+  origemId: z.string().trim().max(100).regex(/^[A-Za-z0-9:_-]+$/).optional().nullable(),
+}).strict()
 
 function podeDelegar(role: string) {
   return ['GESTOR_EMPRESA', 'GESTOR'].includes(role)

@@ -2,23 +2,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
+import {
+  calcularComissao,
+  codigoContainerSchema,
+  dataIsoSchema,
+  nomeOperacional,
+  percentualSchema,
+  textoOperacional,
+  valorMonetarioSchema,
+} from '@/lib/domainValidation'
 
 const schema = z.object({
-  data: z.string().min(10).optional(),
-  codigo: z.string().trim().min(4).max(30).transform((valor) => valor.toUpperCase()).optional(),
-  tipo: z.string().trim().min(2).max(30).optional(),
-  terminalInicio: z.string().trim().min(2).max(160).optional(),
-  terminalFim: z.string().trim().min(2).max(160).optional(),
+  data: dataIsoSchema.optional(),
+  codigo: codigoContainerSchema.optional(),
+  tipo: z.enum(['20 PÉS', '40 PÉS', '40 HC', 'REEFER', 'TANQUE', 'OUTRO']).optional(),
+  terminalInicio: nomeOperacional(2, 160).optional(),
+  terminalFim: nomeOperacional(2, 160).optional(),
   veiculoId: z.string().uuid().optional(),
   motoristaId: z.string().uuid().nullable().optional(),
-  frete: z.coerce.number().min(0).optional(),
-  comissao: z.coerce.number().min(0).optional(),
+  frete: valorMonetarioSchema.optional(),
+  percentualComissao: percentualSchema.optional(),
   status: z.enum(['AGENDADO', 'EM_TRANSITO', 'ENTREGUE', 'CANCELADO']).optional(),
-  observacoes: z.string().trim().max(2000).nullable().optional(),
+  observacoes: textoOperacional(1, 2000).nullable().optional(),
   itensConteudo: z.array(z.object({
-    nome: z.string().trim().min(1).max(100),
-    porcentagem: z.coerce.number().min(0).max(100),
-  })).max(50).optional(),
+    nome: nomeOperacional(1, 100),
+    porcentagem: percentualSchema,
+  }).strict()).max(50).optional(),
+}).strict().superRefine((dados, contexto) => {
+  const ocupacao = dados.itensConteudo?.reduce((total, item) => total + item.porcentagem, 0) ?? 0
+  if (ocupacao > 100) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['itensConteudo'], message: 'A ocupação total não pode ultrapassar 100%.' })
 })
 
 const serializar = (container: any) => ({
@@ -33,6 +45,7 @@ const serializar = (container: any) => ({
   motoristaId: container.motoristaId,
   frete: container.frete,
   comissao: container.comissao,
+  percentualComissao: container.percentual_comissao,
   status: container.status,
   observacoes: container.observacoes || undefined,
   itensConteudo: container.itens_conteudo || [],
@@ -53,8 +66,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const parsed = schema.safeParse(await request.json())
-  if (!parsed.success) return NextResponse.json({ erro: 'Alteração inválida.' }, { status: 400 })
+  if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? 'Alteração inválida.' }, { status: 400 })
   const dados = parsed.data
+  const terminalInicio = dados.terminalInicio ?? atual.terminal_inicio
+  const terminalFim = dados.terminalFim ?? atual.terminal_fim
+  if (terminalInicio.toLocaleLowerCase('pt-BR') === terminalFim.toLocaleLowerCase('pt-BR')) {
+    return NextResponse.json({ erro: 'Origem e destino devem ser diferentes.' }, { status: 400 })
+  }
+  const frete = dados.frete ?? atual.frete
+  const percentualComissao = dados.percentualComissao ?? atual.percentual_comissao
 
   const container = await prisma.$transaction(async (tx) => {
     const atualizado = await tx.container.update({
@@ -66,7 +86,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         terminal_inicio: dados.terminalInicio,
         terminal_fim: dados.terminalFim,
         frete: dados.frete,
-        comissao: dados.comissao,
+        comissao: dados.frete !== undefined || dados.percentualComissao !== undefined
+          ? calcularComissao(frete, percentualComissao)
+          : undefined,
+        percentual_comissao: dados.percentualComissao,
         status: dados.status,
         observacoes: dados.observacoes,
         itens_conteudo: dados.itensConteudo,

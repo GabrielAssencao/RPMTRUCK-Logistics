@@ -1,10 +1,23 @@
 // src/app/api/solicitacoes/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient, PlanoTipo } from '@prisma/client';
+import { z } from 'zod';
 import { requireAdminAuth } from '@/lib/auth';
 import { notificarAdmins } from '@/lib/notificacoes';
+import { nomeOperacional, nomePessoa, textoOperacional } from '@/lib/domainValidation';
+import { prisma } from '@/lib/prisma';
+import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
+import { PLANOS_CONFIG } from '@/utils/planos';
 
-const prisma = new PrismaClient();
+const solicitacaoSchema = z.object({
+  empresa: nomeOperacional(2, 150),
+  responsavel: nomePessoa(3, 120),
+  email: z.string().trim().email().max(254).toLowerCase(),
+  whatsapp: z.string().trim().regex(/^\+?[\d\s().-]{10,20}$/, 'WhatsApp inválido.').optional().or(z.literal('')),
+  plano: z.enum(['ESSENCIAL', 'AVANCADO', 'ENTERPRISE']),
+  mensagem: textoOperacional(3, 1500).optional().or(z.literal('')),
+  contatoPref: z.enum(['email', 'whatsapp']).default('email'),
+  veiculos: z.coerce.number().int().min(0).max(100_000).optional(),
+}).strict();
 
 // ─── 1. ROTA DO ADMIN: LISTAR SOLICITAÇÕES (GET) ───
 export async function GET(request: NextRequest) {
@@ -23,28 +36,21 @@ export async function GET(request: NextRequest) {
       { erro: 'Erro técnico ao recuperar fila de solicitações.' }, 
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
 // ─── 2. ROTA DO CLIENTE: ENVIAR FORMULÁRIO DA LANDING PAGE (POST) ───
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { empresa, responsavel, email, whatsapp, veiculos, plano, mensagem, contatoPref } = body;
-
-    // Validação estrita de campos obrigatórios no Servidor
-    if (!empresa || !responsavel || !email || !plano) {
-      return NextResponse.json(
-        { erro: 'Parâmetros obrigatórios ausentes na requisição técnica.' },
-        { status: 400 }
-      );
-    }
+    const bloqueio = applyRateLimit(request, `solicitacao:${getClientIp(request)}`, RATE_LIMITS.SIGNUP.limit, RATE_LIMITS.SIGNUP.windowMs);
+    if (bloqueio) return bloqueio;
+    const parsed = solicitacaoSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ erro: 'Revise os dados da solicitação.' }, { status: 400 });
+    const { empresa, responsavel, email, whatsapp, plano, mensagem, contatoPref } = parsed.data;
 
     // Bloqueio de duplicidade para e-mails corporativos em análise
     const leadExistente = await prisma.solicitacaoAcesso.findUnique({
-      where: { email: email.toLowerCase().trim() }
+      where: { email }
     });
 
     if (leadExistente) {
@@ -54,25 +60,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Conversão segura do Enum do Plano para casar com o prisma.schema
-    const planoFormatado = plano.toUpperCase() as PlanoTipo;
-    if (!Object.values(PlanoTipo).includes(planoFormatado)) {
-      return NextResponse.json(
-        { erro: 'O plano indicado não condiz com as cotas de produto da RPMTruck.' },
-        { status: 400 }
-      );
-    }
-
-    // Inserção limpa no banco via Prisma Client
     const novaSolicitacao = await prisma.solicitacaoAcesso.create({
       data: {
-        empresa: empresa.trim(),
-        responsavel: responsavel.trim(),
-        email: email.toLowerCase().trim(),
+        empresa,
+        responsavel,
+        email,
         whatsapp: whatsapp || null,
-        // Garante a gravação estrita dos limites numéricos travados do front-end
-        veiculos: parseInt(veiculos) || 0,
-        plano: planoFormatado,
+        veiculos: PLANOS_CONFIG[plano].veiculosBase,
+        plano,
         mensagem: mensagem || null,
         contatoPref: contatoPref || 'email',
         status: 'PENDENTE'
@@ -92,7 +87,5 @@ export async function POST(request: NextRequest) {
       { erro: 'Falha interna na engine de dados do servidor RPMTruck.' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

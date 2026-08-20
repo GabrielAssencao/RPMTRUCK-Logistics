@@ -86,9 +86,9 @@ export default function FrotaPage() {
 
   // Configuração Dinâmica dos Campos do Drawer com as Localizações do Sistema
   const camposFrotaDinamicos: FieldConfig[] = [
-    { name: 'modelo', label: 'Modelo do Caminhão / Veículo', type: 'text', placeholder: 'Ex: VOLVO FH 540', required: true },
-    { name: 'placa', label: 'Placa / Matrícula', type: 'text', placeholder: 'Ex: ABC-1234', required: true },
-    { name: 'ano', label: 'Ano do Veículo', type: 'number', placeholder: 'Ex: 2023', required: true },
+    { name: 'modelo', label: 'Modelo do Caminhão / Veículo', type: 'text', placeholder: 'Ex: VOLVO FH 540', required: true, maxLength: 100 },
+    { name: 'placa', label: 'Placa / Matrícula', type: 'text', placeholder: 'Ex: ABC-1234', required: true, maxLength: 8, pattern: '[A-Za-z]{3}-?[0-9][A-Za-z0-9][0-9]{2}', title: 'Informe uma placa brasileira antiga ou Mercosul.' },
+    { name: 'ano', label: 'Ano do Veículo', type: 'number', placeholder: 'Ex: 2023', required: true, min: 1950, max: new Date().getFullYear() + 1, step: 1 },
     { 
       name: 'tipo', 
       label: 'Tipo de Carroçaria / Chassi', 
@@ -102,7 +102,7 @@ export default function FrotaPage() {
         { label: 'Refrigerado', value: 'Refrigerado' }
       ]
     },
-    { name: 'quilometragem', label: 'Quilometragem Atual (KM)', type: 'number', placeholder: 'Ex: 125430', required: true },
+    { name: 'quilometragem', label: 'Quilometragem Atual (KM)', type: 'number', placeholder: 'Ex: 125430', required: true, min: 0, max: 100000000, step: 1 },
     { 
       name: 'localizacao', 
       label: 'Base / Pátio de Origem', 

@@ -920,6 +920,7 @@ export default function CustosPage() {
                 <input 
                   type="text" 
                   required 
+                  maxLength={500}
                   placeholder="Ex: Abastecimento Diesel S10 - Posto Shell / Reembolso Almoço" 
                   value={formCusto.descricao} 
                   onChange={e => setFormCusto({...formCusto, descricao: e.target.value})} 
@@ -935,6 +936,7 @@ export default function CustosPage() {
                     type="number" 
                     step="0.01" 
                     min="0.01"
+                    max="1000000000"
                     required 
                     placeholder="Ex: 450.00" 
                     value={formCusto.valor} 

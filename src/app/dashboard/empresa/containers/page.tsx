@@ -20,7 +20,6 @@ import {
   ArrowRightLeft,
   PackageCheck,
   PackageX,
-  Calculator,
   Calendar,
   X,
   Lock,
@@ -69,7 +68,8 @@ const FORM_INICIAL = {
   terminalFim: '',
   duplaId: '',
   frete: '',
-  comissao: '',
+  percentualComissao: '10',
+  comissao: '0.00',
   status: 'AGENDADO' as StatusContainer,
   observacoes: '',
   itensConteudo: [] as ItemConteudo[]
@@ -242,6 +242,7 @@ export default function ContainersPage() {
       terminalFim: registro.terminalFim,
       duplaId: registro.duplaId,
       frete: String(registro.frete),
+      percentualComissao: String(registro.percentualComissao),
       comissao: String(registro.comissao),
       status: registro.status,
       observacoes: registro.observacoes ?? '',
@@ -261,7 +262,7 @@ export default function ContainersPage() {
       terminalFim: form.terminalFim,
       duplaId: form.duplaId,
       frete: Number(form.frete) || 0,
-      comissao: Number(form.comissao) || 0,
+      percentualComissao: Number(form.percentualComissao),
       status: form.status,
       observacoes: form.observacoes || undefined,
       itensConteudo: form.itensConteudo
@@ -278,9 +279,13 @@ export default function ContainersPage() {
     setContainerEditandoId(null)
   }
 
-  const handleSugerirComissao = () => {
-    const freteNum = Number(form.frete) || 0
-    setForm(prev => ({ ...prev, comissao: (freteNum * 0.1).toFixed(2) }))
+  const atualizarCalculoComissao = (frete: string, percentual: string) => {
+    const freteNumero = Number(frete)
+    const percentualNumero = Number(percentual)
+    const comissao = Number.isFinite(freteNumero) && Number.isFinite(percentualNumero)
+      ? (freteNumero * percentualNumero / 100).toFixed(2)
+      : '0.00'
+    setForm(prev => ({ ...prev, frete, percentualComissao: percentual, comissao }))
   }
 
   return (
@@ -1006,6 +1011,9 @@ export default function ContainersPage() {
                     <input
                       type="text" required
                       placeholder="Ex: MSCU 734521-0"
+                      pattern="[A-Za-z]{4}[ -]?[0-9]{6}[ -]?[0-9]"
+                      maxLength={15}
+                      title="Use quatro letras e sete números, por exemplo MSCU 734521-0."
                       value={form.codigo}
                       onChange={e => setForm({ ...form, codigo: e.target.value.toUpperCase() })}
                       className="w-full p-2.5 border bg-transparent outline-none uppercase"
@@ -1052,6 +1060,7 @@ export default function ContainersPage() {
                     <input
                       type="text" required
                       placeholder="Ex: Porto de Santos"
+                      maxLength={160}
                       value={form.terminalInicio}
                       onChange={e => setForm({ ...form, terminalInicio: e.target.value })}
                       className="w-full p-2.5 border bg-transparent outline-none"
@@ -1063,6 +1072,7 @@ export default function ContainersPage() {
                     <input
                       type="text" required
                       placeholder="Ex: CD Guarulhos"
+                      maxLength={160}
                       value={form.terminalFim}
                       onChange={e => setForm({ ...form, terminalFim: e.target.value })}
                       className="w-full p-2.5 border bg-transparent outline-none"
@@ -1071,41 +1081,43 @@ export default function ContainersPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                   <div>
                     <label className="block text-[10px] uppercase font-bold mb-1">Frete (R$) *</label>
                     <input
-                      type="number" step="0.01" required
+                      type="number" step="0.01" min="0" max="1000000000" required
                       placeholder="Ex: 4200.00"
                       value={form.frete}
-                      onChange={e => setForm({ ...form, frete: e.target.value })}
+                      onChange={e => atualizarCalculoComissao(e.target.value, form.percentualComissao)}
                       className="w-full p-2.5 border bg-transparent outline-none"
                       style={{ borderColor: 'var(--border)' }}
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase font-bold mb-1">Comissão (R$) *</label>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="number" step="0.01" required
-                        placeholder="Ex: 420.00"
-                        value={form.comissao}
-                        onChange={e => setForm({ ...form, comissao: e.target.value })}
-                        className="w-full p-2.5 border bg-transparent outline-none"
-                        style={{ borderColor: 'var(--border)' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={handleSugerirComissao}
-                        title="Sugerir 10% do frete"
-                        className="px-2 border shrink-0 hover:bg-white/5 transition-colors cursor-pointer"
-                        style={{ borderColor: primary, color: primary }}
-                      >
-                        <Calculator size={14} />
-                      </button>
-                    </div>
+                    <label className="block text-[10px] uppercase font-bold mb-1">Percentual do motorista (%) *</label>
+                    <input
+                      type="number" step="0.01" min="0" max="100" required
+                      placeholder="Ex: 20"
+                      value={form.percentualComissao}
+                      onChange={e => atualizarCalculoComissao(form.frete, e.target.value)}
+                      className="w-full p-2.5 border bg-transparent outline-none"
+                      style={{ borderColor: 'var(--border)' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold mb-1">Comissão calculada (R$)</label>
+                    <input
+                      type="number" step="0.01" readOnly
+                      value={form.comissao}
+                      aria-describedby="ajuda-comissao"
+                      className="w-full p-2.5 border bg-transparent outline-none opacity-75"
+                      style={{ borderColor: 'var(--border)' }}
+                    />
                   </div>
                 </div>
+                <p id="ajuda-comissao" className="text-[10px] text-foreground-muted">
+                  Informe o percentual acordado. A comissão é calculada automaticamente sobre o frete e confirmada novamente pelo servidor.
+                </p>
 
                 {/* ── SEÇÃO OPCIONAL DE PREENCHIMENTO DE CARGA (% DO VEÍCULO) ── */}
                 <div className="p-3 border space-y-3 bg-background-secondary" style={{ borderColor: 'var(--border)' }}>
@@ -1118,6 +1130,7 @@ export default function ContainersPage() {
                     <input
                       type="text"
                       placeholder="Ex: Pneus, Peças Automotivas"
+                      maxLength={100}
                       value={novoItemNome}
                       onChange={e => setNovoItemNome(e.target.value)}
                       className="flex-1 p-2 border text-xs bg-transparent outline-none"
@@ -1186,6 +1199,7 @@ export default function ContainersPage() {
                   <textarea
                     rows={2}
                     placeholder="Ex: Aguardando liberação alfandegária"
+                    maxLength={2000}
                     value={form.observacoes}
                     onChange={e => setForm({ ...form, observacoes: e.target.value })}
                     className="w-full p-2.5 border bg-transparent outline-none resize-none"

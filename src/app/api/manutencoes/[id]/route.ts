@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 
-const schema = z.object({ status: z.enum(['PENDENTE', 'CONCLUIDA', 'CANCELADA', 'NAO_REALIZADA']) })
+const schema = z.object({ status: z.enum(['PENDENTE', 'CONCLUIDA', 'CANCELADA', 'NAO_REALIZADA']) }).strict()
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
@@ -13,7 +13,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (atual.relatorioArquivoId) return NextResponse.json({ erro: 'Esta manutenção já foi arquivada e não pode mais ser alterada.' }, { status: 409 })
   const parsed = schema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ erro: 'Status inválido.' }, { status: 400 })
-  const h = await prisma.historicoVeiculo.update({ where: { id: atual.id }, data: { status: parsed.data.status, data_conclusao: parsed.data.status === 'CONCLUIDA' ? new Date() : null } })
+  const h = await prisma.$transaction(async (tx) => {
+    const dataConclusao = parsed.data.status === 'CONCLUIDA' ? new Date() : null
+    const historico = await tx.historicoVeiculo.update({ where: { id: atual.id }, data: { status: parsed.data.status, data_conclusao: dataConclusao } })
+    if (parsed.data.status === 'CONCLUIDA' && atual.status !== 'CONCLUIDA') {
+      await tx.leituraQuilometragem.create({ data: { quilometragem: atual.km_atual, registrada_em: dataConclusao!, origem: 'MANUTENCAO', veiculoId: atual.veiculoId, empresaId: auth.session!.empresaId! } })
+      if (atual.km_atual > atual.veiculo.quilometragem) await tx.veiculo.update({ where: { id: atual.veiculoId }, data: { quilometragem: atual.km_atual } })
+    }
+    return historico
+  })
   return NextResponse.json({ id: h.id, veiculoPlaca: atual.veiculo.placa, veiculoModelo: atual.veiculo.modelo, dataAgendada: h.data_agendada.toISOString().slice(0, 10), tipo: h.tipo, pecas: h.pecas_substituidas || h.descricao || '', custo: h.custo, kmAtual: h.km_atual, status: h.status, origem: h.origem })
 }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { nomeOperacional } from '@/lib/domainValidation'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,11 +35,11 @@ export async function GET(request: NextRequest) {
 }
 
 const atualizarPerfilSchema = z.object({
-  nome: z.string().trim().min(2).max(150),
-  cnpj: z.string().trim().max(30).nullable().optional(),
-  email: z.string().trim().email(),
-  telefone: z.string().trim().max(30).nullable().optional(),
-})
+  nome: nomeOperacional(2, 150),
+  cnpj: z.string().trim().regex(/^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/).nullable().optional(),
+  email: z.string().trim().email().max(254).toLowerCase(),
+  telefone: z.string().trim().regex(/^\+?[\d\s().-]{10,20}$/).nullable().optional(),
+}).strict()
 
 export async function PATCH(request: NextRequest) {
   const auth = await requireEmpresaAuth(request)

@@ -4,23 +4,38 @@ import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { criarNotificacao } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
+import {
+  calcularComissao,
+  codigoContainerSchema,
+  dataIsoSchema,
+  nomeOperacional,
+  percentualSchema,
+  textoOperacional,
+  valorMonetarioSchema,
+} from '@/lib/domainValidation'
 
 const schema = z.object({
-  data: z.string().min(10),
-  codigo: z.string().trim().min(4).max(30).transform((valor) => valor.toUpperCase()),
-  tipo: z.string().trim().min(2).max(30),
-  terminalInicio: z.string().trim().min(2).max(160),
-  terminalFim: z.string().trim().min(2).max(160),
+  data: dataIsoSchema,
+  codigo: codigoContainerSchema,
+  tipo: z.enum(['20 PÉS', '40 PÉS', '40 HC', 'REEFER', 'TANQUE', 'OUTRO']),
+  terminalInicio: nomeOperacional(2, 160),
+  terminalFim: nomeOperacional(2, 160),
   veiculoId: z.string().uuid(),
   motoristaId: z.string().uuid().optional().nullable(),
-  frete: z.coerce.number().min(0),
-  comissao: z.coerce.number().min(0),
+  frete: valorMonetarioSchema,
+  percentualComissao: percentualSchema,
   status: z.enum(['AGENDADO', 'EM_TRANSITO', 'ENTREGUE', 'CANCELADO']),
-  observacoes: z.string().trim().max(2000).optional().nullable(),
+  observacoes: textoOperacional(1, 2000).optional().nullable(),
   itensConteudo: z.array(z.object({
-    nome: z.string().trim().min(1).max(100),
-    porcentagem: z.coerce.number().min(0).max(100),
-  })).max(50).optional(),
+    nome: nomeOperacional(1, 100),
+    porcentagem: percentualSchema,
+  }).strict()).max(50).optional(),
+}).strict().superRefine((dados, contexto) => {
+  if (dados.terminalInicio.toLocaleLowerCase('pt-BR') === dados.terminalFim.toLocaleLowerCase('pt-BR')) {
+    contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['terminalFim'], message: 'Origem e destino devem ser diferentes.' })
+  }
+  const ocupacao = dados.itensConteudo?.reduce((total, item) => total + item.porcentagem, 0) ?? 0
+  if (ocupacao > 100) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['itensConteudo'], message: 'A ocupação total não pode ultrapassar 100%.' })
 })
 
 function serializar(container: any) {
@@ -36,6 +51,7 @@ function serializar(container: any) {
     motoristaId: container.motoristaId,
     frete: container.frete,
     comissao: container.comissao,
+    percentualComissao: container.percentual_comissao,
     status: container.status,
     observacoes: container.observacoes || undefined,
     itensConteudo: container.itens_conteudo || [],
@@ -79,7 +95,7 @@ export async function POST(request: NextRequest) {
   }
 
   const parsed = schema.safeParse(await request.json())
-  if (!parsed.success) return NextResponse.json({ erro: 'Dados do container inválidos.' }, { status: 400 })
+  if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? 'Dados do container inválidos.' }, { status: 400 })
 
   const veiculo = await prisma.veiculo.findFirst({
     where: { id: parsed.data.veiculoId, empresaId: auth.session.empresaId },
@@ -106,7 +122,8 @@ export async function POST(request: NextRequest) {
           terminal_inicio: parsed.data.terminalInicio,
           terminal_fim: parsed.data.terminalFim,
           frete: parsed.data.frete,
-          comissao: parsed.data.comissao,
+          comissao: calcularComissao(parsed.data.frete, parsed.data.percentualComissao),
+          percentual_comissao: parsed.data.percentualComissao,
           status: parsed.data.status,
           observacoes: parsed.data.observacoes || null,
           itens_conteudo: parsed.data.itensConteudo || [],

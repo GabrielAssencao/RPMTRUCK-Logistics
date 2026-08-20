@@ -251,10 +251,10 @@ export default function SolicitarAcesso() {
             {/* 02 — DADOS DA TRANSPORTADORA */}
             <FormSection label="02 — Dados da Transportadora" primary={primary}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <InputField icon={<Building2 size={14} />} label="Nome da empresa" name="empresa" placeholder="Transportadora XYZ" value={form.empresa} onChange={handleChange} primary={primary} />
-                <InputField icon={<User size={14} />} label="Nome do responsável" name="responsavel" placeholder="João Silva" value={form.responsavel} onChange={handleChange} primary={primary} />
-                <InputField icon={<Mail size={14} />} label="E-mail corporativo" name="email" type="email" placeholder="contato@empresa.com" value={form.email} onChange={handleChange} primary={primary} />
-                <InputField icon={<Phone size={14} />} label="WhatsApp" name="whatsapp" placeholder="(11) 99999-9999" value={form.whatsapp} onChange={handleChange} primary={primary} />
+                <InputField icon={<Building2 size={14} />} label="Nome da empresa" name="empresa" placeholder="Transportadora XYZ" value={form.empresa} onChange={handleChange} primary={primary} maxLength={150} />
+                <InputField icon={<User size={14} />} label="Nome do responsável" name="responsavel" placeholder="João Silva" value={form.responsavel} onChange={handleChange} primary={primary} maxLength={120} />
+                <InputField icon={<Mail size={14} />} label="E-mail corporativo" name="email" type="email" placeholder="contato@empresa.com" value={form.email} onChange={handleChange} primary={primary} maxLength={254} />
+                <InputField icon={<Phone size={14} />} label="WhatsApp" name="whatsapp" placeholder="(11) 99999-9999" value={form.whatsapp} onChange={handleChange} primary={primary} maxLength={20} pattern="\+?[0-9\s().-]{10,20}" />
                 <div className="sm:col-span-2 relative">
                   <InputField 
                     icon={<Truck size={14} />} 
@@ -287,7 +287,7 @@ export default function SolicitarAcesso() {
 
             {/* 04 — MENSAGEM */}
             <FormSection label="04 — Mensagem Adicional (opcional)" primary={primary}>
-              <textarea name="mensagem" placeholder="Precisa de mais veículos ou usuários do que o plano oferece? Descreva suas necessidades aqui..." value={form.mensagem} onChange={handleChange} rows={4} className="w-full resize-none text-sm outline-none transition-all duration-200 p-4 border font-sans" style={{ backgroundColor: 'var(--background-secondary)', border: `1px solid var(--border)`, color: 'var(--foreground)', borderRadius: '0' }} onFocus={e => e.target.style.borderColor = primary} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+              <textarea name="mensagem" maxLength={1500} placeholder="Precisa de mais veículos ou usuários do que o plano oferece? Descreva suas necessidades aqui..." value={form.mensagem} onChange={handleChange} rows={4} className="w-full resize-none text-sm outline-none transition-all duration-200 p-4 border font-sans" style={{ backgroundColor: 'var(--background-secondary)', border: `1px solid var(--border)`, color: 'var(--foreground)', borderRadius: '0' }} onFocus={e => e.target.style.borderColor = primary} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
             </FormSection>
 
             {errorMessage && <div className="p-4 border text-xs font-bold uppercase tracking-wider bg-red-500/10 border-red-500/30 text-red-500 font-mono">⚠ {errorMessage}</div>}
@@ -385,7 +385,7 @@ function FormSection({ label, primary, children }: { label: string; primary: str
   )
 }
 
-function InputField({ icon, label, name, placeholder, value, onChange, primary, type = 'text', readOnly = false }: { icon: React.ReactNode; label: string; name: string; placeholder: string; value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; primary: string; type?: string; readOnly?: boolean }) {
+function InputField({ icon, label, name, placeholder, value, onChange, primary, type = 'text', readOnly = false, maxLength, pattern }: { icon: React.ReactNode; label: string; name: string; placeholder: string; value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; primary: string; type?: string; readOnly?: boolean; maxLength?: number; pattern?: string }) {
   return (
     <div>
       <label className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold mb-2 font-mono" style={{ color: 'var(--foreground-muted)' }}>
@@ -398,6 +398,8 @@ function InputField({ icon, label, name, placeholder, value, onChange, primary, 
         value={value} 
         onChange={onChange} 
         readOnly={readOnly}
+        maxLength={maxLength}
+        pattern={pattern}
         className="w-full px-4 py-3 text-sm outline-none transition-all duration-200 border font-sans" 
         style={{ 
           backgroundColor: readOnly ? 'var(--background)' : 'var(--background-secondary)', 

@@ -847,12 +847,12 @@ function ManutencaoContent() {
               </div>
               <div>
                 <label className="block text-[10px] uppercase font-bold mb-1">Descrição Técnica / Peça</label>
-                <input type="text" required placeholder="Ex: Substituição Lonas Eixo 2, Troca Óleo Bloco V8" value={formManutencao.pecas} onChange={(e) => setFormManutencao({ ...formManutencao, pecas: e.target.value })} className="w-full p-2.5 border bg-transparent outline-none focus:ring-1" style={{ borderColor: 'var(--border)', color: 'var(--foreground)', outlineColor: primary }} />
+                <input type="text" required minLength={2} maxLength={1000} placeholder="Ex: Substituição Lonas Eixo 2, Troca Óleo Bloco V8" value={formManutencao.pecas} onChange={(e) => setFormManutencao({ ...formManutencao, pecas: e.target.value })} className="w-full p-2.5 border bg-transparent outline-none focus:ring-1" style={{ borderColor: 'var(--border)', color: 'var(--foreground)', outlineColor: primary }} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] uppercase font-bold mb-1">Custo Projetado (R$)</label>
-                  <input type="number" required placeholder="1250.00" value={formManutencao.custo} onChange={(e) => setFormManutencao({ ...formManutencao, custo: e.target.value })} className="w-full p-2.5 border bg-transparent outline-none focus:ring-1" style={{ borderColor: 'var(--border)', color: 'var(--foreground)', outlineColor: primary }} />
+                  <input type="number" required min="0" max="1000000000" step="0.01" placeholder="1250.00" value={formManutencao.custo} onChange={(e) => setFormManutencao({ ...formManutencao, custo: e.target.value })} className="w-full p-2.5 border bg-transparent outline-none focus:ring-1" style={{ borderColor: 'var(--border)', color: 'var(--foreground)', outlineColor: primary }} />
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-bold mb-1">Leitura Odômetro (KM)</label>

@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma'
 const schema = z.object({
   veiculoId: z.string().uuid().nullable().optional(),
   status: z.enum(['DISPONIVEL', 'EM_ROTA', 'ALERTA', 'FERIAS']).optional(),
-})
+}).strict()
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
@@ -67,4 +67,3 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   })
   return NextResponse.json({ sucesso: true })
 }
-

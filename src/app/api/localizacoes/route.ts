@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
+import { nomeOperacional } from '@/lib/domainValidation'
 
-const schema = z.object({ nome: z.string().trim().min(2).max(100), cidadeUF: z.string().trim().min(2).max(100), capacidade: z.coerce.number().int().min(0).max(100000) })
+const schema = z.object({ nome: nomeOperacional(2, 100), cidadeUF: nomeOperacional(2, 100), capacidade: z.coerce.number().int().min(0).max(100000) }).strict()
 
 export async function GET(request: NextRequest) {
   const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })

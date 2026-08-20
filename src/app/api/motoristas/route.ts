@@ -10,20 +10,21 @@ import {
 } from '@/lib/motoristaFotos'
 import { criarNotificacao } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
+import { dataIsoSchema, nomePessoa } from '@/lib/domainValidation'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const schema = z.object({
-  nome: z.string().trim().min(3).max(120),
-  cpf: z.string().trim().min(11).max(20).nullable(),
-  rg: z.string().trim().max(30).nullable(),
-  cnh: z.string().trim().min(5).max(30),
-  categoria: z.string().trim().min(1).max(5),
-  validade: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  nome: nomePessoa(3, 120),
+  cpf: z.string().trim().regex(/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/, 'CPF inválido.').nullable(),
+  rg: z.string().trim().regex(/^[A-Za-z0-9.-]{4,30}$/, 'RG inválido.').nullable(),
+  cnh: z.string().trim().regex(/^\d{11}$/, 'A CNH deve ter 11 números.'),
+  categoria: z.enum(['A', 'B', 'C', 'D', 'E', 'AB', 'AC', 'AD', 'AE']),
+  validade: dataIsoSchema,
   status: z.enum(['DISPONIVEL', 'EM_ROTA', 'ALERTA', 'FERIAS']).default('DISPONIVEL'),
   veiculoId: z.string().uuid().nullable(),
-})
+}).strict()
 
 function valorTexto(formData: FormData, campo: string) {
   const valor = formData.get(campo)
@@ -163,4 +164,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ erro: 'Não foi possível cadastrar o motorista.' }, { status: 500 })
   }
 }
-

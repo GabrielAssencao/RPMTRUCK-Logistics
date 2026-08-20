@@ -13,6 +13,12 @@ export interface FieldConfig {
   type: 'text' | 'number' | 'date' | 'select'
   placeholder?: string
   required?: boolean
+  min?: number | string
+  max?: number | string
+  maxLength?: number
+  pattern?: string
+  step?: number | string
+  title?: string
   options?: { label: string; value: string }[]
 }
 
@@ -146,6 +152,12 @@ export default function GenericDrawer({
                       <input
                         type={campo.type}
                         required={campo.required}
+                        min={campo.min}
+                        max={campo.max}
+                        maxLength={campo.maxLength}
+                        pattern={campo.pattern}
+                        step={campo.step}
+                        title={campo.title}
                         placeholder={campo.placeholder}
                         value={formData[campo.name] || ''}
                         onChange={(e) => handleChange(campo.name, e.target.value)}

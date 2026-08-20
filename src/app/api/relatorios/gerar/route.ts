@@ -88,7 +88,23 @@ export async function POST(request: NextRequest) {
     prisma.usuario.findUnique({ where: { id: auth.session.userId }, select: { nome: true } }),
   ])
 
-  if (containers.length === 0 && custos.length === 0 && manutencoes.length === 0) {
+  const movimentacoesPermanentes = await prisma.movimentacaoContainerPermanente.findMany({
+    where: {
+      empresaId: auth.empresaId,
+      data_operacao: { gte: periodoInicio, lte: periodoFim },
+      relatorioArquivoId: null,
+    },
+    select: {
+      id: true,
+      codigo_container: true,
+      terminal_origem: true,
+      terminal_destino: true,
+      data_operacao: true,
+    },
+    orderBy: [{ data_operacao: 'asc' }, { codigo_container: 'asc' }],
+  })
+
+  if (movimentacoesPermanentes.length === 0 && containers.length === 0 && custos.length === 0 && manutencoes.length === 0) {
     return NextResponse.json({ erro: 'Não há dados operacionais nesse período.' }, { status: 422 })
   }
 
@@ -105,6 +121,7 @@ export async function POST(request: NextRequest) {
     periodoFim,
     geradoEm,
     geradoPor: usuario?.nome || 'Gestor da empresa',
+    movimentacoesPermanentes,
     containers,
     custos,
     manutencoes,
@@ -163,7 +180,7 @@ export async function POST(request: NextRequest) {
       await tx.movimentacaoContainerPermanente.updateMany({
         where: {
           empresaId: auth.empresaId!,
-          container_origem_id: { in: containers.map((container) => container.id) },
+          id: { in: movimentacoesPermanentes.map((movimentacao) => movimentacao.id) },
         },
         data: {
           relatorioArquivoId: criado.id,

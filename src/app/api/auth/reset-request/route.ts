@@ -1,22 +1,23 @@
 // src/app/api/auth/reset-request/route.ts
-import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { NextRequest, NextResponse } from 'next/server';
 import { notificarAdmins } from '@/lib/notificacoes';
+import { z } from 'zod';
+import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
+import { prisma } from '@/lib/prisma';
 
-const prisma = new PrismaClient();
+const schema = z.object({ email: z.string().trim().email().max(254).toLowerCase() }).strict();
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { email } = body;
-
-    if (!email) {
-      return NextResponse.json({ erro: 'O e-mail é obrigatório para abrir o chamado de recuperação.' }, { status: 400 });
-    }
+    const bloqueio = applyRateLimit(request, `reset:${getClientIp(request)}`, RATE_LIMITS.PASSWORD_RESET.limit, RATE_LIMITS.PASSWORD_RESET.windowMs);
+    if (bloqueio) return bloqueio;
+    const parsed = schema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ erro: 'Informe um e-mail válido.' }, { status: 400 });
+    const { email } = parsed.data;
 
     // Verifica se o usuário de fato existe no ecossistema RPMTruck
     const usuarioExistente = await prisma.usuario.findUnique({
-      where: { email: email.toLowerCase().trim() }
+      where: { email }
     });
 
     if (!usuarioExistente) {
@@ -27,11 +28,11 @@ export async function POST(request: Request) {
     // Cria o registro de reset pendente que aparecerá no painel administrativo
     await prisma.resetSenha.create({
       data: {
-        email: email.toLowerCase().trim(),
+        email,
         status: 'PENDENTE'
       }
     });
-    await notificarAdmins({ titulo: 'Redefinição de senha pendente', mensagem: `Há uma nova solicitação de segurança para ${email.toLowerCase().trim()}.`, modulo: 'SENHAS' });
+    await notificarAdmins({ titulo: 'Redefinição de senha pendente', mensagem: `Há uma nova solicitação de segurança para ${email}.`, modulo: 'SENHAS' });
 
     return NextResponse.json({ 
       sucesso: true, 
@@ -41,7 +42,5 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Erro na rota reset-request:', error);
     return NextResponse.json({ erro: 'Falha interna ao processar requisição de segurança.' }, { status: 500 });
-  } finally {
-    await prisma.$disconnect();
   }
 }
