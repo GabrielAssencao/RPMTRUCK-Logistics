@@ -16,8 +16,14 @@ interface NotificacoesPanelProps {
 export default function NotificacoesPanel({ onPendenciasChange }: NotificacoesPanelProps) {
   const { primary } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
-  const { notificacoes, naoLidas, loading, error, pendenciasPorModulo, marcarComoLida, marcarTodasComoLidas, deletarNotificacao } =
+  const { notificacoes, naoLidas, loading, error, pendenciasPorModulo, marcarComoLida, marcarTodasComoLidas, deletarNotificacao, recarregar } =
     useNotificacoes()
+
+  const alternarPainel = () => {
+    const proximoEstado = !isOpen
+    setIsOpen(proximoEstado)
+    if (proximoEstado) void recarregar()
+  }
 
   useEffect(() => {
     onPendenciasChange?.(pendenciasPorModulo)
@@ -35,7 +41,7 @@ export default function NotificacoesPanel({ onPendenciasChange }: NotificacoesPa
     <div className="relative">
       {/* Bell Icon */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={alternarPainel}
         aria-label={naoLidas > 0 ? `Abrir notificações, ${naoLidas} não lidas` : 'Abrir notificações'}
         className="relative p-2 rounded-lg hover:opacity-70 transition-all"
         style={{ backgroundColor: `${primary}10` }}

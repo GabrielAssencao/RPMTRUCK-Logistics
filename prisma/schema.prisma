@@ -79,6 +79,14 @@ enum TipoRelatorioArquivo {
   PERSONALIZADO
 }
 
+enum StatusRelatorioArquivo {
+  PRONTO_DOWNLOAD
+  DOWNLOAD_REGISTRADO
+  CONFIRMADO_GESTOR
+  DADOS_PURGADOS
+  ARQUIVO_REMOVIDO
+}
+
 // =============================================================================
 // MODELOS / TABELAS DO BANCO DE DADOS (MULTI-TENANT INFRAS)
 // =============================================================================
@@ -138,27 +146,29 @@ model Empresa {
   atualizado_em DateTime @updatedAt
 
   // Relacionamentos (Isolamento Multitenant)
-  usuarios              Usuario[]
-  veiculos_frota        Veiculo[]
-  motoristas            Motorista[]
-  localizacoes          Localizacao[]
-  historicos_veiculos   HistoricoVeiculo[]
-  custos                Custo[]
-  notificacoes          Notificacao[]
-  faturas               Fatura[]
-  relatorios_arquivados RelatorioArquivo[]
-  containers            Container[]
-  tarefas               Tarefa[]
+  usuarios                Usuario[]
+  veiculos_frota          Veiculo[]
+  motoristas              Motorista[]
+  localizacoes            Localizacao[]
+  historicos_veiculos     HistoricoVeiculo[]
+  custos                  Custo[]
+  notificacoes            Notificacao[]
+  faturas                 Fatura[]
+  relatorios_arquivados   RelatorioArquivo[]
+  movimentacoes_container MovimentacaoContainerPermanente[]
+  containers              Container[]
+  tarefas                 Tarefa[]
 
   @@map("empresas")
 }
 
 model Usuario {
-  id         String @id @default(uuid())
-  nome       String
-  email      String @unique
-  senha_hash String // Hash de segurança (bcrypt)
-  role       Role   @default(GESTOR_EMPRESA)
+  id                   String  @id @default(uuid())
+  nome                 String
+  email                String  @unique
+  senha_hash           String // Hash de segurança (bcrypt)
+  role                 Role    @default(GESTOR_EMPRESA)
+  acessoDashboardGeral Boolean @default(false) @map("acesso_dashboard_geral")
 
   // Se for nulo, indica que o usuário é da equipe interna RPMTruck (Geral Admin)
   empresaId String?
@@ -166,6 +176,8 @@ model Usuario {
 
   empresas_status_alterados Empresa[]          @relation("EmpresaStatusAlteradoPor")
   relatorios_criados        RelatorioArquivo[] @relation("RelatoriosCriados")
+  relatorios_baixados       RelatorioArquivo[] @relation("RelatoriosBaixados")
+  relatorios_confirmados    RelatorioArquivo[] @relation("RelatoriosConfirmados")
   notificacoes              Notificacao[]      @relation("NotificacoesUsuario")
   tarefas_criadas           Tarefa[]           @relation("TarefasCriadas")
   tarefas_atribuidas        Tarefa[]           @relation("TarefasResponsavel")
@@ -272,8 +284,12 @@ model HistoricoVeiculo {
   empresaId String
   empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
+  relatorioArquivoId String?
+  relatorioArquivo   RelatorioArquivo? @relation(fields: [relatorioArquivoId], references: [id], onDelete: Restrict)
+
   criado_em DateTime @default(now())
 
+  @@index([relatorioArquivoId])
   @@map("historicos_veiculo")
 }
 
@@ -298,9 +314,13 @@ model Custo {
   empresaId String
   empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
+  relatorioArquivoId String?
+  relatorioArquivo   RelatorioArquivo? @relation(fields: [relatorioArquivoId], references: [id], onDelete: Restrict)
+
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
 
+  @@index([relatorioArquivoId])
   @@map("custos")
 }
 
@@ -383,12 +403,42 @@ model Container {
   motoristaId String?
   motorista   Motorista? @relation(fields: [motoristaId], references: [id], onDelete: SetNull)
 
+  relatorioArquivoId String?
+  relatorioArquivo   RelatorioArquivo? @relation(fields: [relatorioArquivoId], references: [id], onDelete: Restrict)
+
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
 
-  @@unique([empresaId, codigo])
+  @@unique([empresaId, codigo, data])
   @@index([empresaId, data, status])
+  @@index([relatorioArquivoId])
   @@map("containers")
+}
+
+model MovimentacaoContainerPermanente {
+  id                  String   @id @default(uuid())
+  container_origem_id String   @unique
+  codigo_container    String
+  terminal_origem     String
+  terminal_destino    String
+  data_operacao       DateTime
+
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  relatorioArquivoId String?
+  relatorioArquivo   RelatorioArquivo? @relation(fields: [relatorioArquivoId], references: [id], onDelete: SetNull)
+
+  checksum_arquivo     String?
+  arquivado_em         DateTime?
+  detalhes_purgados_em DateTime?
+  criado_em            DateTime  @default(now())
+  atualizado_em        DateTime  @updatedAt
+
+  @@index([empresaId, codigo_container])
+  @@index([empresaId, data_operacao])
+  @@index([relatorioArquivoId])
+  @@map("movimentacoes_container_permanentes")
 }
 
 model Fatura {
@@ -410,22 +460,40 @@ model Fatura {
 }
 
 model RelatorioArquivo {
-  id              String               @id @default(uuid())
-  nome_arquivo    String
-  caminho_storage String               @unique
-  bucket          String
-  mime_type       String
-  tamanho_bytes   Int
-  checksum_sha256 String
-  periodo_inicio  DateTime
-  periodo_fim     DateTime
-  tipo            TipoRelatorioArquivo
+  id                     String                 @id @default(uuid())
+  nome_arquivo           String
+  caminho_storage        String                 @unique
+  bucket                 String
+  mime_type              String
+  tamanho_bytes          Int
+  checksum_sha256        String
+  periodo_inicio         DateTime
+  periodo_fim            DateTime
+  tipo                   TipoRelatorioArquivo
+  status                 StatusRelatorioArquivo @default(PRONTO_DOWNLOAD)
+  gerado_automaticamente Boolean                @default(false)
+  resumo_registros       Json?
 
   empresaId String
   empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
 
   criadoPorId String?
   criadoPor   Usuario? @relation("RelatoriosCriados", fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  baixadoPorId String?
+  baixadoPor   Usuario?  @relation("RelatoriosBaixados", fields: [baixadoPorId], references: [id], onDelete: SetNull)
+  baixado_em   DateTime?
+
+  confirmadoPorId String?
+  confirmadoPor   Usuario?  @relation("RelatoriosConfirmados", fields: [confirmadoPorId], references: [id], onDelete: SetNull)
+  confirmado_em   DateTime?
+
+  dados_purgados_em       DateTime?
+  arquivo_removido_em     DateTime?
+  movimentacoes_container MovimentacaoContainerPermanente[]
+  containers_arquivados   Container[]
+  custos_arquivados       Custo[]
+  manutencoes_arquivadas  HistoricoVeiculo[]
 
   criado_em DateTime @default(now())
 

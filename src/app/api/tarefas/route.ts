@@ -16,7 +16,7 @@ const criarTarefaSchema = z.object({
 })
 
 function podeDelegar(role: string) {
-  return ['GESTOR_EMPRESA', 'GESTOR', 'OPERADOR'].includes(role)
+  return ['GESTOR_EMPRESA', 'GESTOR'].includes(role)
 }
 
 export async function GET(request: NextRequest) {
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   const tarefas = await prisma.tarefa.findMany({
     where: {
       empresaId: auth.session.empresaId,
-      ...(gestor ? {} : { OR: [{ responsavelId: auth.session.userId }, { criadorId: auth.session.userId }] }),
+      ...(gestor ? {} : { responsavelId: auth.session.userId }),
     },
     include: {
       responsavel: { select: { id: true, nome: true, email: true, role: true } },

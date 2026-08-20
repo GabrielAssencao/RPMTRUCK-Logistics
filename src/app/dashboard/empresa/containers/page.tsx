@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useContainers, StatusContainer, TipoContainer } from '@/contexts/ContainersContext'
@@ -49,6 +49,18 @@ export interface ItemConteudo {
   porcentagem: number
 }
 
+interface MovimentacaoPermanente {
+  id: string
+  codigo: string
+  origem: string
+  destino: string
+  data: string
+  checksumArquivo: string | null
+  arquivadoEm: string | null
+  detalhesPurgadosEm: string | null
+  arquivo: { id: string; nome_arquivo: string; arquivo_removido_em: string | null } | null
+}
+
 const FORM_INICIAL = {
   data: new Date().toISOString().split('T')[0],
   codigo: '',
@@ -92,6 +104,12 @@ export default function ContainersPage() {
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<'TODOS' | StatusContainer>('TODOS')
   const [filtroDupla, setFiltroDupla] = useState('TODOS')
+  const [buscaHistorico, setBuscaHistorico] = useState('')
+  const [paginaHistorico, setPaginaHistorico] = useState(1)
+  const [historicoPermanente, setHistoricoPermanente] = useState<MovimentacaoPermanente[]>([])
+  const [totalPaginasHistorico, setTotalPaginasHistorico] = useState(1)
+  const [carregandoHistorico, setCarregandoHistorico] = useState(true)
+  const [erroHistorico, setErroHistorico] = useState('')
 
   // Modal Lançamento / Edição
   const [modalOpen, setModalOpen] = useState(false)
@@ -102,6 +120,30 @@ export default function ContainersPage() {
 
   // Exclusão inline
   const [excluindoId, setExcluindoId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(async () => {
+      try {
+        setCarregandoHistorico(true)
+        setErroHistorico('')
+        const params = new URLSearchParams({ busca: buscaHistorico, pagina: String(paginaHistorico) })
+        const response = await fetch(`/api/containers/historico?${params}`, { cache: 'no-store', signal: controller.signal })
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar o histórico permanente.')
+        setHistoricoPermanente(data.registros)
+        setTotalPaginasHistorico(data.paginacao.totalPaginas)
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') setErroHistorico(error.message)
+      } finally {
+        if (!controller.signal.aborted) setCarregandoHistorico(false)
+      }
+    }, 250)
+    return () => {
+      controller.abort()
+      window.clearTimeout(timeout)
+    }
+  }, [buscaHistorico, paginaHistorico])
 
   // ─── FILTRAGEM DE DADOS ─────────────────────────────────────────────────
   const containersFiltrados = containers.filter(c => {
@@ -859,6 +901,72 @@ export default function ContainersPage() {
           </table>
         </div>
       </div>
+
+      <section className="border overflow-hidden" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+        <div className="flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between" style={{ borderColor: 'var(--border)' }}>
+          <div>
+            <h2 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest">
+              <ShieldAlert size={16} style={{ color: primary }} /> Histórico permanente
+            </h2>
+            <p className="mt-1 text-[10px] text-foreground-muted">Código, origem, destino e data continuam disponíveis mesmo após a limpeza dos detalhes operacionais.</p>
+          </div>
+          <label className="flex min-w-0 items-center gap-2 border px-3 py-2 md:w-80" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+            <Search size={14} className="shrink-0 text-foreground-muted" />
+            <span className="sr-only">Buscar no histórico permanente</span>
+            <input
+              value={buscaHistorico}
+              onChange={(event) => { setBuscaHistorico(event.target.value); setPaginaHistorico(1) }}
+              placeholder="Container, origem ou destino"
+              className="w-full bg-transparent text-xs outline-none placeholder:text-foreground-muted"
+            />
+          </label>
+        </div>
+
+        {erroHistorico ? (
+          <p className="p-4 text-xs text-red-500" role="alert">{erroHistorico}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full whitespace-nowrap text-left text-xs">
+              <thead style={{ backgroundColor: 'var(--background)', color: 'var(--foreground-muted)' }}>
+                <tr className="border-b text-[10px] uppercase tracking-widest" style={{ borderColor: 'var(--border)' }}>
+                  <th className="px-5 py-3">Data</th>
+                  <th className="px-5 py-3">Container</th>
+                  <th className="px-5 py-3">Origem</th>
+                  <th className="px-5 py-3">Destino</th>
+                  <th className="px-5 py-3">Auditoria</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                {carregandoHistorico ? (
+                  <tr><td colSpan={5} className="px-5 py-8 text-center text-foreground-muted">Carregando histórico...</td></tr>
+                ) : historicoPermanente.length === 0 ? (
+                  <tr><td colSpan={5} className="px-5 py-8 text-center text-foreground-muted">Nenhuma movimentação permanente encontrada.</td></tr>
+                ) : historicoPermanente.map((registro) => (
+                  <tr key={registro.id}>
+                    <td className="px-5 py-3 font-bold">{new Date(`${registro.data}T12:00:00`).toLocaleDateString('pt-BR')}</td>
+                    <td className="px-5 py-3 font-mono font-black" style={{ color: primary }}>{registro.codigo}</td>
+                    <td className="px-5 py-3">{registro.origem}</td>
+                    <td className="px-5 py-3">{registro.destino}</td>
+                    <td className="px-5 py-3 text-[10px] text-foreground-muted">
+                      {registro.detalhesPurgadosEm
+                        ? 'Detalhes limpos · registro permanente'
+                        : registro.arquivadoEm
+                          ? `Arquivado · ${registro.checksumArquivo?.slice(0, 10) ?? 'sem checksum'}…`
+                          : 'Dados operacionais ativos'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-3 border-t p-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}>
+          <button type="button" disabled={paginaHistorico <= 1 || carregandoHistorico} onClick={() => setPaginaHistorico(pagina => pagina - 1)} className="border px-3 py-2 disabled:opacity-40" style={{ borderColor: 'var(--border)' }}>Anterior</button>
+          <span>{paginaHistorico} / {totalPaginasHistorico}</span>
+          <button type="button" disabled={paginaHistorico >= totalPaginasHistorico || carregandoHistorico} onClick={() => setPaginaHistorico(pagina => pagina + 1)} className="border px-3 py-2 disabled:opacity-40" style={{ borderColor: 'var(--border)' }}>Próxima</button>
+        </div>
+      </section>
 
       {/* ─── MODAL LANÇAMENTO COM FORMULÁRIO DE CARGA POR PORCENTAGEM ─── */}
       <AnimatePresence>

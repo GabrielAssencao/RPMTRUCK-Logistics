@@ -10,6 +10,7 @@ const criarOperadorSchema = z.object({
   email: z.string().trim().email().toLowerCase(),
   senha: z.string().min(8).max(128),
   role: z.enum(['OPERADOR', 'VISUALIZADOR']),
+  acessoDashboardGeral: z.boolean().optional().default(false),
 })
 
 function gestorAutorizado(role?: string) {
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
   try {
     const usuarios = await prisma.usuario.findMany({
       where: { empresaId: session.empresaId },
-      select: { id: true, nome: true, email: true, role: true, criado_em: true },
+      select: { id: true, nome: true, email: true, role: true, acessoDashboardGeral: true, criado_em: true },
       orderBy: { criado_em: 'desc' }
     })
     return NextResponse.json(usuarios)
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Dados de usuário inválidos.' }, { status: 400 })
     }
 
-    const { nome, email, senha, role } = parsed.data
+    const { nome, email, senha, role, acessoDashboardGeral } = parsed.data
     const usuarioExiste = await prisma.usuario.findUnique({ where: { email }, select: { id: true } })
     if (usuarioExiste) {
       return NextResponse.json({ error: 'E-mail já cadastrado no sistema.' }, { status: 409 })
@@ -65,9 +66,10 @@ export async function POST(request: NextRequest) {
         email,
         senha_hash: await bcrypt.hash(senha, 10),
         role,
+        acessoDashboardGeral,
         empresaId: session.empresaId,
       },
-      select: { id: true, nome: true, email: true, role: true, criado_em: true }
+      select: { id: true, nome: true, email: true, role: true, acessoDashboardGeral: true, criado_em: true }
     })
     await criarNotificacao({ titulo: 'Acesso criado', mensagem: 'Seu usuário foi adicionado à empresa. Revise suas tarefas e notificações no painel.', modulo: 'USUARIOS', empresaId: session.empresaId, usuarioId: usuario.id })
     return NextResponse.json(usuario, { status: 201 })

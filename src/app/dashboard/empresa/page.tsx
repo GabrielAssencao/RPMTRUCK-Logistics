@@ -51,6 +51,7 @@ export default function PainelEmpresa() {
   const [nomeEmpresa, setNomeEmpresa] = useState('Transportes RPM')
   const [planoEmpresa, setPlanoEmpresa] = useState<PlanoTipo>('ESSENCIAL') // Padrão Essencial para teste
   const [tarefasHabilitadas, setTarefasHabilitadas] = useState(false)
+  const [podeDelegarTarefas, setPodeDelegarTarefas] = useState(false)
   const [dadosGraficos, setDadosGraficos] = useState<Record<string, Array<{ dia: string; combustivel: number; manutencao: number; pedagio: number }>>>({ '7_DIAS': [], '15_DIAS': [], '30_DIAS': [] })
   const [dadosDistribuicaoCustos, setDadosDistribuicaoCustos] = useState<Array<{ name: string; value: number }>>([])
   const [alertas, setAlertas] = useState<AlertaInteligente[]>([])
@@ -79,6 +80,7 @@ export default function PainelEmpresa() {
         setNomeEmpresa(data.empresa.nome)
         setPlanoEmpresa(data.empresa.plano)
         setTarefasHabilitadas(data.empresa.modulos.includes('TAREFAS'))
+        setPodeDelegarTarefas(Boolean(data.usuario.podeDelegar))
         setMetricas(data.metricas)
         setDadosGraficos(data.graficos)
         setDadosDistribuicaoCustos(data.graficos.distribuicao)
@@ -106,6 +108,7 @@ export default function PainelEmpresa() {
 
   // 🎯 GATILHO DE CLIQUE EM DELEGAR TAREFA
   const handleClicarDelegar = (alerta: AlertaInteligente) => {
+    if (!podeDelegarTarefas) return
     if (!tarefasHabilitadas) {
       // Abre o modal de incentivo ao upgrade
       setModalUpgradeOpen(true)
@@ -116,7 +119,7 @@ export default function PainelEmpresa() {
   }
 
   const handleDelegarTarefa = async () => {
-    if (!alertaParaDelegar || !operadorSelecionado) return
+    if (!podeDelegarTarefas || !alertaParaDelegar || !operadorSelecionado) return
     const response = await fetch('/api/tarefas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -303,11 +306,11 @@ export default function PainelEmpresa() {
                 <th className="px-5 py-3 font-medium">Urgência</th>
                 <th className="px-5 py-3 font-medium">Categoria / Foco</th>
                 <th className="px-5 py-3 font-medium">Descrição da Pendência</th>
-                <th className="px-5 py-3 font-medium text-right">Ação / Delegar</th>
+                {podeDelegarTarefas && <th className="px-5 py-3 font-medium text-right">Ação / Delegar</th>}
               </tr>
             </thead>
             <tbody className="divide-y [&>tr]:border-[var(--border)]" style={{ color: 'var(--foreground)' }}>
-              {alertas.length === 0 && <tr><td colSpan={4} className="px-5 py-10 text-center text-xs text-foreground-muted">Nenhum alerta operacional pendente.</td></tr>}
+              {alertas.length === 0 && <tr><td colSpan={podeDelegarTarefas ? 4 : 3} className="px-5 py-10 text-center text-xs text-foreground-muted">Nenhum alerta operacional pendente.</td></tr>}
               {alertas.map((alerta) => {
                 const urgencia = calcularUrgencia(alerta)
                 const descCurta = alerta.descricao.length > 55 ? `${alerta.descricao.substring(0, 55)}...` : alerta.descricao
@@ -331,7 +334,7 @@ export default function PainelEmpresa() {
                     </td>
 
                     {/* 🔒 BOTÃO COM INDICADOR VISUAL DO PLANO AVANÇADO */}
-                    <td className="px-5 py-3 text-right">
+                    {podeDelegarTarefas && <td className="px-5 py-3 text-right">
                       <button 
                         onClick={() => handleClicarDelegar(alerta)}
                         className="px-3 py-1.5 border text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ml-auto hover:bg-white/5 transition-all cursor-pointer relative"
@@ -352,7 +355,7 @@ export default function PainelEmpresa() {
                           </>
                         )}
                       </button>
-                    </td>
+                    </td>}
                   </tr>
                 )
               })}
@@ -362,7 +365,7 @@ export default function PainelEmpresa() {
       </motion.div>
 
       <AnimatePresence>
-        {alertaParaDelegar && (
+        {podeDelegarTarefas && alertaParaDelegar && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
             <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} className="w-full max-w-lg space-y-5 border p-6" style={{ backgroundColor: 'var(--background)', borderColor: primary }}>
               <div className="flex items-start justify-between border-b pb-4" style={{ borderColor: 'var(--border)' }}>

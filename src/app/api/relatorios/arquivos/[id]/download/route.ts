@@ -7,17 +7,20 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'RELATORIOS' })
+  const auth = await requireEmpresaAuth(request)
   if (auth.error || !auth.session || !auth.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
 
   const arquivo = await prisma.relatorioArquivo.findFirst({
     where: { id: params.id, empresaId: auth.empresaId },
-    select: { caminho_storage: true, bucket: true },
+    select: { id: true, caminho_storage: true, bucket: true, status: true, arquivo_removido_em: true },
   })
   if (!arquivo) {
     return NextResponse.json({ erro: 'Relatório não encontrado.' }, { status: 404 })
+  }
+  if (arquivo.arquivo_removido_em || arquivo.status === 'ARQUIVO_REMOVIDO') {
+    return NextResponse.json({ erro: 'O arquivo temporário já foi removido após a confirmação do gestor.' }, { status: 410 })
   }
 
   try {
@@ -30,6 +33,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       console.error('Erro ao assinar download do relatório:', error?.message)
       return NextResponse.json({ erro: 'Não foi possível liberar o download.' }, { status: 502 })
     }
+
+    await prisma.relatorioArquivo.update({
+      where: { id: arquivo.id },
+      data: {
+        status: arquivo.status === 'PRONTO_DOWNLOAD' ? 'DOWNLOAD_REGISTRADO' : undefined,
+        baixado_em: new Date(),
+        baixadoPorId: auth.session.userId,
+      },
+    })
 
     return NextResponse.json(
       { url: data.signedUrl, expira_em_segundos: 60 },

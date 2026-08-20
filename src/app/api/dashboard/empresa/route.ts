@@ -16,13 +16,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
 
+  const usuario = await prisma.usuario.findFirst({
+    where: { id: auth.session.userId, empresaId: auth.session.empresaId },
+    select: { nome: true, role: true, acessoDashboardGeral: true },
+  })
+  if (!usuario) return NextResponse.json({ erro: 'Usuário não encontrado.' }, { status: 403 })
+
+  const gestor = usuario.role === 'GESTOR_EMPRESA'
+  if (!gestor && !usuario.acessoDashboardGeral) {
+    return NextResponse.json({ erro: 'A visão geral não foi liberada pelo gestor.' }, { status: 403 })
+  }
+
   const agora = new Date()
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
   const inicio30Dias = inicioDoDia(new Date(agora.getTime() - 29 * 86_400_000))
   const limiteCnh = new Date(agora.getTime() + 30 * 86_400_000)
 
-  const [usuario, veiculos, custosMes, custos30Dias, manutencoes, motoristas, operadores, tarefasPendentes] = await prisma.$transaction([
-    prisma.usuario.findUnique({ where: { id: auth.session.userId }, select: { nome: true } }),
+  const [veiculos, custosMes, custos30Dias, manutencoes, motoristas, operadores, tarefasPendentes] = await prisma.$transaction([
     prisma.veiculo.findMany({ where: { empresaId: auth.session.empresaId }, select: { id: true, status: true, quilometragem: true } }),
     prisma.custo.findMany({ where: { empresaId: auth.session.empresaId, data: { gte: inicioMes } }, select: { valor: true, categoria: true } }),
     prisma.custo.findMany({ where: { empresaId: auth.session.empresaId, data: { gte: inicio30Dias } }, select: { data: true, valor: true, categoria: true } }),
@@ -35,10 +45,19 @@ export async function GET(request: NextRequest) {
       select: { id: true, nome: true, validade: true }, orderBy: { validade: 'asc' }, take: 20,
     }),
     prisma.usuario.findMany({
-      where: { empresaId: auth.session.empresaId, role: { in: ['GESTOR_EMPRESA', 'OPERADOR'] } },
+      where: {
+        empresaId: auth.session.empresaId,
+        ...(gestor ? { role: { in: ['GESTOR_EMPRESA' as const, 'OPERADOR' as const] } } : { id: '__sem_operadores__' }),
+      },
       select: { id: true, nome: true, role: true }, orderBy: { nome: 'asc' },
     }),
-    prisma.tarefa.count({ where: { empresaId: auth.session.empresaId, status: { in: ['PENDENTE', 'EM_ANDAMENTO'] } } }),
+    prisma.tarefa.count({
+      where: {
+        empresaId: auth.session.empresaId,
+        status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
+        ...(gestor ? {} : { responsavelId: auth.session.userId }),
+      },
+    }),
   ])
 
   const custoMes = custosMes.reduce((total, custo) => total + custo.valor, 0)
@@ -78,7 +97,12 @@ export async function GET(request: NextRequest) {
   ]
 
   return NextResponse.json({
-    usuario: { nome: usuario?.nome || auth.session.email },
+    usuario: {
+      nome: usuario.nome,
+      role: usuario.role,
+      acessoDashboardGeral: usuario.acessoDashboardGeral,
+      podeDelegar: gestor,
+    },
     empresa: { nome: auth.empresa.nome, plano: auth.empresa.plano, modulos: auth.empresa.modulos },
     metricas: { totalVeiculos: veiculos.length, totalAtivos, totalOperacionais, custoMes, custoKm: kmTotal ? custoMes / kmTotal : 0, tarefasPendentes },
     graficos: { '7_DIAS': montarSerie(7), '15_DIAS': montarSerie(15), '30_DIAS': montarSerie(30), distribuicao },

@@ -6,6 +6,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 
 type StatusTarefa = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA'
 type PrioridadeTarefa = 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE'
+type PerfilUsuario = 'GESTOR_EMPRESA' | 'GESTOR' | 'OPERADOR' | 'VISUALIZADOR'
 
 interface UsuarioOption { id: string; nome: string; email: string; role: string }
 interface Tarefa {
@@ -27,6 +28,7 @@ export default function TarefasPage() {
   const { primary } = useTheme()
   const [tarefas, setTarefas] = useState<Tarefa[]>([])
   const [usuarios, setUsuarios] = useState<UsuarioOption[]>([])
+  const [perfil, setPerfil] = useState<PerfilUsuario | null>(null)
   const [loading, setLoading] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -39,19 +41,28 @@ export default function TarefasPage() {
     setLoading(true)
     setErro('')
     try {
-      const [tarefasResponse, usuariosResponse] = await Promise.all([
+      const [tarefasResponse, perfilResponse] = await Promise.all([
         fetch('/api/tarefas', { cache: 'no-store' }),
-        fetch('/api/empresa/usuarios', { cache: 'no-store' }),
+        fetch('/api/empresa/perfil', { cache: 'no-store' }),
       ])
       const tarefasData = await tarefasResponse.json()
       if (!tarefasResponse.ok) throw new Error(tarefasData.erro || 'Não foi possível carregar tarefas.')
       setTarefas(Array.isArray(tarefasData) ? tarefasData : [])
 
-      if (usuariosResponse.ok) {
+      const perfilData = await perfilResponse.json()
+      if (!perfilResponse.ok) throw new Error(perfilData.erro || 'Não foi possível identificar seu perfil.')
+      const role = perfilData.usuario.role as PerfilUsuario
+      setPerfil(role)
+
+      if (role === 'GESTOR_EMPRESA' || role === 'GESTOR') {
+        const usuariosResponse = await fetch('/api/empresa/usuarios', { cache: 'no-store' })
+        if (!usuariosResponse.ok) throw new Error('Não foi possível carregar os responsáveis.')
         const usuariosData = await usuariosResponse.json()
         const lista = Array.isArray(usuariosData) ? usuariosData : []
         setUsuarios(lista)
         setForm(atual => ({ ...atual, responsavelId: atual.responsavelId || lista[0]?.id || '' }))
+      } else {
+        setUsuarios([])
       }
     } catch (cause) {
       setErro(cause instanceof Error ? cause.message : 'Falha ao carregar tarefas.')
@@ -61,6 +72,9 @@ export default function TarefasPage() {
   }, [])
 
   useEffect(() => { void carregar() }, [carregar])
+
+  const eGestor = perfil === 'GESTOR_EMPRESA' || perfil === 'GESTOR'
+  const podeAtualizarStatus = eGestor || perfil === 'OPERADOR'
 
   const tarefasFiltradas = useMemo(
     () => tarefas.filter(tarefa => filtro === 'TODAS' || tarefa.status === filtro),
@@ -118,10 +132,10 @@ export default function TarefasPage() {
       <div className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-end sm:justify-between" style={{ borderColor: 'var(--border)' }}>
         <div>
           <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.3em]" style={{ color: primary }}>Operação</p>
-          <h1 className="font-rajdhani text-3xl font-black uppercase">Delegação de tarefas</h1>
-          <p className="mt-1 text-sm text-foreground-muted">Acompanhe responsáveis, prazos e andamento em um único lugar.</p>
+          <h1 className="font-rajdhani text-3xl font-black uppercase">{eGestor ? 'Delegação de tarefas' : 'Minhas tarefas'}</h1>
+          <p className="mt-1 text-sm text-foreground-muted">{eGestor ? 'Acompanhe responsáveis, prazos e andamento em um único lugar.' : 'Acompanhe somente as tarefas atribuídas a você.'}</p>
         </div>
-        {usuarios.length > 0 && (
+        {eGestor && usuarios.length > 0 && (
           <button onClick={() => setMostrarFormulario(valor => !valor)} className="flex items-center justify-center gap-2 px-5 py-3 text-xs font-black uppercase text-black" style={{ backgroundColor: primary }}>
             <Plus size={15} /> Delegar tarefa
           </button>
@@ -132,7 +146,7 @@ export default function TarefasPage() {
         <div role="status" className={`border p-3 text-sm ${erro ? 'border-red-500/30 text-red-500' : 'border-green-500/30 text-green-500'}`}>{erro || sucesso}</div>
       )}
 
-      {mostrarFormulario && (
+      {eGestor && mostrarFormulario && (
         <form onSubmit={criarTarefa} className="grid gap-4 border p-5 md:grid-cols-2" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
           <Campo label="Título"><input required minLength={3} value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} className="w-full border bg-transparent p-3 text-sm outline-none" style={{ borderColor: 'var(--border)' }} /></Campo>
           <Campo label="Responsável"><select required value={form.responsavelId} onChange={e => setForm({ ...form, responsavelId: e.target.value })} className="w-full border bg-background p-3 text-sm outline-none" style={{ borderColor: 'var(--border)' }}>{usuarios.map(usuario => <option key={usuario.id} value={usuario.id}>{usuario.nome} — {usuario.role.replace('_', ' ')}</option>)}</select></Campo>
@@ -154,10 +168,10 @@ export default function TarefasPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           {tarefasFiltradas.map(tarefa => (
             <article key={tarefa.id} className="border p-5" style={{ borderColor: tarefa.status === 'CONCLUIDA' ? '#22c55e55' : 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
-              <div className="flex items-start justify-between gap-4"><div><span className="text-[9px] font-black uppercase tracking-widest" style={{ color: tarefa.prioridade === 'URGENTE' ? '#ef4444' : primary }}>{tarefa.prioridade}</span><h2 className="mt-1 font-bold">{tarefa.titulo}</h2></div><button onClick={() => void excluir(tarefa)} className="p-1 text-red-500" aria-label="Excluir tarefa"><Trash2 size={15} /></button></div>
+              <div className="flex items-start justify-between gap-4"><div><span className="text-[9px] font-black uppercase tracking-widest" style={{ color: tarefa.prioridade === 'URGENTE' ? '#ef4444' : primary }}>{tarefa.prioridade}</span><h2 className="mt-1 font-bold">{tarefa.titulo}</h2></div>{eGestor && <button onClick={() => void excluir(tarefa)} className="p-1 text-red-500" aria-label="Excluir tarefa"><Trash2 size={15} /></button>}</div>
               {tarefa.descricao && <p className="mt-3 text-sm leading-relaxed text-foreground-muted">{tarefa.descricao}</p>}
-              <div className="mt-4 grid gap-2 text-xs text-foreground-muted sm:grid-cols-2"><span className="flex items-center gap-2"><UserRound size={13} /> {tarefa.responsavel.nome}</span><span className="flex items-center gap-2"><Clock3 size={13} /> {tarefa.prazo ? new Date(tarefa.prazo).toLocaleString('pt-BR') : 'Sem prazo'}</span></div>
-              <div className="mt-4 flex items-center gap-2 border-t pt-4" style={{ borderColor: 'var(--border)' }}><CheckCircle2 size={15} style={{ color: primary }} /><select value={tarefa.status} onChange={e => void atualizarStatus(tarefa, e.target.value as StatusTarefa)} className="flex-1 bg-background p-2 text-xs font-bold uppercase outline-none">{STATUS.map(item => <option key={item}>{item}</option>)}</select></div>
+              <div className="mt-4 grid gap-2 text-xs text-foreground-muted sm:grid-cols-2">{eGestor && <span className="flex items-center gap-2"><UserRound size={13} /> {tarefa.responsavel.nome}</span>}<span className="flex items-center gap-2"><Clock3 size={13} /> {tarefa.prazo ? new Date(tarefa.prazo).toLocaleString('pt-BR') : 'Sem prazo'}</span></div>
+              <div className="mt-4 flex items-center gap-2 border-t pt-4" style={{ borderColor: 'var(--border)' }}><CheckCircle2 size={15} style={{ color: primary }} />{podeAtualizarStatus ? <select value={tarefa.status} onChange={e => void atualizarStatus(tarefa, e.target.value as StatusTarefa)} className="flex-1 bg-background p-2 text-xs font-bold uppercase outline-none">{STATUS.map(item => <option key={item}>{item}</option>)}</select> : <span className="flex-1 p-2 text-xs font-bold uppercase">{tarefa.status.replace('_', ' ')}</span>}</div>
             </article>
           ))}
         </div>

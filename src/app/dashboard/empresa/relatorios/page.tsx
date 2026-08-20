@@ -17,12 +17,13 @@ import {
   X,
   AlertCircle,
   Archive,
-  Upload
+  CheckCircle2,
+  ShieldCheck,
+  Trash2
 } from 'lucide-react'
 import { 
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend
 } from 'recharts'
-import { exportarExcel } from '@/utils/exportExcel'
 import { exportarPdf } from '@/utils/exportPdf'
 import { PLANOS_CONFIG, type PlanoTipo } from '@/utils/planos'
 
@@ -34,6 +35,35 @@ interface RelatorioArquivado {
   periodo_inicio: string
   periodo_fim: string
   criado_em: string
+  status: 'PRONTO_DOWNLOAD' | 'DOWNLOAD_REGISTRADO' | 'CONFIRMADO_GESTOR' | 'DADOS_PURGADOS' | 'ARQUIVO_REMOVIDO'
+  gerado_automaticamente: boolean
+  baixado_em?: string | null
+  confirmado_em?: string | null
+  dados_purgados_em?: string | null
+  arquivo_removido_em?: string | null
+  elegivel_purga_em: string
+  pode_purgar: boolean
+}
+
+interface MetricasRelatorio {
+  totalCustos: number
+  kmAcumulado: number
+  custoPorKmAcumulado: number
+  veiculoMenorCusto: { placa: string; valor: number } | null
+  veiculoMaiorManutencao: { placa: string; valor: number } | null
+}
+
+function calcularIntervalo(periodo: string, dataInicio: string, dataFim: string) {
+  if (periodo === 'CUSTOMIZADO') return { inicio: dataInicio, fim: dataFim }
+  const fim = new Date()
+  const inicio = new Date(fim)
+  if (periodo === 'ESTE_MES') inicio.setDate(1)
+  if (periodo === 'TRIMESTRE') inicio.setMonth(inicio.getMonth() - 3)
+  if (periodo === 'ULTIMOS_6_MESES') inicio.setMonth(inicio.getMonth() - 6)
+  if (periodo === 'ANO_ATUAL') inicio.setMonth(inicio.getMonth() - 12)
+  if (periodo === 'HISTORICO_2_ANOS') inicio.setFullYear(inicio.getFullYear() - 2)
+  if (periodo === 'HISTORICO_3_ANOS') inicio.setFullYear(inicio.getFullYear() - 3)
+  return { inicio: inicio.toISOString().slice(0, 10), fim: fim.toISOString().slice(0, 10) }
 }
 
 export default function RelatoriosPage() {
@@ -47,12 +77,18 @@ export default function RelatoriosPage() {
   const [periodo, setPeriodo] = useState('ESTE_MES')
   const [modalPersonalizarOpen, setModalPersonalizarOpen] = useState(false)
   const [mensagemExportacao, setMensagemExportacao] = useState('')
-  const [arquivoParaArquivar, setArquivoParaArquivar] = useState<File | null>(null)
   const [arquivosPrivados, setArquivosPrivados] = useState<RelatorioArquivado[]>([])
-  const [usoStorage, setUsoStorage] = useState({ uso_bytes: 0, limite_interno_bytes: 0 })
+  const [usoStorage, setUsoStorage] = useState({ uso_bytes: 0, uso_global_bytes: 0, limite_interno_bytes: 0, banco_uso_bytes: 0, banco_limite_bytes: 0, banco_percentual: 0 })
   const [arquivando, setArquivando] = useState(false)
   const [eficienciaMes, setEficienciaMes] = useState<Array<{ mes: string; custoKm: number; kmTotal: number }>>([])
   const [custoVeiculo, setCustoVeiculo] = useState<Array<{ veiculo: string; combustivel: number; manutencao: number }>>([])
+  const [metricas, setMetricas] = useState<MetricasRelatorio>({
+    totalCustos: 0,
+    kmAcumulado: 0,
+    custoPorKmAcumulado: 0,
+    veiculoMenorCusto: null,
+    veiculoMaiorManutencao: null,
+  })
 
   // Intervalo Personalizado
   const dataHojeStr = new Date().toISOString().split('T')[0]
@@ -77,8 +113,24 @@ export default function RelatoriosPage() {
       })
       .catch((error) => setMensagemExportacao(error instanceof Error ? error.message : 'Erro ao carregar arquivos.'))
 
-    fetch('/api/relatorios/dados', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setEficienciaMes(data.eficiencia); setCustoVeiculo(data.porVeiculo) }).catch(error => setMensagemExportacao(error instanceof Error ? error.message : 'Erro ao carregar dados dos relatórios.'))
   }, [])
+
+  useEffect(() => {
+    const { inicio, fim } = calcularIntervalo(periodo, dataInicio, dataFim)
+    const controller = new AbortController()
+    fetch(`/api/relatorios/dados?inicio=${inicio}&fim=${fim}`, { cache: 'no-store', signal: controller.signal })
+      .then(async response => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.erro)
+        setEficienciaMes(data.eficiencia)
+        setCustoVeiculo(data.porVeiculo)
+        setMetricas(data.metricas)
+      })
+      .catch(error => {
+        if (error instanceof Error && error.name !== 'AbortError') setMensagemExportacao(error.message)
+      })
+    return () => controller.abort()
+  }, [periodo, dataInicio, dataFim])
 
   if (!montado) return null
 
@@ -148,29 +200,25 @@ export default function RelatoriosPage() {
     setUsoStorage(data.armazenamento)
   }
 
-  const handleArquivar = async () => {
-    if (!arquivoParaArquivar) {
-      registrarExportacao('Selecione um PDF, XLS, XLSX ou CSV para arquivar.')
-      return
-    }
+  const obterIntervaloSelecionado = () => {
+    return calcularIntervalo(periodo, dataInicio, dataFim)
+  }
 
+  const handleGerarExcelServidor = async () => {
     setArquivando(true)
     try {
-      const formData = new FormData()
-      formData.append('arquivo', arquivoParaArquivar)
-      formData.append('periodo_inicio', dataInicio)
-      formData.append('periodo_fim', dataFim)
-      formData.append('tipo', periodo === 'CUSTOMIZADO' ? 'PERSONALIZADO' : 'OPERACIONAL')
-
-      const response = await fetch('/api/relatorios/arquivos', { method: 'POST', body: formData })
+      const response = await fetch('/api/relatorios/gerar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(obterIntervaloSelecionado()),
+      })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.erro || 'Não foi possível arquivar o relatório.')
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível gerar o Excel operacional.')
 
-      setArquivoParaArquivar(null)
       await carregarArquivosPrivados()
-      registrarExportacao('Relatório arquivado no bucket privado.')
+      registrarExportacao('Excel operacional gerado e protegido no bucket privado.')
     } catch (error) {
-      registrarExportacao(error instanceof Error ? error.message : 'Não foi possível arquivar o relatório.')
+      registrarExportacao(error instanceof Error ? error.message : 'Não foi possível gerar o Excel operacional.')
     } finally {
       setArquivando(false)
     }
@@ -181,7 +229,12 @@ export default function RelatoriosPage() {
       const response = await fetch(`/api/relatorios/arquivos/${id}/download`, { method: 'POST' })
       const data = await response.json()
       if (!response.ok) throw new Error(data.erro || 'Não foi possível liberar o download.')
-      window.location.assign(data.url)
+      const link = document.createElement('a')
+      link.href = data.url
+      link.target = '_blank'
+      link.rel = 'noopener noreferrer'
+      link.click()
+      await carregarArquivosPrivados()
     } catch (error) {
       registrarExportacao(error instanceof Error ? error.message : 'Não foi possível liberar o download.')
     }
@@ -189,29 +242,33 @@ export default function RelatoriosPage() {
 
   const formatarBytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
-  const handleExportarExcel = () => {
-    exportarExcel(`rpmtruck-relatorio-${periodo.toLowerCase()}`, [
-      {
-        nome: 'Custos por veículo',
-        colunas: [
-          { titulo: 'Veículo', chave: 'veiculo' },
-          { titulo: 'Combustível (R$)', chave: 'combustivel', tipo: 'Number' },
-          { titulo: 'Manutenção (R$)', chave: 'manutencao', tipo: 'Number' },
-          { titulo: 'Total (R$)', chave: 'total', tipo: 'Number' },
-        ],
-        linhas: custoVeiculo.map(linha => ({ ...linha, total: linha.combustivel + linha.manutencao })),
-      },
-      {
-        nome: 'Eficiência mensal',
-        colunas: [
-          { titulo: 'Mês', chave: 'mes' },
-          { titulo: 'Custo por KM (R$)', chave: 'custoKm', tipo: 'Number' },
-          { titulo: 'KM total', chave: 'kmTotal', tipo: 'Number' },
-        ],
-        linhas: eficienciaMes.map(linha => ({ ...linha })),
-      },
-    ])
-    registrarExportacao('Planilha Excel gerada com 2 abas.')
+  const handleConfirmarGuarda = async (id: string) => {
+    try {
+      const response = await fetch(`/api/relatorios/arquivos/${id}/confirmar`, { method: 'POST' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível confirmar a guarda.')
+      await carregarArquivosPrivados()
+      registrarExportacao('Guarda do arquivo confirmada pelo gestor.')
+    } catch (error) {
+      registrarExportacao(error instanceof Error ? error.message : 'Não foi possível confirmar a guarda.')
+    }
+  }
+
+  const handlePurgar = async (arquivo: RelatorioArquivado) => {
+    if (!window.confirm('Esta ação excluirá os detalhes operacionais presentes no Excel e removerá o arquivo temporário. O histórico mínimo dos containers será preservado. Deseja continuar?')) return
+    try {
+      const response = await fetch(`/api/relatorios/arquivos/${arquivo.id}/purgar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmacao: 'EXCLUIR DADOS ARQUIVADOS' }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível concluir a limpeza.')
+      await carregarArquivosPrivados()
+      registrarExportacao(data.aviso || 'Limpeza concluída e histórico permanente preservado.')
+    } catch (error) {
+      registrarExportacao(error instanceof Error ? error.message : 'Não foi possível concluir a limpeza.')
+    }
   }
 
   const handleExportarPdf = () => {
@@ -220,10 +277,10 @@ export default function RelatoriosPage() {
         titulo: 'Relatório operacional RPMTruck',
         subtitulo: `Período: ${periodoDescricao} · Plano ${planoEmpresa}`,
         metricas: [
-          { rotulo: 'Custo médio / KM', valor: 'R$ 4,24' },
-          { rotulo: 'Veículo mais eficiente', valor: 'DEF-5678' },
-          { rotulo: 'Maior gasto manutenção', valor: 'XYZ-9876' },
-          { rotulo: 'KM percorrido', valor: '352.000 KM' },
+          { rotulo: 'Custos no período', valor: metricas.totalCustos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+          { rotulo: 'Menor custo operacional', valor: metricas.veiculoMenorCusto?.placa ?? 'Sem dados' },
+          { rotulo: 'Maior gasto manutenção', valor: metricas.veiculoMaiorManutencao?.placa ?? 'Sem dados' },
+          { rotulo: 'KM acumulado da frota', valor: `${metricas.kmAcumulado.toLocaleString('pt-BR')} KM` },
         ],
         secoes: [
           {
@@ -272,11 +329,12 @@ export default function RelatoriosPage() {
 
           <motion.button 
             whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-            onClick={handleExportarExcel}
-            className="flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border hover:bg-white/5 cursor-pointer"
+            onClick={handleGerarExcelServidor}
+            disabled={arquivando}
+            className="flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border hover:bg-white/5 cursor-pointer disabled:cursor-wait disabled:opacity-50"
             style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
           >
-            <FileSpreadsheet size={16} className="text-green-500" /> EXCEL
+            <FileSpreadsheet size={16} className="text-green-500" /> {arquivando ? 'GERANDO...' : 'GERAR EXCEL'}
           </motion.button>
           
           <motion.button 
@@ -304,55 +362,81 @@ export default function RelatoriosPage() {
           <div className="flex items-center gap-3">
             <Archive size={18} style={{ color: primary }} />
             <div>
-              <h2 className="text-xs font-black uppercase tracking-widest">Arquivos privados</h2>
+              <h2 className="text-xs font-black uppercase tracking-widest">Arquivamento operacional privado</h2>
               <p className="text-[10px] text-foreground-muted">
-                {formatarBytes(usoStorage.uso_bytes)} de {formatarBytes(usoStorage.limite_interno_bytes)} do limite interno utilizados.
+                Empresa: {formatarBytes(usoStorage.uso_bytes)} · relatórios globais: {formatarBytes(usoStorage.uso_global_bytes)} de {formatarBytes(usoStorage.limite_interno_bytes)}.
               </p>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="file"
-              accept=".pdf,.xls,.xlsx,.csv,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-              onChange={(event) => setArquivoParaArquivar(event.target.files?.[0] ?? null)}
-              className="max-w-[280px] text-[10px] file:mr-3 file:border file:border-border file:bg-transparent file:px-3 file:py-2 file:text-[10px] file:font-bold"
-              aria-label="Selecionar relatório para arquivar"
-            />
-            <button
-              type="button"
-              onClick={handleArquivar}
-              disabled={arquivando || !arquivoParaArquivar}
-              className="flex items-center justify-center gap-2 border px-4 py-2 text-[10px] font-black uppercase disabled:opacity-40"
-              style={{ borderColor: primary, color: primary }}
-            >
-              <Upload size={14} /> {arquivando ? 'Arquivando...' : 'Arquivar'}
-            </button>
+          <button
+            type="button"
+            onClick={handleGerarExcelServidor}
+            disabled={arquivando}
+            className="flex items-center justify-center gap-2 border px-4 py-2 text-[10px] font-black uppercase disabled:cursor-wait disabled:opacity-40"
+            style={{ borderColor: primary, color: primary }}
+          >
+            <FileSpreadsheet size={14} /> {arquivando ? 'Gerando...' : 'Gerar Excel do período'}
+          </button>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="border p-3 text-[10px]" style={{ borderColor: 'var(--border)' }}>
+            <div className="mb-2 flex items-center justify-between gap-2 font-bold uppercase">
+              <span>Banco de dados</span>
+              <span>{usoStorage.banco_percentual.toFixed(1)}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden bg-black/20" role="progressbar" aria-valuenow={usoStorage.banco_percentual} aria-valuemin={0} aria-valuemax={100} aria-label="Uso estimado do banco">
+              <div className="h-full" style={{ width: `${Math.min(100, usoStorage.banco_percentual)}%`, backgroundColor: usoStorage.banco_percentual >= 80 ? '#ef4444' : primary }} />
+            </div>
+            <p className="mt-2 text-foreground-muted">{formatarBytes(usoStorage.banco_uso_bytes)} de {formatarBytes(usoStorage.banco_limite_bytes)} no plano Free.</p>
+          </div>
+          <div className="border p-3 text-[10px]" style={{ borderColor: 'var(--border)' }}>
+            <p className="flex items-start gap-2 text-foreground-muted">
+              <ShieldCheck size={15} className="mt-0.5 shrink-0" style={{ color: primary }} />
+              Código, origem, destino e data de cada operação permanecem no banco. Frete, comissão, custos e manutenções só podem ser removidos após download, confirmação do gestor e fim da retenção do plano.
+            </p>
           </div>
         </div>
 
         {arquivosPrivados.length > 0 ? (
           <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-            {arquivosPrivados.slice(0, 5).map((arquivo) => (
-              <div key={arquivo.id} className="flex items-center justify-between gap-3 py-3 text-xs">
+            {arquivosPrivados.slice(0, 10).map((arquivo) => (
+              <div key={arquivo.id} className="flex flex-col gap-3 py-3 text-xs lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0">
-                  <p className="font-bold truncate">{arquivo.nome_arquivo}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-bold truncate">{arquivo.nome_arquivo}</p>
+                    <span className="border px-2 py-0.5 text-[8px] font-black uppercase" style={{ borderColor: 'var(--border)' }}>{arquivo.status.replaceAll('_', ' ')}</span>
+                  </div>
                   <p className="text-[9px] text-foreground-muted">
-                    {formatarBytes(arquivo.tamanho_bytes)} · SHA-256 {arquivo.checksum_sha256.slice(0, 12)}…
+                    {new Date(arquivo.periodo_inicio).toLocaleDateString('pt-BR')} a {new Date(arquivo.periodo_fim).toLocaleDateString('pt-BR')} · {formatarBytes(arquivo.tamanho_bytes)} · SHA-256 {arquivo.checksum_sha256.slice(0, 12)}…
                   </p>
+                  {arquivo.confirmado_em && !arquivo.pode_purgar && !arquivo.dados_purgados_em && (
+                    <p className="mt-1 text-[9px] text-foreground-muted">Retenção protegida até {new Date(arquivo.elegivel_purga_em).toLocaleDateString('pt-BR')}.</p>
+                  )}
+                  {arquivo.arquivo_removido_em && <p className="mt-1 text-[9px] text-green-500">Detalhes removidos; movimentações permanentes preservadas.</p>}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDownloadArquivado(arquivo.id)}
-                  className="shrink-0 border px-3 py-2 text-[10px] font-bold uppercase"
-                  style={{ borderColor: 'var(--border)' }}
-                >
-                  Baixar
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  {!arquivo.arquivo_removido_em && (
+                    <button type="button" onClick={() => handleDownloadArquivado(arquivo.id)} className="flex items-center gap-1 border px-3 py-2 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}>
+                      <Download size={12} /> Baixar
+                    </button>
+                  )}
+                  {arquivo.status === 'DOWNLOAD_REGISTRADO' && (
+                    <button type="button" onClick={() => handleConfirmarGuarda(arquivo.id)} className="flex items-center gap-1 border px-3 py-2 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}>
+                      <CheckCircle2 size={12} /> Confirmar guarda
+                    </button>
+                  )}
+                  {arquivo.pode_purgar && (
+                    <button type="button" onClick={() => handlePurgar(arquivo)} className="flex items-center gap-1 border border-red-500/50 px-3 py-2 text-[10px] font-bold uppercase text-red-500">
+                      <Trash2 size={12} /> Limpar detalhes
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-[10px] text-foreground-muted">Nenhum relatório arquivado neste bucket.</p>
+          <p className="text-[10px] text-foreground-muted">Nenhum relatório gerado. Escolha um período com dados operacionais e gere o primeiro Excel.</p>
         )}
       </section>
 
@@ -400,21 +484,29 @@ export default function RelatoriosPage() {
 
       {/* ─── HIGHLIGHTS (DESTAQUES ANALÍTICOS) ─── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <HighlightCard 
-          titulo="Custo Médio / KM" valor="R$ 4,24" variacao="-R$ 0,08 vs Trimestre" 
-          positivo={true} icone={<TrendingDown size={20}/>} primary={primary} 
+        <HighlightCard
+          titulo="Custos no Período"
+          valor={metricas.totalCustos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          variacao="Somatório dos lançamentos reais"
+          positivo={metricas.totalCustos === 0} icone={<TrendingDown size={20}/>} primary={primary}
         />
-        <HighlightCard 
-          titulo="Veículo + Eficiente" valor="DEF-5678" variacao="Consumo 18% abaixo da média" 
-          positivo={true} icone={<Trophy size={20} className="text-yellow-500"/>} primary={primary} destaque 
+        <HighlightCard
+          titulo="Menor Custo Operacional"
+          valor={metricas.veiculoMenorCusto?.placa ?? 'Sem dados'}
+          variacao={metricas.veiculoMenorCusto ? metricas.veiculoMenorCusto.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'Nenhum custo no período'}
+          positivo={true} icone={<Trophy size={20} className="text-yellow-500"/>} primary={primary} destaque
         />
-        <HighlightCard 
-          titulo="Maior Gasto (Manut.)" valor="XYZ-9876" variacao="R$ 8.500 neste período" 
-          positivo={false} icone={<AlertTriangle size={20}/>} primary={primary} alerta 
+        <HighlightCard
+          titulo="Maior Gasto (Manut.)"
+          valor={metricas.veiculoMaiorManutencao?.placa ?? 'Sem dados'}
+          variacao={metricas.veiculoMaiorManutencao ? metricas.veiculoMaiorManutencao.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'Nenhuma manutenção no período'}
+          positivo={false} icone={<AlertTriangle size={20}/>} primary={primary} alerta
         />
-        <HighlightCard 
-          titulo="Total KM Percorrido" valor="352.000 KM" variacao="+15.000 km vs Trimestre" 
-          positivo={true} icone={<TrendingUp size={20}/>} primary={primary} 
+        <HighlightCard
+          titulo="KM Acumulado da Frota"
+          valor={`${metricas.kmAcumulado.toLocaleString('pt-BR')} KM`}
+          variacao="Hodômetros atuais cadastrados"
+          positivo={true} icone={<TrendingUp size={20}/>} primary={primary}
         />
       </div>
 

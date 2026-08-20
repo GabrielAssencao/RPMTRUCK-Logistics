@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -21,22 +21,40 @@ import {
   ClipboardList,
   Bell,
   CheckCheck,
-  Container as ContainerIcon
+  Archive,
+  Container as ContainerIcon,
+  type LucideIcon,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
 import { normalizarModulos, type ModuloCodigo } from '@/utils/planos'
 
 // ─── Marcadores Operacionais do Cliente (Empresa) ─────────────────────────────
-const NAV_EMPRESA = [
-  { path: '/dashboard/empresa', icon: LayoutDashboard, label: 'PAINEL OPERACIONAL', modulo: null, notificacaoModulo: 'GERAL' },
+interface NavEmpresaItem {
+  path: string
+  icon: LucideIcon
+  label: string
+  modulo: ModuloCodigo | null
+  notificacaoModulo: string
+  somenteGestor?: boolean
+  visaoGeral?: boolean
+}
+
+interface PerfilEmpresaUsuario {
+  role: 'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'
+  acessoDashboardGeral: boolean
+}
+
+const NAV_EMPRESA: NavEmpresaItem[] = [
+  { path: '/dashboard/empresa', icon: LayoutDashboard, label: 'PAINEL OPERACIONAL', modulo: null, notificacaoModulo: 'GERAL', visaoGeral: true },
   { path: '/dashboard/empresa/frota', icon: Truck, label: 'FROTA / VEÍCULOS', modulo: 'FROTA', notificacaoModulo: 'FROTA' },
-  { path: '/dashboard/empresa/motoristas', icon: Users, label: 'MOTORISTAS', modulo: 'FROTA', notificacaoModulo: 'MOTORISTAS' },
+  { path: '/dashboard/empresa/motoristas', icon: Users, label: 'MOTORISTAS', modulo: 'FROTA', notificacaoModulo: 'MOTORISTAS', somenteGestor: true },
   { path: '/dashboard/empresa/containers', icon: ContainerIcon, label: 'CONTAINERS', modulo: 'FROTA', notificacaoModulo: 'CONTAINERS' },
   { path: '/dashboard/empresa/custos', icon: DollarSign, label: 'CUSTOS / DESPESAS', modulo: 'GESTAO', notificacaoModulo: 'CUSTOS' },
   { path: '/dashboard/empresa/tarefas', icon: ClipboardList, label: 'TAREFAS', modulo: 'TAREFAS', notificacaoModulo: 'TAREFAS' },
-  { path: '/dashboard/empresa/relatorios', icon: FilePieChart, label: 'RELATÓRIOS', modulo: 'RELATORIOS', notificacaoModulo: 'RELATORIOS' },
-  { path: '/dashboard/empresa/usuarios', icon: UserSquare2, label: 'OPERADORES', modulo: null, notificacaoModulo: 'USUARIOS' },
+  { path: '/dashboard/empresa/arquivos', icon: Archive, label: 'ARQUIVO OPERACIONAL', modulo: null, notificacaoModulo: 'RELATORIOS', somenteGestor: true },
+  { path: '/dashboard/empresa/relatorios', icon: FilePieChart, label: 'RELATÓRIOS', modulo: 'RELATORIOS', notificacaoModulo: 'RELATORIOS', somenteGestor: true },
+  { path: '/dashboard/empresa/usuarios', icon: UserSquare2, label: 'OPERADORES', modulo: null, notificacaoModulo: 'USUARIOS', somenteGestor: true },
 ]
 
 const CONFIG_ITEM = { path: '/dashboard/empresa/configuracoes', icon: Settings, label: 'CONFIGURAÇÕES' }
@@ -60,6 +78,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
   const [sidebarExpandida, setSidebarExpandida] = useState(false)
   const [nomeEmpresa, setNomeEmpresa] = useState('Minha Empresa')
   const [modulosAtivos, setModulosAtivos] = useState<ModuloCodigo[]>([])
+  const [perfilUsuario, setPerfilUsuario] = useState<PerfilEmpresaUsuario | null>(null)
   const [pendenciasPorModulo, setPendenciasPorModulo] = useState<Record<string, number>>({})
   const [acessoCarregado, setAcessoCarregado] = useState(false)
 
@@ -79,6 +98,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
         if (!response.ok) throw new Error(data.erro || 'Acesso suspenso.')
         setNomeEmpresa(data.empresa.nome)
         setModulosAtivos(normalizarModulos(data.empresa.modulos))
+        setPerfilUsuario(data.usuario)
 
         const usuarioLocal = userData ? JSON.parse(userData) : {}
         localStorage.setItem('@rpmtruck:user', JSON.stringify({
@@ -94,15 +114,36 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
       .finally(() => setAcessoCarregado(true))
   }, [])
 
+  const eGestor = perfilUsuario?.role === 'GESTOR_EMPRESA'
+  const itemPermitido = useCallback((item: NavEmpresaItem) => {
+    if (item.modulo && !modulosAtivos.includes(item.modulo)) return false
+    if (eGestor) return true
+    if (item.somenteGestor) return false
+    if (item.visaoGeral) return Boolean(perfilUsuario?.acessoDashboardGeral)
+    return true
+  }, [eGestor, modulosAtivos, perfilUsuario?.acessoDashboardGeral])
+
   useEffect(() => {
-    if (!acessoCarregado) return
+    if (!acessoCarregado || !perfilUsuario) return
     const pagina = [...NAV_EMPRESA]
       .sort((a, b) => b.path.length - a.path.length)
       .find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))
-    if (pagina?.modulo && !modulosAtivos.includes(pagina.modulo as ModuloCodigo)) {
-      window.location.replace('/dashboard/empresa')
+    const configuracaoBloqueada = pathname.startsWith(CONFIG_ITEM.path) && !eGestor
+    if (configuracaoBloqueada || (pagina && !itemPermitido(pagina))) {
+      const destino = NAV_EMPRESA.find(itemPermitido)?.path || '/auth/login'
+      window.location.replace(destino)
     }
-  }, [acessoCarregado, modulosAtivos, pathname])
+  }, [acessoCarregado, eGestor, itemPermitido, pathname, perfilUsuario])
+
+  const paginaAtual = [...NAV_EMPRESA]
+    .sort((a, b) => b.path.length - a.path.length)
+    .find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))
+  const rotaAtualPermitida = Boolean(
+    acessoCarregado
+    && perfilUsuario
+    && !(!eGestor && pathname.startsWith(CONFIG_ITEM.path))
+    && (!paginaAtual || itemPermitido(paginaAtual)),
+  )
 
   const handleLogout = () => {
     localStorage.removeItem('@rpmtruck:user')
@@ -148,7 +189,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
 
           {/* Links de Navegação */}
           <nav className="space-y-1">
-            {NAV_EMPRESA.filter((item) => !item.modulo || modulosAtivos.includes(item.modulo as ModuloCodigo)).map((item) => {
+            {NAV_EMPRESA.filter(itemPermitido).map((item) => {
               const active = pathname === item.path
               const Icon = item.icon
               const mostrarBadgeContainers = item.path === '/dashboard/empresa/containers' && totalEmTransito > 0
@@ -198,23 +239,25 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
 
         {/* ─── RODAPÉ: CONFIGURAÇÕES + SAIR ─── */}
         <div className="space-y-1 pt-4 border-t border-white/10">
-          <Link
-            href={CONFIG_ITEM.path}
-            onClick={() => setMobileOpen(false)}
-            title={!expandida ? CONFIG_ITEM.label : undefined}
-            className={`flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${
-              pathname === CONFIG_ITEM.path
-                ? 'text-black font-black'
-                : 'text-foreground-muted hover:text-foreground hover:bg-white/5'
-            }`}
-            style={{
-              backgroundColor: pathname === CONFIG_ITEM.path ? primary : 'transparent',
-              clipPath: pathname === CONFIG_ITEM.path ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
-            }}
-          >
-            <Settings size={18} className={`shrink-0 ${pathname === CONFIG_ITEM.path ? 'text-black' : 'text-foreground-muted'}`} />
-            {expandida && <span className="flex-1 truncate">{CONFIG_ITEM.label}</span>}
-          </Link>
+          {eGestor && (
+            <Link
+              href={CONFIG_ITEM.path}
+              onClick={() => setMobileOpen(false)}
+              title={!expandida ? CONFIG_ITEM.label : undefined}
+              className={`flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${
+                pathname === CONFIG_ITEM.path
+                  ? 'text-black font-black'
+                  : 'text-foreground-muted hover:text-foreground hover:bg-white/5'
+              }`}
+              style={{
+                backgroundColor: pathname === CONFIG_ITEM.path ? primary : 'transparent',
+                clipPath: pathname === CONFIG_ITEM.path ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
+              }}
+            >
+              <Settings size={18} className={`shrink-0 ${pathname === CONFIG_ITEM.path ? 'text-black' : 'text-foreground-muted'}`} />
+              {expandida && <span className="flex-1 truncate">{CONFIG_ITEM.label}</span>}
+            </Link>
+          )}
 
           <button 
             onClick={handleLogout}
@@ -275,14 +318,14 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
             <div className="w-px h-6 bg-border hidden sm:block" style={{ backgroundColor: 'var(--border)' }} />
             <div className="hidden sm:flex flex-col text-right font-mono">
               <span className="text-[11px] font-bold text-foreground truncate max-w-[150px]">{nomeEmpresa}</span>
-              <span className="text-[9px] text-foreground-muted uppercase tracking-widest">Painel Gestor</span>
+              <span className="text-[9px] text-foreground-muted uppercase tracking-widest">{eGestor ? 'Painel Gestor' : perfilUsuario?.role === 'OPERADOR' ? 'Painel Operador' : 'Painel Visualizador'}</span>
             </div>
           </div>
         </header>
 
         {/* ÁREA DE RENDERIZAÇÃO DA PÁGINA INTERNA */}
         <main className="flex-1 overflow-y-auto p-6 md:p-8">
-          {children}
+          {rotaAtualPermitida ? children : <div className="py-16 text-center text-xs font-mono text-foreground-muted">Validando permissões...</div>}
         </main>
       </div>
 

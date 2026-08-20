@@ -2,7 +2,8 @@ import 'server-only'
 
 export const RELATORIOS_BUCKET = 'relatorios-privados'
 export const RELATORIO_MAX_FILE_BYTES = 10 * 1024 * 1024
-export const RELATORIOS_FREE_SOFT_LIMIT_BYTES = 900 * 1024 * 1024
+// Mantém margem para fotos, outros buckets e variações de contabilização no plano Free.
+export const RELATORIOS_FREE_SOFT_LIMIT_BYTES = 700 * 1024 * 1024
 
 export const RELATORIO_MIME_TYPES = {
   'application/pdf': 'pdf',

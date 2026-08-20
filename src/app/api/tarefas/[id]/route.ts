@@ -24,7 +24,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   const gestor = ['GESTOR_EMPRESA', 'GESTOR'].includes(auth.session.role)
   const somenteStatus = Object.keys(parsed.data).every(campo => campo === 'status')
-  if (!gestor && atual.criadorId !== auth.session.userId && !(somenteStatus && atual.responsavelId === auth.session.userId)) {
+  const operadorResponsavel = auth.session.role === 'OPERADOR' && atual.responsavelId === auth.session.userId
+  if (!gestor && !(somenteStatus && operadorResponsavel)) {
     return NextResponse.json({ erro: 'Você não pode alterar esta tarefa.' }, { status: 403 })
   }
 
@@ -78,7 +79,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   const tarefa = await prisma.tarefa.findFirst({ where: { id: params.id, empresaId: auth.session.empresaId } })
   if (!tarefa) return NextResponse.json({ erro: 'Tarefa não encontrada.' }, { status: 404 })
   const gestor = ['GESTOR_EMPRESA', 'GESTOR'].includes(auth.session.role)
-  if (!gestor && tarefa.criadorId !== auth.session.userId) return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 })
+  if (!gestor) return NextResponse.json({ erro: 'Apenas o gestor pode excluir tarefas.' }, { status: 403 })
 
   await prisma.tarefa.delete({ where: { id: tarefa.id } })
   return NextResponse.json({ sucesso: true })

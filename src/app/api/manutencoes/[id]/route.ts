@@ -10,6 +10,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
   const atual = await prisma.historicoVeiculo.findFirst({ where: { id: params.id, empresaId: auth.session.empresaId }, include: { veiculo: true } })
   if (!atual) return NextResponse.json({ erro: 'Manutenção não encontrada.' }, { status: 404 })
+  if (atual.relatorioArquivoId) return NextResponse.json({ erro: 'Esta manutenção já foi arquivada e não pode mais ser alterada.' }, { status: 409 })
   const parsed = schema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ erro: 'Status inválido.' }, { status: 400 })
   const h = await prisma.historicoVeiculo.update({ where: { id: atual.id }, data: { status: parsed.data.status, data_conclusao: parsed.data.status === 'CONCLUIDA' ? new Date() : null } })
@@ -19,8 +20,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
-  const atual = await prisma.historicoVeiculo.findFirst({ where: { id: params.id, empresaId: auth.session.empresaId }, select: { id: true } })
+  const atual = await prisma.historicoVeiculo.findFirst({ where: { id: params.id, empresaId: auth.session.empresaId }, select: { id: true, relatorioArquivoId: true } })
   if (!atual) return NextResponse.json({ erro: 'Manutenção não encontrada.' }, { status: 404 })
+  if (atual.relatorioArquivoId) return NextResponse.json({ erro: 'Esta manutenção já foi arquivada e não pode mais ser excluída.' }, { status: 409 })
   await prisma.historicoVeiculo.delete({ where: { id: atual.id } })
   return NextResponse.json({ sucesso: true })
 }

@@ -54,12 +54,19 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/empresa', request.url));
     }
 
+    const rotasSomenteGestor = [
+      '/dashboard/empresa/motoristas',
+      '/dashboard/empresa/arquivos',
+      '/dashboard/empresa/relatorios',
+      '/dashboard/empresa/usuarios',
+      '/dashboard/empresa/configuracoes',
+    ];
     if (
-      pathname.startsWith('/dashboard/empresa/usuarios') &&
+      rotasSomenteGestor.some((rota) => pathname.startsWith(rota)) &&
       session.role !== 'GESTOR_EMPRESA' &&
       session.role !== 'GESTOR'
     ) {
-      return NextResponse.redirect(new URL('/dashboard/empresa', request.url));
+      return NextResponse.redirect(new URL('/dashboard/empresa/frota', request.url));
     }
   }
 

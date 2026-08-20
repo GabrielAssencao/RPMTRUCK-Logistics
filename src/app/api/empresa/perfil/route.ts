@@ -11,12 +11,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
 
+  const usuario = await prisma.usuario.findFirst({
+    where: { id: auth.session.userId, empresaId: auth.empresa.id },
+    select: { id: true, email: true, role: true, acessoDashboardGeral: true },
+  })
+  if (!usuario) {
+    return NextResponse.json({ erro: 'Usuário não pertence mais a esta empresa.' }, { status: 403 })
+  }
+
   return NextResponse.json(
     {
       usuario: {
-        id: auth.session.userId,
-        email: auth.session.email,
-        role: auth.session.role,
+        id: usuario.id,
+        email: usuario.email,
+        role: usuario.role,
+        acessoDashboardGeral: usuario.acessoDashboardGeral,
       },
       empresa: auth.empresa,
     },

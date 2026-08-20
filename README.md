@@ -149,8 +149,8 @@ upload e download, copie a chave `service_role` de **Supabase > Project Settings
 para `SUPABASE_SERVICE_ROLE_KEY` no ambiente do servidor. Nunca use essa chave em uma
 variável `NEXT_PUBLIC_*`.
 
-O aplicativo aplica um teto interno padrão de 900 MiB para preservar margem dentro
-do 1 GB do plano Free. O valor pode ser reduzido por
+O aplicativo aplica um teto interno padrão de 700 MiB para preservar margem dentro
+do 1 GB do plano Free para fotos e outros objetos. O valor pode ser reduzido por
 `RELATORIOS_STORAGE_SOFT_LIMIT_BYTES`. O teto considera os relatórios registrados
 pelo aplicativo; outros buckets também consomem a franquia e devem ser acompanhados
 no painel do Supabase.
@@ -159,6 +159,14 @@ O bucket não aceita leitura pública. A aplicação grava os arquivos pelo serv
 registra SHA-256, período e tamanho no PostgreSQL e libera downloads por URLs
 assinadas válidas por 60 segundos. Esses arquivos são um arquivo operacional; para
 recuperação de desastre, mantenha futuramente uma cópia externa ao projeto Supabase.
+
+A migração `20260820020000_arquivamento_operacional_permanente` adiciona o ciclo
+seguro dos arquivos gerados no servidor: gerar, baixar, confirmar a guarda e, somente
+depois do prazo do plano, remover os detalhes vinculados exatamente àquele arquivo.
+O código do container, empresa, terminal de origem, terminal de destino, data da
+operação, referência do relatório e checksum permanecem na tabela de movimentações
+permanentes. O arquivo temporário só é removido do Storage após a limpeza transacional
+dos detalhes; uma falha no Storage pode ser tentada novamente sem apagar o histórico.
 
 ### Fotos privadas de motoristas
 

@@ -22,6 +22,7 @@ interface UsuarioLocal {
   nome: string
   email: string
   role: 'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'
+  acessoDashboardGeral: boolean
   status: 'ATIVO' | 'INATIVO'
   criadoEm: string
 }
@@ -45,7 +46,7 @@ const CAMPOS_USUARIO: FieldConfig[] = [
     name: 'senha', 
     label: 'Senha Inicial de Acesso', 
     type: 'text', 
-    placeholder: 'Mínimo de 6 caracteres', 
+    placeholder: 'Mínimo de 8 caracteres',
     required: true 
   },
   { 
@@ -54,9 +55,19 @@ const CAMPOS_USUARIO: FieldConfig[] = [
     type: 'select', 
     required: true,
     options: [
-      { label: 'OPERADOR (Lança Frota, Motoristas e Custos)', value: 'OPERADOR' },
-      { label: 'VISUALIZADOR (Apenas Leitura / Relatórios)', value: 'VISUALIZADOR' }
+      { label: 'OPERADOR (Frota, Containers, Custos e Tarefas)', value: 'OPERADOR' },
+      { label: 'VISUALIZADOR (Leitura operacional)', value: 'VISUALIZADOR' }
     ]
+  },
+  {
+    name: 'acessoDashboardGeral',
+    label: 'Acesso à visão geral da empresa',
+    type: 'select',
+    required: true,
+    options: [
+      { label: 'NÃO — somente módulos operacionais', value: 'false' },
+      { label: 'SIM — permitir a visão geral', value: 'true' },
+    ],
   }
 ]
 
@@ -68,13 +79,15 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true)
 
   const [usuarios, setUsuarios] = useState<UsuarioLocal[]>([])
+  const [usuarioLogadoId, setUsuarioLogadoId] = useState('')
+  const [salvandoPermissaoId, setSalvandoPermissaoId] = useState<string | null>(null)
   
   const [perfilLogado, setPerfilLogado] = useState<'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'>('VISUALIZADOR')
 
   // Carrega os usuários salvos no Supabase ao carregar a página
   useEffect(() => {
     setMontado(true)
-    fetch('/api/empresa/perfil', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (response.ok) { setPerfilLogado(data.usuario.role); if (data.usuario.role === 'GESTOR_EMPRESA' || data.usuario.role === 'GESTOR') void carregarUsuarios() } else setLoading(false) }).catch(() => setLoading(false))
+    fetch('/api/empresa/perfil', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (response.ok) { setPerfilLogado(data.usuario.role); setUsuarioLogadoId(data.usuario.id); if (data.usuario.role === 'GESTOR_EMPRESA' || data.usuario.role === 'GESTOR') void carregarUsuarios() } else setLoading(false) }).catch(() => setLoading(false))
   }, [])
 
   const carregarUsuarios = async () => {
@@ -88,6 +101,7 @@ export default function UsuariosPage() {
           nome: u.nome,
           email: u.email,
           role: u.role,
+          acessoDashboardGeral: Boolean(u.acessoDashboardGeral),
           status: 'ATIVO',
           criadoEm: new Date(u.criado_em).toISOString().split('T')[0]
         }))
@@ -132,7 +146,10 @@ export default function UsuariosPage() {
       const res = await fetch('/api/empresa/usuarios', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          acessoDashboardGeral: formData.acessoDashboardGeral === 'true',
+        })
       })
 
       if (!res.ok) {
@@ -155,6 +172,46 @@ export default function UsuariosPage() {
       const data = await response.json()
       if (!response.ok) return alert(data.erro || 'Não foi possível remover o usuário.')
       setUsuarios((prev) => prev.filter(u => u.id !== id))
+    }
+  }
+
+  const handleAlternarDashboard = async (usuario: UsuarioLocal) => {
+    setSalvandoPermissaoId(usuario.id)
+    try {
+      const response = await fetch(`/api/empresa/usuarios/${usuario.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acessoDashboardGeral: !usuario.acessoDashboardGeral }),
+      })
+      const data = await response.json()
+      if (!response.ok) return alert(data.erro || 'Não foi possível alterar a permissão.')
+      setUsuarios(prev => prev.map(item => item.id === usuario.id
+        ? { ...item, acessoDashboardGeral: data.acessoDashboardGeral }
+        : item))
+    } catch {
+      alert('Erro de conexão ao alterar a permissão.')
+    } finally {
+      setSalvandoPermissaoId(null)
+    }
+  }
+
+  const solicitarReset = async (usuario: UsuarioLocal) => {
+    const proprioAcesso = usuario.id === usuarioLogadoId
+    const mensagem = proprioAcesso
+      ? 'Enviar sua solicitação de redefinição ao SuperAdmin?'
+      : `Enviar ao SuperAdmin uma solicitação de redefinição para ${usuario.nome}?`
+    if (!window.confirm(mensagem)) return
+
+    try {
+      const response = await fetch('/api/auth/reset-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: usuario.email }),
+      })
+      const data = await response.json()
+      alert(response.ok ? data.mensagem : data.erro || 'Não foi possível solicitar a redefinição.')
+    } catch {
+      alert('Erro de conexão ao solicitar a redefinição.')
     }
   }
 
@@ -223,6 +280,7 @@ export default function UsuariosPage() {
               <tr className="text-[10px] uppercase tracking-widest border-b" style={{ borderColor: 'var(--border)' }}>
                 <th className="px-6 py-4 font-medium">Usuário / Operador</th>
                 <th className="px-6 py-4 font-medium">Nível de Permissão</th>
+                <th className="px-6 py-4 font-medium">Visão Geral</th>
                 <th className="px-6 py-4 font-medium">Status do Acesso</th>
                 <th className="px-6 py-4 font-medium">Data de Cadastro</th>
                 <th className="px-6 py-4 font-medium text-right">Ações</th>
@@ -232,7 +290,7 @@ export default function UsuariosPage() {
               <AnimatePresence>
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-sm font-mono text-foreground-muted">
+                    <td colSpan={6} className="px-6 py-12 text-center text-sm font-mono text-foreground-muted">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 size={16} className="animate-spin" style={{ color: primary }} />
                         <span>A carregar operadores...</span>
@@ -241,7 +299,7 @@ export default function UsuariosPage() {
                   </tr>
                 ) : usuariosFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-sm font-mono text-foreground-muted">
+                    <td colSpan={6} className="px-6 py-12 text-center text-sm font-mono text-foreground-muted">
                       Nenhum operador encontrado na lista.
                     </td>
                   </tr>
@@ -271,6 +329,27 @@ export default function UsuariosPage() {
                       </td>
 
                       <td className="px-6 py-4">
+                        {u.role === 'GESTOR_EMPRESA' ? (
+                          <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: primary }}>Acesso integral</span>
+                        ) : (
+                          <button
+                            type="button"
+                            aria-pressed={u.acessoDashboardGeral}
+                            disabled={salvandoPermissaoId === u.id}
+                            onClick={() => void handleAlternarDashboard(u)}
+                            className="inline-flex min-w-24 items-center justify-center gap-2 border px-3 py-2 text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
+                            style={{
+                              borderColor: u.acessoDashboardGeral ? primary : 'var(--border)',
+                              color: u.acessoDashboardGeral ? primary : 'var(--foreground-muted)',
+                            }}
+                          >
+                            {salvandoPermissaoId === u.id ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />}
+                            {u.acessoDashboardGeral ? 'Permitida' : 'Bloqueada'}
+                          </button>
+                        )}
+                      </td>
+
+                      <td className="px-6 py-4">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] font-bold tracking-widest bg-green-500/10 text-green-500 border border-green-500/20">
                           <CheckCircle2 size={10} /> {u.status}
                         </span>
@@ -283,18 +362,21 @@ export default function UsuariosPage() {
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button 
-                            title="Redefinir Senha"
+                            title={u.id === usuarioLogadoId ? 'Solicitar meu reset ao SuperAdmin' : 'Solicitar reset ao SuperAdmin'}
+                            onClick={() => void solicitarReset(u)}
                             className="p-2 text-foreground-muted hover:text-foreground transition-colors rounded hover:bg-white/5"
                           >
                             <Lock size={14} />
                           </button>
-                          <button 
-                            title="Remover Operador"
-                            onClick={() => handleExcluirUsuario(u.id)}
-                            className="p-2 text-red-400 hover:text-red-500 transition-colors rounded hover:bg-red-500/10"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          {u.id !== usuarioLogadoId && u.role !== 'GESTOR_EMPRESA' && (
+                            <button
+                              title="Remover Operador"
+                              onClick={() => handleExcluirUsuario(u.id)}
+                              className="p-2 text-red-400 hover:text-red-500 transition-colors rounded hover:bg-red-500/10"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </motion.tr>

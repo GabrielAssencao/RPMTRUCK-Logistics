@@ -16,6 +16,23 @@ const criarSchema = z.object({
   veiculoId: z.string().uuid().optional(),
 })
 
+type ContagemPorModulo = Array<{
+  modulo: string
+  _count?: true | { _all?: number }
+}>
+
+function resumirPendencias(contagens: ContagemPorModulo) {
+  const pendenciasPorModulo = contagens.reduce<Record<string, number>>((totais, item) => {
+    totais[item.modulo] = typeof item._count === 'object' ? item._count._all ?? 0 : 0
+    return totais
+  }, {})
+
+  return {
+    naoLidas: Object.values(pendenciasPorModulo).reduce((total, quantidade) => total + quantidade, 0),
+    pendenciasPorModulo,
+  }
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request)
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
@@ -31,7 +48,23 @@ export async function GET(request: NextRequest) {
     ...(lidas === null ? {} : { lida: lidas === 'true' }),
   }
 
-  const [notificacoes, naoLidas] = await prisma.$transaction([
+  const whereNaoLidas: Prisma.NotificacaoWhereInput = {
+    ...escopoNotificacoes(auth.session),
+    lida: false,
+  }
+
+  if (request.nextUrl.searchParams.get('resumo') === 'true') {
+    const contagens = await prisma.notificacao.groupBy({
+      by: ['modulo'],
+      where: whereNaoLidas,
+      orderBy: { modulo: 'asc' },
+      _count: { _all: true },
+    })
+
+    return NextResponse.json(resumirPendencias(contagens))
+  }
+
+  const [notificacoes, contagens] = await prisma.$transaction([
     prisma.notificacao.findMany({
       where,
       include: {
@@ -41,10 +74,15 @@ export async function GET(request: NextRequest) {
       orderBy: { criado_em: 'desc' },
       take: 50,
     }),
-    prisma.notificacao.count({ where: { ...escopoNotificacoes(auth.session), lida: false } }),
+    prisma.notificacao.groupBy({
+      by: ['modulo'],
+      where: whereNaoLidas,
+      orderBy: { modulo: 'asc' },
+      _count: { _all: true },
+    }),
   ])
 
-  return NextResponse.json({ notificacoes, naoLidas, total: notificacoes.length })
+  return NextResponse.json({ notificacoes, ...resumirPendencias(contagens), total: notificacoes.length })
 }
 
 export async function PATCH(request: NextRequest) {
