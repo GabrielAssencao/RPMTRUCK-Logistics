@@ -1,0 +1,166 @@
+import { Prisma } from '@prisma/client'
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { requireEmpresaAuth } from '@/lib/empresaAuth'
+import {
+  criarUrlsAssinadasFotos,
+  FotoMotoristaError,
+  removerFotoMotorista,
+  salvarFotoMotorista,
+} from '@/lib/motoristaFotos'
+import { criarNotificacao } from '@/lib/notificacoes'
+import { prisma } from '@/lib/prisma'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+const schema = z.object({
+  nome: z.string().trim().min(3).max(120),
+  cpf: z.string().trim().min(11).max(20).nullable(),
+  rg: z.string().trim().max(30).nullable(),
+  cnh: z.string().trim().min(5).max(30),
+  categoria: z.string().trim().min(1).max(5),
+  validade: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  status: z.enum(['DISPONIVEL', 'EM_ROTA', 'ALERTA', 'FERIAS']).default('DISPONIVEL'),
+  veiculoId: z.string().uuid().nullable(),
+})
+
+function valorTexto(formData: FormData, campo: string) {
+  const valor = formData.get(campo)
+  return typeof valor === 'string' ? valor : ''
+}
+
+function valorOpcional(formData: FormData, campo: string) {
+  const valor = valorTexto(formData, campo).trim()
+  return valor || null
+}
+
+function podeGerenciarMotoristas(role: string) {
+  return role === 'GESTOR_EMPRESA' || role === 'GESTOR' || role === 'OPERADOR'
+}
+
+export async function GET(request: NextRequest) {
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
+  if (auth.error || !auth.session?.empresaId) {
+    return NextResponse.json({ erro: auth.error }, { status: auth.status })
+  }
+
+  const [motoristas, veiculos] = await prisma.$transaction([
+    prisma.motorista.findMany({
+      where: { empresaId: auth.session.empresaId },
+      include: { veiculo: { select: { id: true, modelo: true, placa: true } } },
+      orderBy: { nome: 'asc' },
+    }),
+    prisma.veiculo.findMany({
+      where: { empresaId: auth.session.empresaId },
+      include: { motoristas: { select: { id: true } } },
+      orderBy: { modelo: 'asc' },
+    }),
+  ])
+
+  const urls = await criarUrlsAssinadasFotos(motoristas.map((motorista) => motorista.foto_url))
+  return NextResponse.json({
+    motoristas: motoristas.map((motorista) => ({
+      ...motorista,
+      foto_url: motorista.foto_url?.startsWith('http')
+        ? motorista.foto_url
+        : urls.get(motorista.foto_url ?? '') ?? null,
+    })),
+    veiculos,
+  })
+}
+
+export async function POST(request: NextRequest) {
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
+  if (auth.error || !auth.session?.empresaId) {
+    return NextResponse.json({ erro: auth.error }, { status: auth.status })
+  }
+  if (!podeGerenciarMotoristas(auth.session.role)) {
+    return NextResponse.json({ erro: 'Seu perfil não pode cadastrar motoristas.' }, { status: 403 })
+  }
+
+  let formData: FormData
+  try {
+    formData = await request.formData()
+  } catch {
+    return NextResponse.json({ erro: 'Formulário inválido.' }, { status: 400 })
+  }
+
+  const parsed = schema.safeParse({
+    nome: valorTexto(formData, 'nome'),
+    cpf: valorOpcional(formData, 'cpf'),
+    rg: valorOpcional(formData, 'rg'),
+    cnh: valorTexto(formData, 'cnh'),
+    categoria: valorTexto(formData, 'categoria'),
+    validade: valorTexto(formData, 'validade'),
+    status: valorTexto(formData, 'status') || 'DISPONIVEL',
+    veiculoId: valorOpcional(formData, 'veiculoId'),
+  })
+  if (!parsed.success) {
+    return NextResponse.json({ erro: 'Revise os dados cadastrais do motorista.' }, { status: 400 })
+  }
+
+  const validade = new Date(`${parsed.data.validade}T12:00:00`)
+  if (Number.isNaN(validade.getTime())) {
+    return NextResponse.json({ erro: 'Informe uma validade de CNH válida.' }, { status: 400 })
+  }
+
+  if (parsed.data.veiculoId) {
+    const veiculo = await prisma.veiculo.findFirst({
+      where: { id: parsed.data.veiculoId, empresaId: auth.session.empresaId },
+      select: { id: true },
+    })
+    if (!veiculo) return NextResponse.json({ erro: 'Veículo inválido.' }, { status: 400 })
+  }
+
+  const fotoEntrada = formData.get('foto')
+  const foto = fotoEntrada instanceof File && fotoEntrada.size > 0 ? fotoEntrada : null
+  let motorista: Awaited<ReturnType<typeof prisma.motorista.create>> | null = null
+  let caminhoFoto: string | null = null
+
+  try {
+    motorista = await prisma.motorista.create({
+      data: {
+        ...parsed.data,
+        validade,
+        foto_url: null,
+        empresaId: auth.session.empresaId,
+      },
+    })
+
+    if (foto) {
+      const upload = await salvarFotoMotorista(auth.session.empresaId, motorista.id, foto)
+      caminhoFoto = upload.caminho
+      motorista = await prisma.motorista.update({
+        where: { id: motorista.id },
+        data: { foto_url: caminhoFoto },
+      })
+    }
+
+    await criarNotificacao({
+      titulo: 'Motorista cadastrado',
+      mensagem: `${motorista.nome} foi adicionado à equipe.`,
+      modulo: 'MOTORISTAS',
+      empresaId: auth.session.empresaId,
+      usuarioId: auth.session.userId,
+    }).catch((error) => console.error('Falha ao notificar cadastro de motorista:', error))
+
+    return NextResponse.json(motorista, { status: 201 })
+  } catch (error) {
+    if (caminhoFoto) {
+      await removerFotoMotorista(caminhoFoto).catch((cause) => console.error('Falha ao compensar upload de foto:', cause))
+    }
+    if (motorista) {
+      await prisma.motorista.delete({ where: { id: motorista.id } }).catch((cause) => console.error('Falha ao compensar cadastro de motorista:', cause))
+    }
+    if (error instanceof FotoMotoristaError) {
+      return NextResponse.json({ erro: error.message }, { status: error.status })
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json({ erro: 'CPF ou CNH já cadastrado para esta empresa.' }, { status: 409 })
+    }
+    console.error('Erro ao cadastrar motorista:', error)
+    return NextResponse.json({ erro: 'Não foi possível cadastrar o motorista.' }, { status: 500 })
+  }
+}
+

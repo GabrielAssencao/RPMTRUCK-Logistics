@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
-import { ArrowLeft, Upload, CheckCircle2, User } from 'lucide-react'
+import { ArrowLeft, Upload, CheckCircle2, User, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -18,6 +18,12 @@ export default function NovoMotoristaPage() {
   const [categoriaCNH, setCategoriaCNH] = useState('D')
   const [validadeCNH, setValidadeCNH] = useState('')
   const [fotoUrl, setFotoUrl] = useState<string | null>(null)
+  const [fotoArquivo, setFotoArquivo] = useState<File | null>(null)
+  const [fotoInfo, setFotoInfo] = useState<{ largura: number; altura: number } | null>(null)
+  const [fotoErro, setFotoErro] = useState('')
+  const fotoInputRef = useRef<HTMLInputElement>(null)
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
 
   const abreviarNome = (nome: string) => {
     if (!nome.trim()) return 'NOME DO CONDUTOR'
@@ -26,18 +32,87 @@ export default function NovoMotoristaPage() {
     return `${partes[0]} ${partes[partes.length - 1]}`.toUpperCase()
   }
 
-  const handleFotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    return () => {
+      if (fotoUrl) URL.revokeObjectURL(fotoUrl)
+    }
+  }, [fotoUrl])
+
+  const handleFotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      const url = URL.createObjectURL(file)
-      setFotoUrl(url)
+    if (!file) return
+
+    setFotoErro('')
+    const formatosPermitidos = ['image/jpeg', 'image/png', 'image/webp']
+    if (!formatosPermitidos.includes(file.type)) {
+      setFotoErro('Formato permitido: JPG, PNG ou WebP.')
+      e.target.value = ''
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setFotoErro('A foto deve ter no máximo 5 MB.')
+      e.target.value = ''
+      return
+    }
+
+    try {
+      const dimensoes = await new Promise<{ largura: number; altura: number }>((resolve, reject) => {
+        const urlTemporaria = URL.createObjectURL(file)
+        const imagem = new Image()
+        imagem.onload = () => {
+          resolve({ largura: imagem.naturalWidth, altura: imagem.naturalHeight })
+          URL.revokeObjectURL(urlTemporaria)
+        }
+        imagem.onerror = () => {
+          reject(new Error('Imagem inválida'))
+          URL.revokeObjectURL(urlTemporaria)
+        }
+        imagem.src = urlTemporaria
+      })
+
+      if (dimensoes.largura < 300 || dimensoes.altura < 400) {
+        setFotoErro('Use uma foto vertical com pelo menos 300 × 400 pixels.')
+        e.target.value = ''
+        return
+      }
+
+      setFotoArquivo(file)
+      setFotoInfo(dimensoes)
+      setFotoUrl(URL.createObjectURL(file))
+    } catch {
+      setFotoErro('Não foi possível ler a imagem selecionada.')
+      e.target.value = ''
     }
   }
 
-  const handleSalvar = (e: React.FormEvent) => {
+  const removerFotoSelecionada = () => {
+    setFotoArquivo(null)
+    setFotoInfo(null)
+    setFotoUrl(null)
+    setFotoErro('')
+    if (fotoInputRef.current) fotoInputRef.current.value = ''
+  }
+
+  const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault()
-    alert('Motorista cadastrado com sucesso!')
+    setSalvando(true)
+    setErro('')
+    const formData = new FormData()
+    formData.set('nome', nomeCompleto)
+    formData.set('cpf', cpf)
+    formData.set('rg', rg)
+    formData.set('cnh', cnh)
+    formData.set('categoria', categoriaCNH)
+    formData.set('validade', validadeCNH)
+    formData.set('status', 'DISPONIVEL')
+    if (fotoArquivo) formData.set('foto', fotoArquivo)
+
+    const response = await fetch('/api/motoristas', { method: 'POST', body: formData })
+    const data = await response.json()
+    setSalvando(false)
+    if (!response.ok) return setErro(data.erro || 'Não foi possível cadastrar o motorista.')
     router.push('/dashboard/empresa/motoristas')
+    router.refresh()
   }
 
   return (
@@ -60,6 +135,7 @@ export default function NovoMotoristaPage() {
         
         {/* ─── FORMULÁRIO DE CADASTRO ─── */}
         <form onSubmit={handleSalvar} className="lg:col-span-7 border p-6 space-y-4" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
+          {erro && <div role="alert" className="border border-red-500/30 p-3 text-xs text-red-500">{erro}</div>}
           <h3 className="text-xs font-bold uppercase tracking-widest pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
             Dados Cadastrais do Motorista
           </h3>
@@ -144,18 +220,50 @@ export default function NovoMotoristaPage() {
 
           <div>
             <label className="block text-[10px] uppercase font-bold mb-1">Foto de Perfil (Padronizado 3x4 / Opcional)</label>
-            <div className="flex items-center gap-3 border p-3" style={{ borderColor: 'var(--border)' }}>
-              <input type="file" accept="image/*" onChange={handleFotoUpload} className="hidden" id="foto-upload" />
-              <label htmlFor="foto-upload" className="px-3 py-1.5 border text-[10px] uppercase font-bold cursor-pointer hover:bg-white/5 flex items-center gap-1.5" style={{ borderColor: primary, color: primary }}>
-                <Upload size={12} /> Selecionar Foto
-              </label>
-              <span className="text-[10px] text-foreground-muted">{fotoUrl ? 'Foto anexada' : 'Nenhuma imagem selecionada'}</span>
+            <div className="space-y-3 border p-3" style={{ borderColor: fotoErro ? '#ef4444' : 'var(--border)' }}>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  ref={fotoInputRef}
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                  onChange={handleFotoUpload}
+                  className="hidden"
+                  id="foto-upload"
+                  aria-describedby="orientacoes-foto"
+                />
+                <label htmlFor="foto-upload" className="px-3 py-1.5 border text-[10px] uppercase font-bold cursor-pointer hover:bg-white/5 flex items-center gap-1.5" style={{ borderColor: primary, color: primary }}>
+                  <Upload size={12} /> {fotoArquivo ? 'Trocar foto' : 'Selecionar foto'}
+                </label>
+                {fotoArquivo && (
+                  <button type="button" onClick={removerFotoSelecionada} className="px-3 py-1.5 border border-red-500/30 text-[10px] uppercase font-bold text-red-500 hover:bg-red-500/10 flex items-center gap-1.5">
+                    <X size={12} /> Remover
+                  </button>
+                )}
+                <span className="text-[10px] text-foreground-muted">
+                  {fotoArquivo
+                    ? `${fotoArquivo.name} • ${(fotoArquivo.size / 1024 / 1024).toFixed(2)} MB${fotoInfo ? ` • ${fotoInfo.largura}×${fotoInfo.altura}px` : ''}`
+                    : 'Nenhuma imagem selecionada'}
+                </span>
+              </div>
+
+              <div id="orientacoes-foto" className="text-[10px] leading-relaxed text-foreground-muted">
+                <p className="font-bold text-foreground mb-1">Antes de enviar:</p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>Use foto recente, vertical, bem iluminada e com fundo neutro.</li>
+                  <li>Mantenha rosto e ombros visíveis, sem capacete ou óculos escuros.</li>
+                  <li>Não envie CNH, CPF ou outros documentos fotografados.</li>
+                  <li>JPG, PNG ou WebP, mínimo 300×400 px e máximo 5 MB.</li>
+                </ul>
+                <p className="mt-1">A imagem será recortada em 3:4, convertida para WebP e terá os metadados removidos.</p>
+              </div>
+
+              {fotoErro && <p role="alert" className="text-[10px] text-red-500">{fotoErro}</p>}
             </div>
           </div>
 
           <div className="pt-4 flex justify-end gap-2 border-t" style={{ borderColor: 'var(--border)' }}>
-            <button type="submit" className="px-6 py-3 text-xs uppercase font-bold text-black flex items-center gap-2" style={{ backgroundColor: primary }}>
-              <CheckCircle2 size={16} /> Finalizar Cadastro
+            <button type="submit" disabled={salvando} className="px-6 py-3 text-xs uppercase font-bold text-black flex items-center gap-2 disabled:opacity-50" style={{ backgroundColor: primary }}>
+              <CheckCircle2 size={16} /> {salvando ? 'Salvando...' : 'Finalizar Cadastro'}
             </button>
           </div>
         </form>

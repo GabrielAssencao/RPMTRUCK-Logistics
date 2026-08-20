@@ -50,11 +50,7 @@ export default function AdminRequestsAndResets() {
   // ─── AÇÕES CONECTADAS AO BANCO (UPDATE/PATCH) ────────────────────────────
   const handleAprovarConta = async (id) => {
     try {
-      const response = await fetch(`/api/solicitacoes/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'APROVADO' })
-      });
+      const response = await fetch(`/api/solicitacoes/${id}/aprovar`, { method: 'POST' });
 
       if (response.ok) {
         setContas(contas.map(c => c.id === id ? { ...c, status: 'APROVADO' } : c));
@@ -68,11 +64,7 @@ export default function AdminRequestsAndResets() {
 
   const handleRejeitarConta = async (id) => {
     try {
-      const response = await fetch(`/api/solicitacoes/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'REJEITADO' })
-      });
+      const response = await fetch(`/api/solicitacoes/${id}/rejeitar`, { method: 'POST' });
 
       if (response.ok) {
         setContas(contas.map(c => c.id === id ? { ...c, status: 'REJEITADO' } : c));
@@ -84,22 +76,16 @@ export default function AdminRequestsAndResets() {
 
   const handleGerarSenhaTemporaria = async (id) => {
     // Gera a chave e atualiza no banco de dados real
-    const temporaryPassword = `RPM-${Math.floor(100000 + Math.random() * 900000)}`;
-    
     try {
-      const response = await fetch(`/api/resets/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'CONCLUIDO', chave: temporaryPassword })
-      });
+      const response = await fetch(`/api/resets/${id}/liberar`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível liberar o reset.');
 
-      if (response.ok) {
-        setGeneratedKey({ id, key: temporaryPassword });
-        setResets(resets.map(r => r.id === id ? { ...r, status: 'CONCLUIDO', chave: temporaryPassword } : r));
-      }
+      setGeneratedKey({ id, key: data.chave });
+      setResets(resets.map(r => r.id === id ? { ...r, status: 'CONCLUIDO', chave: data.chave } : r));
     } catch (error) {
       console.error("Erro ao liberar reset:", error);
-      alert("Erro ao gravar a chave temporária no banco.");
+      alert(error instanceof Error ? error.message : 'Erro ao liberar a senha temporária.');
     }
   };
 

@@ -9,49 +9,38 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { motion } from 'framer-motion';
 import CompanyUsersManager from './CompanyUsersManager'; 
 import CompanyVehiclesManager from './CompanyVehiclesManager'; 
+import { calcularMensalidade, MODULOS, MODULOS_CONFIG, obterModulosPadrao, PLANOS, PLANOS_CONFIG } from '@/utils/planos';
 
 // ─── CONSTANTES DE PRECIFICAÇÃO E LIMITES ────────────────────────────────
-const PLANOS_CONFIG = {
-  ESSENCIAL: { base: 450, setup: 300, uBase: 4, vBase: 10 },
-  AVANCADO: { base: 650, setup: 500, uBase: 10, vBase: 25 },
-  ENTERPRISE: { base: 1250, setup: 1000, uBase: 25, vBase: 80 },
-  PREVIEW: { base: 0, setup: 0, uBase: 999, vBase: 999 }
-};
-
-const MODULOS_PADRAO = {
-  ESSENCIAL: ['Módulo Frota'],
-  AVANCADO: ['Módulo Frota', 'Controle & Gestão'],
-  ENTERPRISE: ['Módulo Frota', 'Controle & Gestão', 'Relatórios & Dashboards'],
-  PREVIEW: []
-};
-
-const TODOS_OS_MODULOS = ['Módulo Frota', 'Controle & Gestão', 'Relatórios & Dashboards'];
 // ─────────────────────────────────────────────────────────────────────────
 
-export default function CompanyFinancialControl({ empresa, onBack }) {
+export default function CompanyFinancialControl({ empresa, onUpdate }) {
   const { primary } = useTheme();
   const [tabAtiva, setTabAtiva] = useState('geral');
 
   const [plano, setPlano] = useState(empresa.plano || 'ESSENCIAL');
+  const [statusEmpresa, setStatusEmpresa] = useState(empresa.status || 'ATIVO');
+  const [motivoStatus, setMotivoStatus] = useState(empresa.status_motivo || '');
   const [uExtra, setUExtra] = useState(empresa.usuarios_adicionais || 0);
   const [vExtra, setVExtra] = useState(empresa.veiculos_adicionais || 0);
   const [modulosAtivos, setModulosAtivos] = useState(empresa.modulos || []);
+  const [salvando, setSalvando] = useState(false);
+  const [feedback, setFeedback] = useState('');
 
   const config = PLANOS_CONFIG[plano];
-  const mensalidadeCalculada = config.base + (uExtra * 25) + (vExtra * 30);
+  const mensalidadeCalculada = calcularMensalidade(plano, uExtra, vExtra);
 
-  // Faturas controladas por estado dinâmico
-  const [faturas, setFaturas] = useState([
-    { id: 'fat-1', mes: 'Jun', ano: 2026, tipo: 'IMPLEMENTACAO', valor: config.setup, status: 'pendente' },
-    { id: 'fat-2', mes: 'Jun', ano: 2026, tipo: 'MENSALIDADE', valor: mensalidadeCalculada, status: 'pendente' }
-  ]);
+  const [faturas, setFaturas] = useState([]);
+
+  useEffect(() => {
+    fetch(`/api/empresas/${empresa.id}/faturas`, { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setFaturas(data.map(fatura => ({ ...fatura, status: fatura.status.toLowerCase() }))); }).catch(error => setFeedback(error.message || 'Falha ao carregar faturas.'));
+  }, [empresa.id]);
 
   // 1. Sincroniza módulos quando o plano muda
-  useEffect(() => {
-    if (plano !== 'PREVIEW') {
-      setModulosAtivos(MODULOS_PADRAO[plano] || []);
-    }
-  }, [plano]);
+  const selecionarPlano = (novoPlano) => {
+    setPlano(novoPlano);
+    setModulosAtivos(obterModulosPadrao(novoPlano));
+  };
 
   // 2. Recálculo automático de faturas que ainda estão pendentes
   useEffect(() => {
@@ -59,7 +48,7 @@ export default function CompanyFinancialControl({ empresa, onBack }) {
       prevFaturas.map(fatura => {
         if (fatura.status === 'pendente') {
           if (fatura.tipo === 'IMPLEMENTACAO') {
-            return { ...fatura, valor: config.setup };
+            return { ...fatura, valor: config.taxaImplantacao };
           }
           if (fatura.tipo === 'MENSALIDADE') {
             return { ...fatura, valor: mensalidadeCalculada };
@@ -68,7 +57,7 @@ export default function CompanyFinancialControl({ empresa, onBack }) {
         return fatura;
       })
     );
-  }, [plano, uExtra, vExtra, mensalidadeCalculada, config.setup]);
+  }, [plano, uExtra, vExtra, mensalidadeCalculada, config.taxaImplantacao]);
 
   const toggleModulo = (mod) => {
     setModulosAtivos(prev => prev.includes(mod) ? prev.filter(m => m !== mod) : [...prev, mod]);
@@ -76,6 +65,43 @@ export default function CompanyFinancialControl({ empresa, onBack }) {
 
   const handleEditValorFatura = (id, novoValor) => {
     setFaturas(prev => prev.map(f => f.id === id ? { ...f, valor: parseFloat(novoValor) || 0 } : f));
+  };
+
+  const salvarAlteracoes = async () => {
+    setSalvando(true);
+    setFeedback('');
+    try {
+      const response = await fetch(`/api/empresas/${empresa.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plano,
+          status: statusEmpresa,
+          status_motivo: statusEmpresa === 'ATIVO' ? null : motivoStatus,
+          modulos: modulosAtivos,
+          usuarios_adicionais: uExtra,
+          veiculos_adicionais: vExtra,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível salvar as alterações.');
+      await onUpdate?.(data.empresa);
+      const resultadosFaturas = await Promise.allSettled(faturas.map(async fatura => {
+        const faturaResponse = await fetch(`/api/faturas/${fatura.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valor: Number(fatura.valor), status: fatura.status.toUpperCase() }) });
+        if (!faturaResponse.ok) {
+          const erroFatura = await faturaResponse.json().catch(() => ({}));
+          throw new Error(erroFatura.erro || 'Falha ao atualizar uma fatura.');
+        }
+      }));
+      const houveFalhaEmFatura = resultadosFaturas.some(resultado => resultado.status === 'rejected');
+      setFeedback(houveFalhaEmFatura
+        ? 'Plano e módulos salvos. Uma ou mais faturas não puderam ser atualizadas.'
+        : 'Configuração salva com sucesso.');
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : 'Não foi possível salvar as alterações.');
+    } finally {
+      setSalvando(false);
+    }
   };
 
   const Abas = [
@@ -99,11 +125,29 @@ export default function CompanyFinancialControl({ empresa, onBack }) {
             <p className="text-xs opacity-50 font-mono mt-1">GESTÃO E FINANÇAS • {empresa.email}</p>
           </div>
         </div>
-        <select className="bg-transparent border border-border text-[10px] p-2 font-black uppercase tracking-widest cursor-pointer outline-none hover:border-primary transition-colors" style={{ color: 'var(--foreground)', backgroundColor: 'var(--background)' }}>
-          <option>ATIVO</option>
-          <option>INADIMPLENTE</option>
-          <option>INATIVO</option>
-        </select>
+        <div className="space-y-2 min-w-[220px]">
+          <select
+            value={statusEmpresa}
+            onChange={(event) => setStatusEmpresa(event.target.value)}
+            aria-label="Status de acesso da empresa"
+            className="w-full bg-transparent border border-border text-[10px] p-2 font-black uppercase tracking-widest cursor-pointer outline-none hover:border-primary transition-colors"
+            style={{ color: 'var(--foreground)', backgroundColor: 'var(--background)' }}
+          >
+            <option value="ATIVO">ATIVO</option>
+            <option value="INADIMPLENTE">INADIMPLENTE</option>
+            <option value="INATIVO">INATIVO</option>
+          </select>
+          {statusEmpresa !== 'ATIVO' && (
+            <input
+              value={motivoStatus}
+              onChange={(event) => setMotivoStatus(event.target.value)}
+              maxLength={500}
+              placeholder="Motivo da suspensão"
+              aria-label="Motivo da suspensão"
+              className="w-full bg-transparent border border-border p-2 text-xs outline-none focus:border-primary"
+            />
+          )}
+        </div>
       </div>
 
       {/* NAVEGAÇÃO ENTRE ABAS */}
@@ -120,8 +164,8 @@ export default function CompanyFinancialControl({ empresa, onBack }) {
       <div className="py-4">
         {tabAtiva === 'geral' && (
            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <StatCard label="VEÍCULOS" val={`8 / ${config.vBase + vExtra}`} sub="Frota atual" primary={primary}/>
-              <StatCard label="MOTORISTAS" val="5" sub="Cadastrados" primary={primary}/>
+              <StatCard label="VEÍCULOS" val={`${empresa._count?.veiculos_frota ?? 0} / ${config.veiculosBase + vExtra}`} sub="Frota atual" primary={primary}/>
+              <StatCard label="MOTORISTAS" val={empresa._count?.motoristas ?? 0} sub="Cadastrados" primary={primary}/>
               <StatCard label="MENSALIDADE" val={plano === 'PREVIEW' ? 'GRÁTIS' : `R$ ${mensalidadeCalculada.toFixed(2)}`} sub="Valor recorrente" primary={primary} className={plano === 'PREVIEW' ? 'text-blue-500' : ''} />
               <StatCard label="TOTAL PAGO" val={`R$ ${empresa.total_pago_historico || '0,00'}`} sub="Acumulado" primary={primary}/>
            </div>
@@ -132,8 +176,8 @@ export default function CompanyFinancialControl({ empresa, onBack }) {
              <section>
                 <label className="text-[10px] font-black opacity-50 block mb-4 tracking-[0.3em]">PLANO BASE</label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                   {['PREVIEW', 'ESSENCIAL', 'AVANCADO', 'ENTERPRISE'].map(p => (
-                      <button key={p} onClick={() => setPlano(p)} className={`p-4 border text-left transition-all ${plano === p ? 'bg-primary text-black' : 'opacity-40 hover:opacity-100'}`} style={{borderColor: plano === p ? primary : 'var(--border)'}}>
+                   {PLANOS.map(p => (
+                      <button key={p} onClick={() => selecionarPlano(p)} className={`p-4 border text-left transition-all ${plano === p ? 'bg-primary text-black' : 'opacity-40 hover:opacity-100'}`} style={{borderColor: plano === p ? primary : 'var(--border)'}}>
                         <p className="text-[10px] font-bold">PLANO</p>
                         <h4 className="font-black text-lg">{p}</h4>
                       </button>
@@ -143,9 +187,9 @@ export default function CompanyFinancialControl({ empresa, onBack }) {
              <section>
                 <label className="text-[10px] font-black opacity-50 block mb-4 tracking-[0.3em]">MÓDULOS ATIVOS</label>
                 <div className="space-y-2 max-w-md">
-                   {TODOS_OS_MODULOS.map(mod => (
+                   {MODULOS.map(mod => (
                       <div key={mod} onClick={() => toggleModulo(mod)} className={`flex justify-between p-3 border cursor-pointer transition-all ${modulosAtivos.includes(mod) ? 'border-primary bg-primary/5' : 'border-border'}`}>
-                         <span className={`text-sm font-bold ${modulosAtivos.includes(mod) ? 'text-primary' : ''}`}>{mod}</span>
+                         <span className={`text-sm font-bold ${modulosAtivos.includes(mod) ? 'text-primary' : ''}`}>{MODULOS_CONFIG[mod].nome}</span>
                          <input type="checkbox" checked={modulosAtivos.includes(mod)} readOnly className="accent-primary" />
                       </div>
                    ))}
@@ -160,12 +204,12 @@ export default function CompanyFinancialControl({ empresa, onBack }) {
                 <CounterCard label="LICENÇAS EXTRAS" desc={`Custo: R$ 25,00/cada`} val={uExtra} setVal={setUExtra} primary={primary} />
                 <CounterCard label="VEÍCULOS EXTRAS" desc={`Custo: R$ 30,00/cada`} val={vExtra} setVal={setVExtra} primary={primary} />
              </div>
-             <CompanyUsersManager empresa={empresa} limiteTotal={config.uBase + uExtra} primary={primary} />
+             <CompanyUsersManager empresa={empresa} limiteTotal={config.usuariosBase + uExtra} primary={primary} />
           </div>
         )}
 
         {tabAtiva === 'veiculos' && (
-          <CompanyVehiclesManager empresa={empresa} limiteTotal={config.vBase + vExtra} primary={primary} />
+          <CompanyVehiclesManager empresa={empresa} limiteTotal={config.veiculosBase + vExtra} primary={primary} />
         )}
 
         {tabAtiva === 'pagamentos' && (
@@ -176,6 +220,7 @@ export default function CompanyFinancialControl({ empresa, onBack }) {
                       <tr>{['REFERÊNCIA', 'TIPO', 'VALOR (R$)', 'STATUS', 'COMPROVANTE', 'AÇÃO'].map(h => <th key={h} className="px-5 py-3 text-[10px] font-black tracking-widest opacity-60">{h}</th>)}</tr>
                    </thead>
                    <tbody>
+                      {faturas.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-xs opacity-50">Nenhuma fatura registrada para esta empresa.</td></tr>}
                       {faturas.map((f, i) => (
                          <tr key={f.id} className="border-b last:border-0 hover:bg-black/5 text-sm" style={{borderColor: 'var(--border)'}}>
                             <td className="px-5 py-4 font-mono font-bold">{f.mes} / {f.ano}</td>
@@ -214,24 +259,21 @@ export default function CompanyFinancialControl({ empresa, onBack }) {
                             <td className="px-5 py-4">
                                {f.status === 'pago' ? (
                                   <a 
-                                    href="#ver-comprovante" 
-                                    onClick={(e) => { e.preventDefault(); alert('Resgatando documento temporário no Supabase Storage...'); }}
+                                    href={f.comprovanteUrl || '#'}
+                                    onClick={(e) => { if (!f.comprovanteUrl) e.preventDefault(); }}
                                     className="text-[10px] font-black tracking-wider text-primary border-b border-primary/30 hover:border-primary transition-colors uppercase"
                                   >
-                                    📄 Ver Arquivo
+                                    {f.comprovanteUrl ? '📄 Ver Arquivo' : 'Sem comprovante'}
                                   </a>
                                ) : (
-                                  <label className="text-[10px] font-black opacity-40 hover:opacity-100 cursor-pointer transition-opacity uppercase flex items-center gap-1">
-                                     📎 Anexar PDF
-                                     <input type="file" accept="application/pdf,image/*" className="hidden" onChange={() => alert('Mock: Upload direcionado para o Bucket Supabase!')} />
-                                  </label>
+                                  <span className="text-[10px] font-black opacity-40 uppercase">Sem comprovante</span>
                                )}
                             </td>
 
                             <td className="px-5 py-4">
                                {f.status === 'pendente' ? (
                                  <button 
-                                   onClick={() => setFaturas(faturas.map(fat => fat.id === f.id ? {...fat, status: 'pago'} : fat))} 
+                                   onClick={async () => { const response = await fetch(`/api/faturas/${f.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'PAGO' }) }); if (response.ok) setFaturas(faturas.map(fat => fat.id === f.id ? {...fat, status: 'pago'} : fat)); else setFeedback('Não foi possível dar baixa na fatura.'); }}
                                    className="px-3 py-1.5 text-[10px] font-black border hover:border-green-500 hover:text-green-500 transition-all"
                                    style={{ borderColor: 'var(--border)' }}
                                  >
@@ -252,7 +294,17 @@ export default function CompanyFinancialControl({ empresa, onBack }) {
 
       {/* BOTÃO FIXO SALVAR */}
       <div className="flex justify-end pt-6 border-t mt-4" style={{borderColor: 'var(--border)'}}>
-         <button className="bg-primary text-black px-8 py-3 font-black text-xs hover:scale-105 transition-transform" style={{backgroundColor: primary}}>SALVAR ALTERAÇÕES</button>
+         <div className="flex items-center gap-4">
+           {feedback && <p className="text-xs" role="status">{feedback}</p>}
+           <button
+             onClick={salvarAlteracoes}
+             disabled={salvando}
+             className="bg-primary text-black px-8 py-3 font-black text-xs hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100"
+             style={{backgroundColor: primary}}
+           >
+             {salvando ? 'SALVANDO...' : 'SALVAR ALTERAÇÕES'}
+           </button>
+         </div>
       </div>
     </div>
   );

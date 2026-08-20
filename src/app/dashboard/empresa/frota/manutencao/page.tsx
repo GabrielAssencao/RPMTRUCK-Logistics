@@ -70,31 +70,20 @@ function ManutencaoContent() {
     kmAtual: ''
   })
 
-  const [veiculos, setVeiculos] = useState<VeiculoSelecao[]>([
-    { id: '1', modelo: 'VOLVO FH 540', placa: 'ABC-1234', tipo: 'Cavalo Mecânico', kmAtual: 125430, diasAntecedenciaNotificacao: 7 },
-    { id: '2', modelo: 'SCANIA R450', placa: 'XYZ-9876', tipo: 'Bitrem', kmAtual: 342100, diasAntecedenciaNotificacao: 15 },
-    { id: '3', modelo: 'MERCEDES ACTROS', placa: 'DEF-5678', tipo: 'Sider', kmAtual: 45200, diasAntecedenciaNotificacao: 3 },
-    { id: '4', modelo: 'VOLVO FH 460', placa: 'JKL-3456', tipo: 'Cavalo Mecânico', kmAtual: 89000, diasAntecedenciaNotificacao: 7 },
-  ])
+  const [veiculos, setVeiculos] = useState<VeiculoSelecao[]>([])
+  const [feedback, setFeedback] = useState('')
 
   const [indexSelecionado, setIndexSelecionado] = useState(0)
 
   useEffect(() => {
     setMontado(true)
-    if (placaUrl) {
-      const idx = veiculos.findIndex(v => v.placa.toUpperCase() === placaUrl.toUpperCase())
-      if (idx !== -1) setIndexSelecionado(idx)
-    }
-  }, [placaUrl, veiculos])
+    fetch('/api/manutencoes', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setVeiculos(data.veiculos); setHistorico(data.historico); if (placaUrl) { const idx = data.veiculos.findIndex((v: VeiculoSelecao) => v.placa.toUpperCase() === placaUrl.toUpperCase()); if (idx !== -1) setIndexSelecionado(idx) } }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar manutenções.'))
+  }, [placaUrl])
 
-  const [historico, setHistorico] = useState<RegistroManutencao[]>([
-    { id: '101', veiculoPlaca: 'ABC-1234', veiculoModelo: 'VOLVO FH 540', dataAgendada: '2026-08-01', tipo: 'PREVENTIVA', pecas: 'Troca de Óleo de Motor e Filtro RACOR', custo: 1850.00, kmAtual: 126000, status: 'PENDENTE', origem: 'FUTURA' },
-    { id: '104', veiculoPlaca: 'ABC-1234', veiculoModelo: 'VOLVO FH 540', dataAgendada: '2026-08-22', tipo: 'FUNILARIA', pecas: 'Reparo de amassado na porta direita e repintura de arranhados', custo: 2400.00, kmAtual: 125430, status: 'PENDENTE', origem: 'FUTURA' },
-    { id: '102', veiculoPlaca: 'ABC-1234', veiculoModelo: 'VOLVO FH 540', dataAgendada: '2026-05-10', tipo: 'PNEUS', pecas: 'Substituição de 2 Pneus Dianteiros', custo: 3200.00, kmAtual: 120000, status: 'CONCLUIDA', origem: 'ADMINISTRATIVA' },
-    { id: '103', veiculoPlaca: 'JKL-3456', veiculoModelo: 'VOLVO FH 460', dataAgendada: '2026-07-25', tipo: 'CORRETIVA', pecas: 'Revisão das Lonas de Freio', custo: 1200.00, kmAtual: 89000, status: 'PENDENTE', origem: 'FUTURA' }
-  ])
+  const [historico, setHistorico] = useState<RegistroManutencao[]>([])
 
   if (!montado) return null
+  if (veiculos.length === 0) return <div className="border border-dashed p-12 text-center text-sm text-foreground-muted">Nenhum veículo cadastrado para controlar manutenções.{feedback ? ` ${feedback}` : ''}</div>
 
   const veiculoAtivo = veiculos[indexSelecionado] || veiculos[0]
   const manutencoesDoVeiculo = historico.filter(h => h.veiculoPlaca === veiculoAtivo.placa)
@@ -103,31 +92,33 @@ function ManutencaoContent() {
 
   const handleAnterior = () => setIndexSelecionado(prev => (prev === 0 ? veiculos.length - 1 : prev - 1))
   const handleProximo = () => setIndexSelecionado(prev => (prev === veiculos.length - 1 ? 0 : prev + 1))
-  const handleAtualizarDiasNotificacao = (dias: number) => {
+  const handleAtualizarDiasNotificacao = async (dias: number) => {
+    if (!veiculoAtivo) return
+    const response = await fetch(`/api/veiculos/${veiculoAtivo.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ diasAntecedenciaNotif: dias }) })
+    if (!response.ok) return setFeedback('Não foi possível atualizar a antecedência do alerta.')
     setVeiculos(prev => prev.map((v, idx) => idx === indexSelecionado ? { ...v, diasAntecedenciaNotificacao: dias } : v))
   }
 
-  const handleSalvarManutencao = (e: React.FormEvent) => {
+  const handleSalvarManutencao = async (e: React.FormEvent) => {
     e.preventDefault()
-    const novoRegistro: RegistroManutencao = {
-      id: String(Date.now()),
-      veiculoPlaca: veiculoAtivo.placa,
-      veiculoModelo: veiculoAtivo.modelo,
-      dataAgendada: formManutencao.dataAgendada,
-      tipo: formManutencao.tipo,
-      pecas: formManutencao.pecas,
-      custo: Number(formManutencao.custo) || 0,
-      kmAtual: Number(formManutencao.kmAtual) || veiculoAtivo.kmAtual,
-      status: tipoInclusao === 'FUTURA' ? 'PENDENTE' : 'CONCLUIDA',
-      origem: tipoInclusao
-    }
+    const response = await fetch('/api/manutencoes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ veiculoId: veiculoAtivo.id, ...formManutencao, custo: Number(formManutencao.custo) || 0, kmAtual: Number(formManutencao.kmAtual) || veiculoAtivo.kmAtual, origem: tipoInclusao }) })
+    const novoRegistro = await response.json()
+    if (!response.ok) return setFeedback(novoRegistro.erro || 'Não foi possível salvar a manutenção.')
     setHistorico(prev => [novoRegistro, ...prev])
     setModalInclusaoOpen(false)
     setFormManutencao({ dataAgendada: dataHoje, tipo: 'PREVENTIVA', pecas: '', custo: '', kmAtual: '' })
   }
 
-  const handleAlterarStatus = (id: string, novoStatus: StatusManutencao) => setHistorico(prev => prev.map(item => item.id === id ? { ...item, status: novoStatus } : item))
-  const handleConfirmarExclusao = (id: string) => {
+  const handleAlterarStatus = async (id: string, novoStatus: StatusManutencao) => {
+    const response = await fetch(`/api/manutencoes/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: novoStatus }) })
+    const data = await response.json()
+    if (!response.ok) return setFeedback(data.erro || 'Não foi possível atualizar a manutenção.')
+    setHistorico(prev => prev.map(item => item.id === id ? data : item))
+  }
+  const handleConfirmarExclusao = async (id: string) => {
+    const response = await fetch(`/api/manutencoes/${id}`, { method: 'DELETE' })
+    const data = await response.json()
+    if (!response.ok) return setFeedback(data.erro || 'Não foi possível excluir a manutenção.')
     setHistorico(prev => prev.filter(h => h.id !== id))
     setExcluindoId(null)
   }
@@ -242,6 +233,7 @@ function ManutencaoContent() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
+      {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
 
       {/* CABEÇALHO */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">

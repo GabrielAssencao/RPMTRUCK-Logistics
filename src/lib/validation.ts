@@ -1,6 +1,7 @@
 // src/lib/validation.ts
 // Schemas Zod para validação de entrada em APIs
 import { z } from 'zod';
+import { MODULOS, PLANOS, STATUS_EMPRESA } from '@/utils/planos';
 
 /**
  * Login validation schema
@@ -60,10 +61,10 @@ export const criarEmpresaSchema = z.object({
   cnpj: z.string().regex(/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/, 'CNPJ inválido'),
   email: z.string().email(),
   telefone: z.string().min(10).max(15),
-  plano: z.enum(['PREVIEW', 'STARTER', 'GROWTH', 'ENTERPRISE']),
-  status: z.enum(['ATIVO', 'BLOQUEADO', 'AGUARDANDO_APROVACAO']).optional().default('AGUARDANDO_APROVACAO'),
+  plano: z.enum(PLANOS),
+  status: z.enum(STATUS_EMPRESA).optional().default('ATIVO'),
   nomeContato: z.string().max(100).optional(),
-  modulos: z.array(z.string()).optional(),
+  modulos: z.array(z.enum(MODULOS)).optional(),
 });
 
 export type CriarEmpresaInput = z.infer<typeof criarEmpresaSchema>;

@@ -1,18 +1,19 @@
 // src/app/admin/modules/companies/CompanyVehiclesManager.jsx
 'use client'
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Truck, Plus, Trash2, AlertCircle, X, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function CompanyVehiclesManager({ empresa, limiteTotal, primary }) {
-  // Simulação de veículos (No futuro vira um fetch da API conectada ao Prisma)
-  const [veiculos, setVeiculos] = useState([
-    { id: 'v1', modelo: 'Scania R450', placa: 'ABC-1234', tipo: 'Cavalo Mecânico' },
-    { id: 'v2', modelo: 'Volvo FH 540', placa: 'XYZ-9876', tipo: 'Bitrem' },
-  ]);
+  const [veiculos, setVeiculos] = useState([]);
+  const [feedback, setFeedback] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ modelo: '', placa: '', tipo: 'Cavalo Mecânico' });
+
+  useEffect(() => {
+    fetch(`/api/empresas/${empresa.id}/veiculos`, { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setVeiculos(data); }).catch(error => setFeedback(error.message || 'Falha ao carregar veículos.'));
+  }, [empresa.id]);
 
   const vagasDisponiveis = limiteTotal - veiculos.length;
 
@@ -22,27 +23,28 @@ export default function CompanyVehiclesManager({ empresa, limiteTotal, primary }
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.modelo || !formData.placa) return;
 
-    const novoVeiculo = {
-      id: `v-${Math.random().toString(36).substr(2, 9)}`,
-      ...formData,
-      placa: formData.placa.toUpperCase()
-    };
+    const response = await fetch(`/api/empresas/${empresa.id}/veiculos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
+    const novoVeiculo = await response.json();
+    if (!response.ok) return setFeedback(novoVeiculo.erro || 'Falha ao criar veículo.');
 
     setVeiculos([...veiculos, novoVeiculo]);
     setIsModalOpen(false);
   };
 
-  const handleDelete = (id, modelo) => {
+  const handleDelete = async (id, modelo) => {
     if (confirm(`Remover o veículo ${modelo} permanentemente da frota desta empresa?`)) {
+      const response = await fetch(`/api/empresas/${empresa.id}/veiculos/${id}`, { method: 'DELETE' });
+      const data = await response.json(); if (!response.ok) return setFeedback(data.erro || 'Falha ao excluir veículo.');
       setVeiculos(veiculos.filter(v => v.id !== id));
     }
   };
 
   return (
     <div className="space-y-4">
+      {feedback && <div role="status" className="border p-3 text-xs" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
       {/* HEADER DO GERENCIADOR DE FROTA */}
       <div className="flex items-center justify-between p-4 border bg-background-secondary" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-4">

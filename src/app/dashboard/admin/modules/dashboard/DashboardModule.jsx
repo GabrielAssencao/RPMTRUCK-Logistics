@@ -22,7 +22,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 
 export default function DashboardModule() {
   const { primary } = useTheme();
-  const { empresas, loading } = useAdminData();
+  const { empresas, stats, loading, erro } = useAdminData();
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   
   if (loading) {
@@ -31,9 +31,9 @@ export default function DashboardModule() {
 
   const listaEmpresas = Array.isArray(empresas) ? empresas : [];
 
-  const inadimplentes = listaEmpresas.filter(c => c.status === 'inadimplente');
-  const solicitacoes = listaEmpresas.filter(c => c.status === 'aguardando_aprovacao');
-  const receitaTotal = listaEmpresas.reduce((acc, c) => acc + (c.mensalidade || 0), 0);
+  const inadimplentes = listaEmpresas.filter(c => c.status === 'INADIMPLENTE');
+  const solicitacoesPendentes = Number(stats?.resumo?.solicitacoesPendentes || 0);
+  const receitaTotal = Number(stats?.resumo?.receitaTotal || 0);
 
   const processarDadosGrafico = () => {
     const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -53,20 +53,16 @@ export default function DashboardModule() {
   };
 
   const distribuicaoPlanos = [
-    { name: 'Essencial', value: listaEmpresas.filter(c => c.plano === 'ESSENCIAL').length || 1 },
+    { name: 'Essencial', value: listaEmpresas.filter(c => c.plano === 'ESSENCIAL').length },
     { name: 'Avançado', value: listaEmpresas.filter(c => c.plano === 'AVANCADO').length || 0 },
     { name: 'Enterprise', value: listaEmpresas.filter(c => c.plano === 'ENTERPRISE').length || 0 },
     { name: 'Preview', value: listaEmpresas.filter(c => c.plano === 'PREVIEW').length || 0 },
   ];
 
-  const receitaMensal = [
-    { mes: 'Jan', receita: 18000 },
-    { mes: 'Fev', receita: 24000 },
-    { mes: 'Mar', receita: 22000 },
-    { mes: 'Abr', receita: 31000 },
-    { mes: 'Mai', receita: 28000 },
-    { mes: 'Jun', receita: 36000 },
-  ];
+  const receitaMensal = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((mes, indice) => ({
+    mes,
+    receita: listaEmpresas.filter(empresa => empresa.status === 'ATIVO' && new Date(empresa.criado_em).getFullYear() <= selectedYear && (new Date(empresa.criado_em).getFullYear() < selectedYear || new Date(empresa.criado_em).getMonth() <= indice)).reduce((total, empresa) => total + Number(empresa.mensalidade || 0), 0),
+  }));
 
   return (
     <div className="space-y-6 max-w-full overflow-hidden pb-10">
@@ -77,7 +73,8 @@ export default function DashboardModule() {
         </h1>
       </div>
 
-      <DashboardStats empresas={listaEmpresas} solicitacoes={solicitacoes} receita={receitaTotal} />
+      {erro && <div role="alert" className="border p-4 text-sm text-red-500 border-red-500/30 bg-red-500/10">{erro}</div>}
+      <DashboardStats empresas={listaEmpresas} solicitacoesPendentes={solicitacoesPendentes} receita={receitaTotal} />
 
       {inadimplentes.length > 0 && (
         <div className="border p-4 flex items-center gap-3 bg-red-500/10 border-red-500/30">
@@ -208,10 +205,10 @@ export default function DashboardModule() {
                         if (empresa.plano === 'PREVIEW') {
                           return <span className="text-[10px] px-2 py-1 uppercase font-mono border font-black bg-blue-500/10 text-blue-400 border-blue-500/20 tracking-wider">✦ PREVIEW</span>;
                         }
-                        if (empresa.status === 'aguardando_aprovacao') {
+                        if (empresa.status === 'AGUARDANDO_APROVACAO') {
                           return <span className="text-[10px] px-2 py-1 uppercase font-mono border font-black bg-yellow-500/10 text-yellow-500 border-yellow-500/20 tracking-wider animate-pulse">⏳ AGUARDANDO</span>;
                         }
-                        if (empresa.status === 'inadimplente' || !empresa.status_pago) {
+                        if (empresa.status === 'INADIMPLENTE') {
                           return <span className="text-[10px] px-2 py-1 uppercase font-mono border font-black bg-red-500/10 text-red-500 border-red-500/20 tracking-wider">⚠️ INADIMPLENTE</span>;
                         }
                         return <span className="text-[10px] px-2 py-1 uppercase font-mono border font-black bg-green-500/10 text-green-500 border-green-500/20 tracking-wider">✓ PAGO</span>;

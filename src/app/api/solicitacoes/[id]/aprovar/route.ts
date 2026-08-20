@@ -1,18 +1,11 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient, Role, StatusEmpresa, StatusSolicitacao, StatusFatura } from '@prisma/client';
+import { Role, StatusEmpresa, StatusSolicitacao, StatusFatura } from '@prisma/client';
 import bcrypt from 'bcrypt'; // Lembre-se de rodar 'npm i bcrypt' e 'npm i --save-dev @types/bcrypt'
 import { requireAdminAuth } from '@/lib/auth';
 import { NextRequest } from 'next/server';
-
-const prisma = new PrismaClient();
-
-// Configurações padrão de limites e valores para cada plano base do SaaS
-const PLANOS_CONFIG = {
-  ESSENCIAL: { base: 450, setup: 300, uBase: 4, vBase: 10, modulos: ['Módulo Frota'] },
-  AVANCADO: { base: 650, setup: 500, uBase: 10, vBase: 25, modulos: ['Módulo Frota', 'Controle & Gestão'] },
-  ENTERPRISE: { base: 1250, setup: 1000, uBase: 25, vBase: 80, modulos: ['Módulo Frota', 'Controle & Gestão', 'Relatórios & Dashboards'] },
-  PREVIEW: { base: 0, setup: 0, uBase: 999, vBase: 999, modulos: ['Módulo Frota', 'Controle & Gestão', 'Relatórios & Dashboards'] }
-};
+import { prisma } from '@/lib/prisma';
+import { PLANOS_CONFIG as PLANOS_PADRONIZADOS } from '@/utils/planos';
+import { randomBytes } from 'crypto';
 
 export async function POST(
   request: NextRequest,
@@ -36,14 +29,14 @@ export async function POST(
       return NextResponse.json({ erro: 'Esta solicitação já foi processada anteriormente.' }, { status: 400 });
     }
 
-    const configPlano = PLANOS_CONFIG[solicitacao.plano];
+    const configPlano = PLANOS_PADRONIZADOS[solicitacao.plano];
     const dataAtual = new Date();
     const mesesValores = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     const mesReferencia = mesesValores[dataAtual.getMonth()];
     const anoReferencia = dataAtual.getFullYear();
 
     // Gerando uma senha padrão temporária inicial forte para o cliente
-    const senhaProvisoria = `RPM@${Math.floor(100000 + Math.random() * 900000)}`;
+    const senhaProvisoria = `RPM@${randomBytes(6).toString('base64url')}`;
     const salt = await bcrypt.genSalt(10);
     const senhaHash = await bcrypt.hash(senhaProvisoria, salt);
 
@@ -64,7 +57,7 @@ export async function POST(
           nome_contato: solicitacao.responsavel,
           plano: solicitacao.plano,
           status: StatusEmpresa.ATIVO,
-          modulos: configPlano.modulos,
+          modulos: [...configPlano.modulosPadrao],
           usuarios_adicionais: 0,
           veiculos_adicionais: 0
         }
@@ -81,14 +74,24 @@ export async function POST(
         }
       });
 
+      await tx.notificacao.create({
+        data: {
+          titulo: 'Acesso aprovado',
+          mensagem: `A empresa ${novaEmpresa.nome} foi ativada no plano ${novaEmpresa.plano}.`,
+          modulo: 'GERAL',
+          empresaId: novaEmpresa.id,
+          usuarioId: novoGestor.id,
+        }
+      });
+
       // Passo D: Gerar Fatura de Implementação (Setup) - se houver custo
-      if (configPlano.setup > 0) {
+      if (configPlano.taxaImplantacao > 0) {
         await tx.fatura.create({
           data: {
             mes: mesReferencia,
             ano: anoReferencia,
             tipo: 'IMPLEMENTACAO',
-            valor: configPlano.setup,
+            valor: configPlano.taxaImplantacao,
             status: StatusFatura.PENDENTE,
             empresaId: novaEmpresa.id
           }
@@ -96,13 +99,13 @@ export async function POST(
       }
 
       // Passo E: Gerar primeira Fatura de Mensalidade recorrente em aberto
-      if (configPlano.base > 0) {
+      if (configPlano.precoBase > 0) {
         await tx.fatura.create({
           data: {
             mes: mesReferencia,
             ano: anoReferencia,
             tipo: 'MENSALIDADE',
-            valor: configPlano.base,
+            valor: configPlano.precoBase,
             status: StatusFatura.PENDENTE,
             empresaId: novaEmpresa.id
           }
@@ -125,7 +128,5 @@ export async function POST(
   } catch (error) {
     console.error('Erro crítico ao aprovar e implantar tenant:', error);
     return NextResponse.json({ erro: 'Falha na transação técnica de implantação da infraestrutura.' }, { status: 500 });
-  } finally {
-    await prisma.$disconnect();
   }
 }

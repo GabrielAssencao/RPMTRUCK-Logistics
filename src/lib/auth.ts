@@ -146,33 +146,6 @@ export async function requireAdminAuth(request: NextRequest) {
 }
 
 /**
- * Middleware para verificar IDOR (Insecure Direct Object Reference)
- * Garante que o usuário só acesse dados da sua empresa
- */
-export async function requireEmpresaAuth(request: NextRequest) {
-  const { session, error, status } = await requireAuth(request);
-
-  if (error) {
-    return { error, status, session: null };
-  }
-
-  if (!session?.empresaId) {
-    return {
-      error: 'Acesso negado: usuário sem empresa vinculada',
-      status: 403,
-      session: null,
-    };
-  }
-
-  return {
-    error: null,
-    status: 200,
-    session,
-    empresaId: session.empresaId,
-  };
-}
-
-/**
  * Limpa a sessão (logout)
  */
 export async function clearSession() {

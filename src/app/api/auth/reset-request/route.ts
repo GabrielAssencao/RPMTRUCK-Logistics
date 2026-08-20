@@ -1,6 +1,7 @@
 // src/app/api/auth/reset-request/route.ts
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { notificarAdmins } from '@/lib/notificacoes';
 
 const prisma = new PrismaClient();
 
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
         status: 'PENDENTE'
       }
     });
+    await notificarAdmins({ titulo: 'Redefinição de senha pendente', mensagem: `Há uma nova solicitação de segurança para ${email.toLowerCase().trim()}.`, modulo: 'SENHAS' });
 
     return NextResponse.json({ 
       sucesso: true, 

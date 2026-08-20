@@ -26,9 +26,8 @@ function FeatureCard({ feature, index }: { feature: typeof FEATURES[0]; index: n
       initial={{ opacity: 0, y: 40 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.6, delay: index * 0.1, ease: [0.16, 1, 0.3, 1] }}
-      className="feature-card group relative bg-card p-6 border transition-all duration-300 cursor-default"
+      className="feature-card group relative border border-border bg-card p-6 transition-all duration-300 cursor-default"
       style={{
-        borderColor: 'var(--border)',
         clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
       }}
     >

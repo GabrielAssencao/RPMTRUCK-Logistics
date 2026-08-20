@@ -5,8 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useContainers } from '@/contexts/ContainersContext'
-import { DUPLAS_OPERACIONAIS } from '@/data/DuplasOperacionais'
 import { obterAnoMesSemana, MESES } from '@/lib/dataUtils'
+import { PLANOS_CONFIG, type PlanoTipo } from '@/utils/planos'
 import { 
   DollarSign, 
   Search, 
@@ -35,7 +35,6 @@ import {
 
 // ─── TIPOS E DADOS ──────────────────────────────────────────────────────────
 type CategoriaCusto = 'COMBUSTIVEL' | 'MANUTENCAO' | 'PEDAGIO' | 'ALIMENTACAO' | 'DIARIA_MOTORISTA' | 'SEGURO' | 'OUTROS'
-type PlanoSaaS = 'BASICO' | 'PRO' | 'ENTERPRISE'
 
 interface RegistroCusto {
   id: string
@@ -69,17 +68,13 @@ interface LinhaExibicao {
   origem: 'MANUAL' | 'CONTAINER_AUTO'
 }
 
-// DUPLAS_OPERACIONAIS vem de src/data/duplasOperacionais.ts — a mesma fonte
-// que Containers usa, então "duplaAtiva" aqui e no módulo Containers sempre
-// se referem exatamente à mesma dupla.
-
 export default function CustosPage() {
   const { primary } = useTheme()
-  const { containers } = useContainers()
+  const { containers, duplas, loading: carregandoDuplas } = useContainers()
   const [montado, setMontado] = useState(false)
 
   // Contexto da Empresa (Plano Ativo)
-  const [planoEmpresa, setPlanoEmpresa] = useState<PlanoSaaS>('ENTERPRISE')
+  const [planoEmpresa, setPlanoEmpresa] = useState<PlanoTipo>('ESSENCIAL')
 
   // Seletor Temporal Dinâmico
   const anoAtual = new Date().getFullYear()
@@ -113,26 +108,27 @@ export default function CustosPage() {
     status: 'PAGO' as 'PAGO' | 'PENDENTE'
   })
 
-  // Banco de Dados em Memória de Lançamentos Manuais
-  const [custos, setCustos] = useState<RegistroCusto[]>([
-    { id: 'c1', duplaId: 'd1', data: '2026-07-07', ano: 2026, mesIndex: 6, semanaIndex: 1, categoria: 'COMBUSTIVEL', descricao: 'Abastecimento Diesel S10 Posto Shell', valor: 850.00, formaPagamento: 'CARTÃO CORPORATIVO', status: 'PAGO' },
-    { id: 'c2', duplaId: 'd1', data: '2026-07-06', ano: 2026, mesIndex: 6, semanaIndex: 1, categoria: 'PEDAGIO', descricao: 'Pedágios Rota Anchieta', valor: 145.20, formaPagamento: 'TAG AUTO', status: 'PAGO' },
-    { id: 'c3', duplaId: 'd1', data: '2026-07-08', ano: 2026, mesIndex: 6, semanaIndex: 2, categoria: 'ALIMENTACAO', descricao: 'Diária e Almoço Motorista', valor: 120.00, formaPagamento: 'PIX', status: 'PAGO' },
-    { id: 'c4', duplaId: 'd2', data: '2026-07-05', ano: 2026, mesIndex: 6, semanaIndex: 1, categoria: 'MANUTENCAO', descricao: 'Troca de Correia Dentada', valor: 1400.00, formaPagamento: 'BOLETO', status: 'PENDENTE' },
-  ])
+  const [custos, setCustos] = useState<RegistroCusto[]>([])
 
   useEffect(() => {
     setMontado(true)
+    Promise.all([fetch('/api/custos', { cache: 'no-store' }), fetch('/api/empresa/perfil', { cache: 'no-store' })]).then(async ([custosResponse, perfilResponse]) => {
+      const custosData = await custosResponse.json(); const perfilData = await perfilResponse.json()
+      if (!custosResponse.ok) throw new Error(custosData.erro || 'Falha ao carregar custos.')
+      setCustos(custosData)
+      if (perfilResponse.ok && perfilData.empresa?.plano in PLANOS_CONFIG) setPlanoEmpresa(perfilData.empresa.plano)
+    }).catch(error => setErroFormulario(error instanceof Error ? error.message : 'Falha ao carregar custos.'))
   }, [])
 
   if (!montado) return null
 
-  const duplaAtiva = DUPLAS_OPERACIONAIS[indexDupla] || DUPLAS_OPERACIONAIS[0]
+  if (carregandoDuplas) return <div className="p-12 text-center text-sm text-foreground-muted">Carregando dados operacionais...</div>
+  if (duplas.length === 0) return <div className="border border-dashed p-12 text-center text-sm text-foreground-muted">Cadastre ao menos um veículo antes de lançar custos.</div>
+  const duplaAtiva = duplas[indexDupla] || duplas[0]
 
   // Histórico Permitido pelo Plano
-  const anosDisponiveis = planoEmpresa === 'ENTERPRISE' 
-    ? [anoAtual, anoAtual - 1, anoAtual - 2]
-    : [anoAtual]
+  const historicoAnos = PLANOS_CONFIG[planoEmpresa].historicoAnos
+  const anosDisponiveis = Array.from({ length: historicoAnos }, (_, index) => anoAtual - index)
 
   // ─── LANÇAMENTOS MANUAIS DA SEMANA (fluxo já existente) ────────────────
   const custosFiltrados = custos.filter(c => {
@@ -233,7 +229,7 @@ export default function CustosPage() {
   const termoBusca = busca.trim().toLowerCase()
   const duplaCorrespondeAoCaminhao = (duplaId: string) => {
     if (placaFiltroDia === 'TODOS') return true
-    return DUPLAS_OPERACIONAIS.some(dupla => dupla.id === duplaId && dupla.veiculoPlaca === placaFiltroDia)
+    return duplas.some(dupla => dupla.id === duplaId && dupla.veiculoPlaca === placaFiltroDia)
   }
 
   const linhasManualDia: LinhaExibicao[] = custos
@@ -243,7 +239,7 @@ export default function CustosPage() {
       return custo.data === dataFiltroDia && duplaCorrespondeAoCaminhao(custo.duplaId) && correspondeCategoria && correspondeBusca
     })
     .map(custo => {
-      const dupla = DUPLAS_OPERACIONAIS.find(item => item.id === custo.duplaId)
+      const dupla = duplas.find(item => item.id === custo.duplaId)
       return {
         id: custo.id,
         duplaId: custo.duplaId,
@@ -267,7 +263,7 @@ export default function CustosPage() {
           return !termoBusca || container.codigo.toLowerCase().includes(termoBusca) || container.terminalInicio.toLowerCase().includes(termoBusca) || container.terminalFim.toLowerCase().includes(termoBusca) || 'comissão transporte'.includes(termoBusca)
         })
         .map(container => {
-          const dupla = DUPLAS_OPERACIONAIS.find(item => item.id === container.duplaId)
+          const dupla = duplas.find(item => item.id === container.duplaId)
           return {
             id: `container-${container.id}`,
             duplaId: container.duplaId,
@@ -288,12 +284,15 @@ export default function CustosPage() {
   const linhasDia = [...linhasManualDia, ...linhasComissaoDia].sort((a, b) => b.valor - a.valor)
   const linhasExibidas = modoConsulta === 'DIA' ? linhasDia : linhasCombinadas
   const totalExibido = linhasExibidas.reduce((total, linha) => total + linha.valor, 0)
-  const veiculosFiltroDia = DUPLAS_OPERACIONAIS.filter((dupla, index, lista) => lista.findIndex(item => item.veiculoPlaca === dupla.veiculoPlaca) === index)
+  const veiculosFiltroDia = duplas.filter((dupla, index, lista) => lista.findIndex(item => item.veiculoPlaca === dupla.veiculoPlaca) === index)
   const periodoFormulario = obterAnoMesSemana(formCusto.data || new Date().toISOString().split('T')[0])
 
   // 🔄 ALTERAÇÃO RÁPIDA DE STATUS DO LANÇAMENTO (só afeta lançamentos manuais)
-  const handleAlterarStatusRapido = (id: string, novoStatus: 'PAGO' | 'PENDENTE') => {
-    setCustos(prev => prev.map(c => c.id === id ? { ...c, status: novoStatus } : c))
+  const handleAlterarStatusRapido = async (id: string, novoStatus: 'PAGO' | 'PENDENTE') => {
+    const response = await fetch(`/api/custos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: novoStatus }) })
+    const data = await response.json()
+    if (!response.ok) return setErroFormulario(data.erro || 'Falha ao atualizar custo.')
+    setCustos(prev => prev.map(c => c.id === id ? data : c))
   }
 
   const resetarFormulario = () => {
@@ -330,7 +329,7 @@ export default function CustosPage() {
   }
 
   // Salvar Novo Lançamento
-  const handleSalvarDespesa = (e: React.FormEvent) => {
+  const handleSalvarDespesa = async (e: React.FormEvent) => {
     e.preventDefault()
     const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null
     const continuar = submitter?.value === 'continuar'
@@ -344,19 +343,9 @@ export default function CustosPage() {
     setErroFormulario('')
     const periodoDoLancamento = obterAnoMesSemana(formCusto.data)
 
-    const novoRegistro: RegistroCusto = {
-      id: String(Date.now()),
-      duplaId: duplaAtiva.id,
-      data: formCusto.data,
-      ano: periodoDoLancamento.ano,
-      mesIndex: periodoDoLancamento.mesIndex,
-      semanaIndex: periodoDoLancamento.semanaIndex,
-      categoria: formCusto.categoria,
-      descricao: formCusto.descricao.trim(),
-      valor: valorNumerico,
-      formaPagamento: formCusto.formaPagamento,
-      status: formCusto.status
-    }
+    const response = await fetch('/api/custos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ veiculoId: duplaAtiva.veiculoId, motoristaId: duplaAtiva.motoristaId || null, ...formCusto, valor: valorNumerico }) })
+    const novoRegistro = await response.json()
+    if (!response.ok) return setErroFormulario(novoRegistro.erro || 'Não foi possível salvar a despesa.')
 
     setCustos(prev => [novoRegistro, ...prev])
     setAnoSelecionado(periodoDoLancamento.ano)
@@ -373,7 +362,10 @@ export default function CustosPage() {
     }
   }
 
-  const handleConfirmarExclusao = (id: string) => {
+  const handleConfirmarExclusao = async (id: string) => {
+    const response = await fetch(`/api/custos/${id}`, { method: 'DELETE' })
+    const data = await response.json()
+    if (!response.ok) return setErroFormulario(data.erro || 'Não foi possível excluir o custo.')
     setCustos(prev => prev.filter(c => c.id !== id))
     setExcluindoId(null)
   }
@@ -395,7 +387,7 @@ export default function CustosPage() {
         <div className="flex items-center gap-3">
           <div className="px-3 py-1.5 border text-[10px] font-bold uppercase tracking-wider flex items-center gap-2" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
             <span>Histórico {planoEmpresa}:</span>
-            <span style={{ color: primary }}>{planoEmpresa === 'ENTERPRISE' ? '3 Anos Liberados' : '1 Ano Liberado'}</span>
+            <span style={{ color: primary }}>{historicoAnos} Ano(s) Liberado(s)</span>
           </div>
 
           <motion.button 
@@ -450,11 +442,11 @@ export default function CustosPage() {
       <div className="border p-4 relative" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
         <div className="flex justify-between items-center mb-3 text-[10px] uppercase font-bold text-foreground-muted tracking-widest">
           <span>Selecione o Conjunto Operacional (Veículo e Motorista Vinculado):</span>
-          <span>{DUPLAS_OPERACIONAIS.length} Alocações Ativas</span>
+          <span>{duplas.length} Alocações Ativas</span>
         </div>
 
         <div className="flex overflow-x-auto hide-scrollbar gap-3 py-1">
-          {DUPLAS_OPERACIONAIS.map((d, idx) => {
+          {duplas.map((d, idx) => {
             const estaSelecionada = idx === indexDupla
             return (
               <button
@@ -505,7 +497,7 @@ export default function CustosPage() {
                   {ano}
                 </button>
               ))}
-              {planoEmpresa !== 'ENTERPRISE' && (
+              {historicoAnos < 3 && (
                 <div className="px-2 py-1 text-[10px] text-foreground-muted flex items-center gap-1 opacity-50 cursor-not-allowed" title="Upgrade para o Plano Enterprise para acessar histórico de 3 anos">
                   <Lock size={10} /> 2025 / 2024 (Enterprise)
                 </div>

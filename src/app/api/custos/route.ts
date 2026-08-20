@@ -1,47 +1,37 @@
-import { requireEmpresaAuth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { requireEmpresaAuth } from '@/lib/empresaAuth'
+import { criarNotificacao } from '@/lib/notificacoes'
+import { prisma } from '@/lib/prisma'
+
+const schema = z.object({
+  veiculoId: z.string().uuid(), motoristaId: z.string().uuid().optional().nullable(), data: z.string().min(10),
+  categoria: z.enum(['COMBUSTIVEL', 'MANUTENCAO', 'PEDAGIO', 'ALIMENTACAO', 'DIARIA_MOTORISTA', 'SEGURO', 'OUTROS']),
+  descricao: z.string().trim().min(3).max(500), valor: z.coerce.number().positive(), formaPagamento: z.string().trim().min(2).max(80), status: z.enum(['PAGO', 'PENDENTE']),
+})
+
+const serializar = (c: any) => ({ id: c.id, duplaId: c.veiculoId, veiculoId: c.veiculoId, motoristaId: c.motoristaId, data: c.data.toISOString().slice(0, 10), ano: c.ano, mesIndex: c.mesIndex, semanaIndex: c.semanaIndex, categoria: c.categoria, descricao: c.descricao, valor: c.valor, formaPagamento: c.formaPagamento, status: c.status })
 
 export async function GET(request: NextRequest) {
-  const { session, error, status } = await requireEmpresaAuth(request)
-  if (error || !session?.empresaId) {
-    return NextResponse.json({ error: error || 'Não autenticado' }, { status })
-  }
+  const auth = await requireEmpresaAuth(request, { modulo: 'GESTAO' })
+  if (auth.error || !auth.session?.empresaId || !auth.empresa) return NextResponse.json({ erro: auth.error }, { status: auth.status })
+  const ano = request.nextUrl.searchParams.get('ano')
+  const anoMinimo = new Date().getFullYear() - (auth.empresa.permissoes.historicoAnos - 1)
+  if (ano && Number(ano) < anoMinimo) return NextResponse.json({ erro: `Seu plano permite ${auth.empresa.permissoes.historicoAnos} ano(s) de histórico.` }, { status: 403 })
+  const custos = await prisma.custo.findMany({ where: { empresaId: auth.session.empresaId, ano: { gte: anoMinimo }, ...(ano ? { ano: Number(ano) } : {}) }, orderBy: { data: 'desc' }, take: 5000 })
+  return NextResponse.json(custos.map(serializar))
+}
 
-  try {
-    const { searchParams } = request.nextUrl
-    const ano = Number(searchParams.get('ano'))
-    const mesIndex = Number(searchParams.get('mesIndex'))
-    const semanaIndex = Number(searchParams.get('semanaIndex'))
-    const veiculoId = searchParams.get('veiculoId')
-    const empresaId = session.empresaId
-
-    if (![ano, mesIndex, semanaIndex].every(Number.isInteger)) {
-      return NextResponse.json({ error: 'Período inválido.' }, { status: 400 })
-    }
-
-    const empresa = await prisma.empresa.findUnique({ where: { id: empresaId }, select: { plano: true } })
-    if (!empresa) return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 404 })
-
-    const limiteAnos = empresa.plano === 'ENTERPRISE' ? 3 : 1
-    const anoMinimoPermitido = new Date().getFullYear() - (limiteAnos - 1)
-    if (ano < anoMinimoPermitido) {
-      return NextResponse.json({ error: `Seu plano permite ${limiteAnos} ano(s) de histórico.` }, { status: 403 })
-    }
-
-    if (veiculoId) {
-      const veiculoValido = await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId }, select: { id: true } })
-      if (!veiculoValido) return NextResponse.json({ error: 'Veículo inválido.' }, { status: 400 })
-    }
-
-    const custos = await prisma.custo.findMany({
-      where: { empresaId, ano, mesIndex, semanaIndex, ...(veiculoId ? { veiculoId } : {}) },
-      include: { veiculo: true, motorista: true },
-      orderBy: { data: 'desc' }
-    })
-    return NextResponse.json(custos)
-  } catch (cause) {
-    console.error('Erro ao carregar despesas:', cause)
-    return NextResponse.json({ error: 'Erro ao carregar despesas.' }, { status: 500 })
-  }
+export async function POST(request: NextRequest) {
+  const auth = await requireEmpresaAuth(request, { modulo: 'GESTAO' })
+  if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
+  const parsed = schema.safeParse(await request.json())
+  if (!parsed.success) return NextResponse.json({ erro: 'Dados do custo inválidos.' }, { status: 400 })
+  const veiculo = await prisma.veiculo.findFirst({ where: { id: parsed.data.veiculoId, empresaId: auth.session.empresaId }, select: { id: true, placa: true } })
+  if (!veiculo) return NextResponse.json({ erro: 'Veículo inválido.' }, { status: 400 })
+  if (parsed.data.motoristaId && !await prisma.motorista.findFirst({ where: { id: parsed.data.motoristaId, empresaId: auth.session.empresaId }, select: { id: true } })) return NextResponse.json({ erro: 'Motorista inválido.' }, { status: 400 })
+  const data = new Date(`${parsed.data.data}T12:00:00`)
+  const custo = await prisma.custo.create({ data: { ...parsed.data, data, ano: data.getFullYear(), mesIndex: data.getMonth(), semanaIndex: Math.min(4, Math.floor((data.getDate() - 1) / 7) + 1), empresaId: auth.session.empresaId } })
+  await criarNotificacao({ titulo: 'Custo registrado', mensagem: `${veiculo.placa}: ${custo.descricao} — ${custo.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`, modulo: 'CUSTOS', empresaId: auth.session.empresaId, usuarioId: auth.session.userId, veiculoId: veiculo.id })
+  return NextResponse.json(serializar(custo), { status: 201 })
 }

@@ -1,20 +1,21 @@
 'use client'
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { UserPlus, Shield, Edit, Trash2, X, Check, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
-  // Mock inicial de usuários (No futuro vira um fetch da API: /api/usuarios?empresa_id=...)
-  const [usuarios, setUsuarios] = useState([
-    { id: '1', nome: empresa.nome_contato || 'Admin Principal', email: empresa.email, cargo: 'GESTOR_EMPRESA', status: 'ativo' },
-    { id: '2', nome: 'Operador Logístico 1', email: 'op1@empresa.com', cargo: 'OPERADOR', status: 'ativo' },
-  ]);
+  const [usuarios, setUsuarios] = useState([]);
+  const [feedback, setFeedback] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   
   // Estado do Formulário
   const [formData, setFormData] = useState({ nome: '', email: '', cargo: 'OPERADOR', status: 'ativo', senha: '' });
+
+  useEffect(() => {
+    fetch(`/api/empresas/${empresa.id}/usuarios`, { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setUsuarios(data.map(usuario => ({ ...usuario, cargo: usuario.role, status: 'ativo' }))); }).catch(error => setFeedback(error.message || 'Falha ao carregar usuários.'));
+  }, [empresa.id]);
 
   const vagasDisponiveis = limiteTotal - usuarios.length;
   const limiteExcedido = vagasDisponiveis <= 0;
@@ -31,23 +32,32 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    setFeedback('');
     if (editingUser) {
-      setUsuarios(usuarios.map(u => u.id === editingUser.id ? { ...u, ...formData } : u));
+      const response = await fetch(`/api/usuarios/${editingUser.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: formData.nome, email: formData.email, role: formData.cargo }) });
+      const data = await response.json(); if (!response.ok) return setFeedback(data.erro || 'Falha ao atualizar usuário.');
+      setUsuarios(usuarios.map(u => u.id === editingUser.id ? { ...u, ...data, cargo: data.role } : u));
     } else {
-      setUsuarios([...usuarios, { id: Math.random().toString(), ...formData }]);
+      const response = await fetch(`/api/empresas/${empresa.id}/usuarios`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: formData.nome, email: formData.email, senha: formData.senha, role: formData.cargo }) });
+      const data = await response.json(); if (!response.ok) return setFeedback(data.erro || 'Falha ao criar usuário.');
+      setUsuarios([...usuarios, { ...data, cargo: data.role, status: 'ativo' }]);
     }
+    setFeedback('Usuário salvo com sucesso.');
     setIsModalOpen(false);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if(confirm('Tem certeza que deseja excluir este usuário permanentemente?')) {
+      const response = await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+      const data = await response.json(); if (!response.ok) return setFeedback(data.erro || 'Falha ao excluir usuário.');
       setUsuarios(usuarios.filter(u => u.id !== id));
     }
   };
 
   return (
     <div className="space-y-6">
+      {feedback && <div role="status" className="border p-3 text-xs" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
       
       {/* HEADER DO GERENCIADOR E TRAVA DE LIMITES */}
       <div className="flex items-center justify-between p-4 border bg-background-secondary" style={{ borderColor: 'var(--border)' }}>

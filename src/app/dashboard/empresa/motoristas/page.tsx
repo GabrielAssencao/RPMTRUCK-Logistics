@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useContainers } from '@/contexts/ContainersContext'
-import { DUPLAS_OPERACIONAIS } from '@/data/DuplasOperacionais'
 import { 
   Users, 
   Plus, 
@@ -45,53 +44,9 @@ export default function MotoristasPage() {
   const [montado, setMontado] = useState(false)
 
   // Lista de Veículos
-  const [veiculos, setVeiculos] = useState<VeiculoCompleto[]>([
-    { id: 'v1', modelo: 'VOLVO FH 540', placa: 'ABC-1234', tipo: 'Cavalo Mecânico', kmAtual: 125430, motoristaVinculadoId: 'm1' },
-    { id: 'v2', modelo: 'SCANIA R450', placa: 'XYZ-9876', tipo: 'Bitrem', kmAtual: 342100 },
-    { id: 'v3', modelo: 'MERCEDES ACTROS', placa: 'DEF-5678', tipo: 'Sider', kmAtual: 45200 },
-    { id: 'v4', modelo: 'DAF XF 480', placa: 'GHI-9012', tipo: 'Baú', kmAtual: 512000 },
-  ])
-
-  // Lista de Motoristas (Com simulação de fotos e avatar padrão)
-  const [motoristas, setMotoristas] = useState<MotoristaCard[]>([
-    { 
-      id: 'm1', 
-      nomeAbreviado: 'CARLOS SILVA', 
-      cpf: '123.456.789-00', 
-      cnh: '98765432100', 
-      categoria: 'E', 
-      validadeCNH: '2027-05-12', 
-      veiculoIdVinculado: 'v1',
-      fotoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-    },
-    { 
-      id: 'm2', 
-      nomeAbreviado: 'JOÃO SANTOS', 
-      cpf: '234.567.890-11', 
-      cnh: '87654321011', 
-      categoria: 'E', 
-      validadeCNH: '2026-11-20',
-      fotoUrl: undefined // Sem foto -> exibe ícone de User
-    },
-    { 
-      id: 'm3', 
-      nomeAbreviado: 'MANUEL COSTA', 
-      cpf: '345.678.901-22', 
-      cnh: '76543210922', 
-      categoria: 'D', 
-      validadeCNH: '2024-01-15',
-      fotoUrl: undefined 
-    },
-    { 
-      id: 'm4', 
-      nomeAbreviado: 'PEDRO FERNANDES', 
-      cpf: '456.789.012-33', 
-      cnh: '65432109833', 
-      categoria: 'E', 
-      validadeCNH: '2028-08-30',
-      fotoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'
-    },
-  ])
+  const [veiculos, setVeiculos] = useState<VeiculoCompleto[]>([])
+  const [motoristas, setMotoristas] = useState<MotoristaCard[]>([])
+  const [feedback, setFeedback] = useState('')
 
   // Carrossel e Drag/Drop
   const [indexCarrossel, setIndexCarrossel] = useState(0)
@@ -101,24 +56,20 @@ export default function MotoristasPage() {
   // Estado para confirmação de exclusão rápida
   const [excluindoId, setExcluindoId] = useState<string | null>(null)
 
-  useEffect(() => setMontado(true), [])
+  useEffect(() => {
+    setMontado(true)
+    fetch('/api/motoristas', { cache: 'no-store' }).then(async response => {
+      const data = await response.json(); if (!response.ok) throw new Error(data.erro)
+      setMotoristas(data.motoristas.map((m: any) => ({ id: m.id, nomeAbreviado: m.nome, cpf: m.cpf || 'Não informado', cnh: m.cnh, categoria: m.categoria, validadeCNH: String(m.validade).slice(0, 10), fotoUrl: m.foto_url || undefined, veiculoIdVinculado: m.veiculoId || undefined })))
+      setVeiculos(data.veiculos.map((v: any) => ({ id: v.id, modelo: v.modelo, placa: v.placa, tipo: v.tipo, kmAtual: v.quilometragem, motoristaVinculadoId: v.motoristas?.[0]?.id })))
+    }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar motoristas.'))
+  }, [])
 
   if (!montado) return null
 
-  // ─── COMISSÃO RECEBIDA POR MOTORISTA (NOVO) ─────────────────────────────
-  // Vínculo hoje é por NOME (DUPLAS_OPERACIONAIS.motoristaNome vs
-  // motorista.nomeAbreviado) — funciona, mas é frágil: se o nome cadastrado
-  // aqui não bater exatamente (acento, espaço, abreviação) com o nome da
-  // dupla em Containers/Custos, a comissão não aparece. O caminho mais
-  // robusto a médio prazo é DUPLAS_OPERACIONAIS referenciar motoristaId em
-  // vez de duplicar o nome como texto.
-  const obterComissaoDoMotorista = (nomeAbreviado: string) => {
-    const duplasDoMotorista = DUPLAS_OPERACIONAIS.filter(
-      d => d.motoristaNome.trim().toUpperCase() === nomeAbreviado.trim().toUpperCase()
-    )
-    const duplaIds = duplasDoMotorista.map(d => d.id)
-
-    const containersDoMotorista = containers.filter(c => duplaIds.includes(c.duplaId) && c.status !== 'CANCELADO')
+  // Comissão calculada pelos vínculos relacionais persistidos no banco.
+  const obterComissaoDoMotorista = (motoristaId: string) => {
+    const containersDoMotorista = containers.filter(c => c.motoristaId === motoristaId && c.status !== 'CANCELADO')
 
     const recebida = containersDoMotorista
       .filter(c => c.status === 'ENTREGUE')
@@ -128,7 +79,7 @@ export default function MotoristasPage() {
       .filter(c => c.status !== 'ENTREGUE')
       .reduce((acc, c) => acc + c.comissao, 0)
 
-    return { recebida, aReceber, temVinculo: duplasDoMotorista.length > 0 }
+    return { recebida, aReceber, temVinculo: containersDoMotorista.length > 0 }
   }
 
   // Motoristas sem veículo para o deck de cartas
@@ -139,8 +90,12 @@ export default function MotoristasPage() {
   const handleProximo = () => setIndexCarrossel(p => (p === veiculos.length - 1 ? 0 : p + 1))
 
   // Drag and Drop
-  const handleDropNoVeiculo = (veiculoId: string) => {
+  const handleDropNoVeiculo = async (veiculoId: string) => {
     if (!draggedMotoristaId) return
+
+    const response = await fetch(`/api/motoristas/${draggedMotoristaId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ veiculoId }) })
+    const data = await response.json()
+    if (!response.ok) return setFeedback(data.erro || 'Não foi possível vincular o motorista.')
 
     setMotoristas(prev => prev.map(m => {
       if (m.id === draggedMotoristaId) return { ...m, veiculoIdVinculado: veiculoId }
@@ -158,20 +113,25 @@ export default function MotoristasPage() {
     setHoveredVeiculoId(null)
   }
 
-  const handleDesvincular = (motoristaId: string) => {
+  const handleDesvincular = async (motoristaId: string) => {
+    const response = await fetch(`/api/motoristas/${motoristaId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ veiculoId: null }) })
+    if (!response.ok) return setFeedback('Não foi possível desvincular o motorista.')
     setMotoristas(prev => prev.map(m => m.id === motoristaId ? { ...m, veiculoIdVinculado: undefined } : m))
     setVeiculos(prev => prev.map(v => v.motoristaVinculadoId === motoristaId ? { ...v, motoristaVinculadoId: undefined } : v))
   }
 
   // Exclusão definitiva de condutor
-  const handleConfirmarExclusao = (motoristaId: string) => {
-    handleDesvincular(motoristaId)
+  const handleConfirmarExclusao = async (motoristaId: string) => {
+    const response = await fetch(`/api/motoristas/${motoristaId}`, { method: 'DELETE' })
+    const data = await response.json()
+    if (!response.ok) return setFeedback(data.erro || 'Não foi possível excluir o motorista.')
     setMotoristas(prev => prev.filter(m => m.id !== motoristaId))
     setExcluindoId(null)
   }
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
+      {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
       
       {/* ─── CABEÇALHO ─── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -373,7 +333,7 @@ export default function MotoristasPage() {
               {motoristas.map((m) => {
                 const veiculoAfeito = veiculos.find(v => v.id === m.veiculoIdVinculado)
                 const estaExcluindo = excluindoId === m.id
-                const comissao = obterComissaoDoMotorista(m.nomeAbreviado)
+                const comissao = obterComissaoDoMotorista(m.id)
 
                 return (
                   <tr key={m.id} className="hover:bg-white/5 transition-colors font-mono">

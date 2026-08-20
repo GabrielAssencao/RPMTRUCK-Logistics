@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useContainers, StatusContainer, TipoContainer } from '@/contexts/ContainersContext'
-import { DUPLAS_OPERACIONAIS, encontrarDupla } from '@/data/DuplasOperacionais'
 import { obterAnoMesSemana, MESES } from '@/lib/dataUtils'
 import {
   Container as ContainerIcon,
@@ -56,7 +55,7 @@ const FORM_INICIAL = {
   tipo: '40 HC' as TipoContainer,
   terminalInicio: '',
   terminalFim: '',
-  duplaId: DUPLAS_OPERACIONAIS[0]?.id ?? '',
+  duplaId: '',
   frete: '',
   comissao: '',
   status: 'AGENDADO' as StatusContainer,
@@ -68,11 +67,14 @@ export default function ContainersPage() {
   const { primary } = useTheme()
   const {
     containers,
+    duplas,
+    erro: erroContainers,
     adicionarContainer,
     atualizarContainer,
     removerContainer,
     totalEmTransito
   } = useContainers()
+  const encontrarDupla = (id: string) => duplas.find(dupla => dupla.id === id)
 
   // ─── ESTADOS DE SELEÇÃO E NAVEGAÇÃO GAMIFICADA ──────────────────────────
   const [containerAtivoId, setContainerAtivoId] = useState<string | null>(null)
@@ -184,7 +186,7 @@ export default function ContainersPage() {
   // ─── CRIAÇÃO E EDIÇÃO ──────────────────────────────────────────────────
   const handleAbrirNovo = () => {
     setContainerEditandoId(null)
-    setForm(FORM_INICIAL)
+    setForm({ ...FORM_INICIAL, duplaId: duplas[0]?.id ?? '' })
     setModalOpen(true)
   }
 
@@ -206,7 +208,7 @@ export default function ContainersPage() {
     setModalOpen(true)
   }
 
-  const handleSalvar = (e: React.FormEvent) => {
+  const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault()
 
     const dados = {
@@ -223,14 +225,14 @@ export default function ContainersPage() {
       itensConteudo: form.itensConteudo
     }
 
-    if (containerEditandoId) {
-      atualizarContainer(containerEditandoId, dados)
-    } else {
-      adicionarContainer(dados)
-    }
+    const salvo = containerEditandoId
+      ? await atualizarContainer(containerEditandoId, dados)
+      : await adicionarContainer(dados)
+
+    if (!salvo) return
 
     setModalOpen(false)
-    setForm(FORM_INICIAL)
+    setForm({ ...FORM_INICIAL, duplaId: duplas[0]?.id ?? '' })
     setContainerEditandoId(null)
   }
 
@@ -241,6 +243,7 @@ export default function ContainersPage() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
+      {erroContainers && <div role="alert" className="border border-red-500/30 p-3 text-sm text-red-500">{erroContainers}</div>}
 
       {/* ─── CABEÇALHO ─── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b pb-4" style={{ borderColor: 'var(--border)' }}>
@@ -684,7 +687,7 @@ export default function ContainersPage() {
             style={{ color: 'var(--foreground)' }}
           >
             <option value="TODOS" style={{ backgroundColor: 'var(--background)' }}>Todos Transportadores</option>
-            {DUPLAS_OPERACIONAIS.map(d => (
+            {duplas.map(d => (
               <option key={d.id} value={d.id} style={{ backgroundColor: 'var(--background)' }}>
                 {d.veiculoModelo} ({d.veiculoPlaca})
               </option>
@@ -926,7 +929,7 @@ export default function ContainersPage() {
                       className="w-full p-2.5 border bg-transparent outline-none cursor-pointer"
                       style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
                     >
-                      {DUPLAS_OPERACIONAIS.map(d => (
+                      {duplas.map(d => (
                         <option key={d.id} value={d.id} style={{ backgroundColor: 'var(--background)' }}>
                           {d.veiculoModelo} ({d.veiculoPlaca}) — {d.motoristaNome}
                         </option>

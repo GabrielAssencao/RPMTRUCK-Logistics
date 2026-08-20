@@ -4,12 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Save, X, Building2, CheckCircle } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-
-const MODULES = [
-  { value: 'frota', label: 'Frota' },
-  { value: 'controle_gestao', label: 'Controle & Gestão' },
-  { value: 'relatorios', label: 'Relatórios' }
-];
+import { MODULOS, MODULOS_CONFIG, obterModulosPadrao, PLANOS } from '@/utils/planos';
 
 const EMPTY_FORM = {
   nome: '',
@@ -17,8 +12,8 @@ const EMPTY_FORM = {
   email: '',
   telefone: '',
   plano: 'PREVIEW',
-  status: 'aguardando_aprovacao',
-  modulos: ['frota'],
+  status: 'ATIVO',
+  modulos: obterModulosPadrao('PREVIEW'),
   cnpj: '',
   notas: ''
 };
@@ -94,13 +89,15 @@ export default function CompanyForm({ onClose, onRefresh }) {
             <label className="text-[10px] font-bold tracking-widest opacity-50 mb-2 block">PLANO</label>
             <select 
               value={form.plano} 
-              onChange={e => handleChange('plano', e.target.value)}
+              onChange={e => setForm(prev => ({
+                ...prev,
+                plano: e.target.value,
+                modulos: obterModulosPadrao(e.target.value),
+              }))}
               className="w-full bg-transparent border p-2.5 text-sm outline-none focus:border-primary"
               style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
             >
-              <option value="PREVIEW">PREVIEW</option>
-              <option value="PROFISSIONAL">PROFISSIONAL</option>
-              <option value="PREMIUM">PREMIUM</option>
+              {PLANOS.map(plano => <option key={plano} value={plano}>{plano}</option>)}
             </select>
           </div>
         </div>
@@ -109,12 +106,12 @@ export default function CompanyForm({ onClose, onRefresh }) {
         <div>
           <label className="text-[10px] font-bold tracking-widest opacity-50 mb-4 block">MÓDULOS HABILITADOS</label>
           <div className="flex gap-6 flex-wrap">
-            {MODULES.map(m => {
-              const isActive = form.modulos.includes(m.value);
+            {MODULOS.map(modulo => {
+              const isActive = form.modulos.includes(modulo);
               return (
-                <label key={m.value} className="flex items-center gap-2 cursor-pointer group">
+                <label key={modulo} className="flex items-center gap-2 cursor-pointer group">
                   <div 
-                    onClick={() => toggleModule(m.value)}
+                    onClick={() => toggleModule(modulo)}
                     className="w-5 h-5 border flex items-center justify-center transition-all"
                     style={{ 
                       borderColor: isActive ? primary : 'var(--border)',
@@ -124,7 +121,7 @@ export default function CompanyForm({ onClose, onRefresh }) {
                     {isActive && <CheckCircle size={14} color="#000" />}
                   </div>
                   <span className={`text-xs font-bold transition-opacity ${isActive ? 'opacity-100' : 'opacity-40'}`}>
-                    {m.label.toUpperCase()}
+                    {MODULOS_CONFIG[modulo].nome.toUpperCase()}
                   </span>
                 </label>
               );

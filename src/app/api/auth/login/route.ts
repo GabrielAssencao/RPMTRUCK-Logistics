@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt';
 import { createSession } from '@/lib/auth';
 import { loginSchema } from '@/lib/validation';
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
+import { normalizarModulos, PLANOS_CONFIG } from '@/utils/planos';
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,21 +50,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Valida se a empresa está ativa
-    if (usuario.empresaId && usuario.empresa?.status !== 'ATIVO') {
-      return NextResponse.json(
-        { erro: 'O acesso desta empresa está temporariamente suspenso.' },
-        { status: 403 }
-      );
-    }
-
-    // 6. Valida a senha com bcrypt
+    // 5. Valida a senha antes de revelar qualquer estado da conta.
     const senhaValida = await bcrypt.compare(senha, usuario.senha_hash);
 
     if (!senhaValida) {
       return NextResponse.json(
         { erro: 'Credenciais de acesso inválidas.' },
         { status: 401 }
+      );
+    }
+
+    if (usuario.empresaId && usuario.empresa?.status !== 'ATIVO') {
+      return NextResponse.json(
+        { erro: 'O acesso desta empresa está temporariamente suspenso.' },
+        { status: 403 }
       );
     }
 
@@ -89,7 +89,17 @@ export async function POST(request: NextRequest) {
                 id: usuario.empresa.id,
                 nome: usuario.empresa.nome,
                 plano: usuario.empresa.plano,
-                modulos: usuario.empresa.modulos,
+                modulos: normalizarModulos(usuario.empresa.modulos),
+                permissoes: PLANOS_CONFIG[usuario.empresa.plano],
+              }
+            : null,
+          empresaInfo: usuario.empresa
+            ? {
+                id: usuario.empresa.id,
+                nome: usuario.empresa.nome,
+                plano: usuario.empresa.plano,
+                modulos: normalizarModulos(usuario.empresa.modulos),
+                permissoes: PLANOS_CONFIG[usuario.empresa.plano],
               }
             : null,
         },

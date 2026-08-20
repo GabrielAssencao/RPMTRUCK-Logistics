@@ -35,6 +35,7 @@ interface VeiculoCompleto {
   quilometragem: number
   status: StatusVeiculo
   motoristaAtual?: string
+  localizacaoId?: string
 }
 
 export default function FrotaPage() {
@@ -59,23 +60,27 @@ export default function FrotaPage() {
   const [filtroLocalizacao, setFiltroLocalizacao] = useState('TODAS')
 
   // Pátios/Bases Cadastrados
-  const [listaLocalizacoes] = useState([
-    'Santos - SP',
-    'Garagem Central',
-    'Guarujá - SP',
-    'Pátio Principal'
-  ])
+  const [listaLocalizacoes, setListaLocalizacoes] = useState<Array<{ id: string; nome: string }>>([])
+  const [veiculos, setVeiculos] = useState<VeiculoCompleto[]>([])
+  const [feedback, setFeedback] = useState('')
 
-  // Mock de dados da frota
-  const [veiculos, setVeiculos] = useState<VeiculoCompleto[]>([
-    { id: '1', modelo: 'VOLVO FH 540', placa: 'ABC-1234', ano: 2023, tipo: 'Cavalo Mecânico', status: 'OPERACIONAL', motoristaAtual: 'Carlos Silva', quilometragem: 125430, localizacao: 'Santos - SP' },
-    { id: '2', modelo: 'SCANIA R450', placa: 'XYZ-9876', ano: 2022, tipo: 'Bitrem', status: 'OFICINA', motoristaAtual: 'Sem Atribuição', quilometragem: 342100, localizacao: 'Garagem Central' },
-    { id: '3', modelo: 'MERCEDES ACTROS', placa: 'DEF-5678', ano: 2024, tipo: 'Sider', status: 'OPERACIONAL', motoristaAtual: 'João Santos', quilometragem: 45200, localizacao: 'Guarujá - SP' },
-    { id: '4', modelo: 'DAF XF 480', placa: 'GHI-9012', ano: 2021, tipo: 'Baú', status: 'INATIVO', motoristaAtual: 'Sem Atribuição', quilometragem: 512000, localizacao: 'Pátio Principal' },
-    { id: '5', modelo: 'VOLVO FH 460', placa: 'JKL-3456', ano: 2023, tipo: 'Cavalo Mecânico', status: 'OPERACIONAL', motoristaAtual: 'Manuel Costa', quilometragem: 89000, localizacao: 'Santos - SP' },
-  ])
+  const normalizarVeiculo = (veiculo: any): VeiculoCompleto => ({
+    id: veiculo.id, modelo: veiculo.modelo, placa: veiculo.placa, tipo: veiculo.tipo,
+    ano: veiculo.ano ?? new Date().getFullYear(), quilometragem: veiculo.quilometragem,
+    status: veiculo.status, localizacao: veiculo.localizacao?.nome ?? 'Sem localização',
+    localizacaoId: veiculo.localizacao?.id, motoristaAtual: veiculo.motoristas?.[0]?.nome ?? 'Sem atribuição',
+  })
 
-  useEffect(() => setMontado(true), [])
+  useEffect(() => {
+    setMontado(true)
+    Promise.all([
+      fetch('/api/veiculos', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); return data }),
+      fetch('/api/localizacoes', { cache: 'no-store' }).then(async response => response.ok ? response.json() : []),
+    ]).then(([dadosVeiculos, localizacoes]) => {
+      setVeiculos(dadosVeiculos.map(normalizarVeiculo))
+      setListaLocalizacoes(localizacoes)
+    }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar a frota.'))
+  }, [])
 
   if (!montado) return null
 
@@ -103,7 +108,7 @@ export default function FrotaPage() {
       label: 'Base / Pátio de Origem', 
       type: 'select', 
       required: true,
-      options: listaLocalizacoes.map(loc => ({ label: loc, value: loc }))
+      options: listaLocalizacoes.map(loc => ({ label: loc.nome, value: loc.id }))
     },
     { 
       name: 'status', 
@@ -128,8 +133,11 @@ export default function FrotaPage() {
   })
 
   // 🔄 TROCA RÁPIDA DE STATUS NA TABELA
-  const handleAlterarStatusRapido = (id: string, novoStatus: StatusVeiculo) => {
-    setVeiculos(prev => prev.map(v => v.id === id ? { ...v, status: novoStatus } : v))
+  const handleAlterarStatusRapido = async (id: string, novoStatus: StatusVeiculo) => {
+    const response = await fetch(`/api/veiculos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: novoStatus }) })
+    const data = await response.json()
+    if (!response.ok) return setFeedback(data.erro || 'Falha ao alterar status.')
+    setVeiculos(prev => prev.map(v => v.id === id ? normalizarVeiculo(data) : v))
   }
 
   // ✅ SELEÇÃO MÚLTIPLA
@@ -153,17 +161,22 @@ export default function FrotaPage() {
   }
 
   // 🎯 ALTERAR STATUS EM LOTE
-  const handleAlterarStatusEmLote = (novoStatus: StatusVeiculo) => {
-    setVeiculos(prev => prev.map(v => 
-      selecionados.has(v.id) ? { ...v, status: novoStatus } : v
-    ))
+  const handleAlterarStatusEmLote = async (novoStatus: StatusVeiculo) => {
+    const ids = Array.from(selecionados)
+    const responses = await Promise.all(ids.map(id => fetch(`/api/veiculos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: novoStatus }) })))
+    if (responses.some(response => !response.ok)) return setFeedback('Parte da atualização em lote não pôde ser concluída.')
+    setVeiculos(prev => prev.map(v => selecionados.has(v.id) ? { ...v, status: novoStatus } : v))
     setSelecionados(new Set())
     setNovoStatusEmLote(null)
   }
 
   // 🗑️ EXCLUIR EM LOTE
-  const handleExcluirEmLote = () => {
-    setVeiculos(prev => prev.filter(v => !selecionados.has(v.id)))
+  const handleExcluirEmLote = async () => {
+    const ids = Array.from(selecionados)
+    const responses = await Promise.all(ids.map(id => fetch(`/api/veiculos/${id}`, { method: 'DELETE' })))
+    const removidos = ids.filter((_, indice) => responses[indice].ok)
+    setVeiculos(prev => prev.filter(v => !removidos.includes(v.id)))
+    if (removidos.length !== ids.length) setFeedback('Alguns veículos possuem histórico e não puderam ser removidos.')
     setSelecionados(new Set())
     setConfirmandoExclusaoEmLote(false)
   }
@@ -183,38 +196,24 @@ export default function FrotaPage() {
 
   // 💾 SALVAR
   const handleSalvarVeiculo = async (formData: Record<string, any>) => {
-    if (veiculoParaEditar) {
-      setVeiculos(prev => prev.map(v => v.id === veiculoParaEditar.id ? {
-        ...v,
-        modelo: formData.modelo,
-        placa: formData.placa,
-        ano: Number(formData.ano) || v.ano,
-        tipo: formData.tipo,
-        quilometragem: Number(formData.quilometragem) || v.quilometragem,
-        localizacao: formData.localizacao || v.localizacao,
-        status: formData.status || v.status
-      } : v))
-    } else {
-      const novo: VeiculoCompleto = {
-        id: String(Date.now()),
-        modelo: formData.modelo,
-        placa: formData.placa,
-        ano: Number(formData.ano) || 2024,
-        tipo: formData.tipo,
-        quilometragem: Number(formData.quilometragem) || 0,
-        localizacao: formData.localizacao || listaLocalizacoes[0],
-        status: formData.status || 'OPERACIONAL',
-        motoristaAtual: 'Sem Atribuição'
-      }
-      setVeiculos(prev => [novo, ...prev])
-    }
+    const response = await fetch(veiculoParaEditar ? `/api/veiculos/${veiculoParaEditar.id}` : '/api/veiculos', {
+      method: veiculoParaEditar ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...formData, ano: Number(formData.ano), quilometragem: Number(formData.quilometragem), localizacaoId: formData.localizacao || null }),
+    })
+    const data = await response.json()
+    if (!response.ok) return setFeedback(data.erro || 'Não foi possível salvar o veículo.')
+    const salvo = normalizarVeiculo(data)
+    setVeiculos(prev => veiculoParaEditar ? prev.map(v => v.id === salvo.id ? salvo : v) : [salvo, ...prev])
 
     setDrawerOpen(false)
     setVeiculoParaEditar(null)
   }
 
   // 🗑️ EXCLUSÃO
-  const handleConfirmarExclusao = (id: string) => {
+  const handleConfirmarExclusao = async (id: string) => {
+    const response = await fetch(`/api/veiculos/${id}`, { method: 'DELETE' })
+    const data = await response.json()
+    if (!response.ok) return setFeedback(data.erro || 'Não foi possível remover o veículo.')
     setVeiculos(prev => prev.filter(v => v.id !== id))
     setExcluindoId(null)
     setMenuAcoesAberto(null)
@@ -222,6 +221,7 @@ export default function FrotaPage() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
+      {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
       
       {/* ─── CABEÇALHO COM AÇÕES HOMOGENEIZADAS ─── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
@@ -281,7 +281,7 @@ export default function FrotaPage() {
           >
             <option value="TODAS" style={{ backgroundColor: 'var(--background)' }}>Todas Localizações</option>
             {listaLocalizacoes.map(loc => (
-              <option key={loc} value={loc} style={{ backgroundColor: 'var(--background)' }}>{loc}</option>
+              <option key={loc.id} value={loc.nome} style={{ backgroundColor: 'var(--background)' }}>{loc.nome}</option>
             ))}
           </select>
         </div>
@@ -661,7 +661,7 @@ export default function FrotaPage() {
           ano: veiculoParaEditar.ano,
           tipo: veiculoParaEditar.tipo,
           quilometragem: veiculoParaEditar.quilometragem,
-          localizacao: veiculoParaEditar.localizacao || listaLocalizacoes[0],
+          localizacao: veiculoParaEditar.localizacaoId || listaLocalizacoes[0]?.id || '',
           status: veiculoParaEditar.status
         } : {}}
         onSubmit={handleSalvarVeiculo}

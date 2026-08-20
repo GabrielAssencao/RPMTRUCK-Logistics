@@ -1,109 +1,40 @@
-// src/app/api/notificacoes/[id]/route.ts
-// Atualizar status de leitura da notificação
-
-import { requireEmpresaAuth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { requireAuth } from '@/lib/auth'
+import { escopoNotificacoes } from '@/lib/notificacoes'
+import { prisma } from '@/lib/prisma'
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const { session, error, status } = await requireEmpresaAuth(request)
+const atualizarSchema = z.object({ lida: z.boolean() })
 
-  if (error || !session) {
-    return NextResponse.json({ erro: error }, { status })
-  }
-
-  try {
-    const { lida } = await request.json()
-
-    if (typeof lida !== 'boolean') {
-      return NextResponse.json(
-        { erro: 'Campo lida deve ser booleano' },
-        { status: 400 }
-      )
-    }
-
-    // Verificar se notificação pertence à empresa do usuário (IDOR)
-    const notificacao = await prisma.notificacao.findUnique({
-      where: { id: params.id }
-    })
-
-    if (!notificacao) {
-      return NextResponse.json(
-        { erro: 'Notificação não encontrada' },
-        { status: 404 }
-      )
-    }
-
-    if (notificacao.empresaId !== session.empresaId) {
-      return NextResponse.json(
-        { erro: 'Acesso negado' },
-        { status: 403 }
-      )
-    }
-
-    const atualizada = await prisma.notificacao.update({
-      where: { id: params.id },
-      data: { lida },
-      include: {
-        veiculo: {
-          select: { id: true, modelo: true, placa: true }
-        }
-      }
-    })
-
-    return NextResponse.json(atualizada)
-  } catch (error) {
-    console.error('Erro ao atualizar notificação:', error)
-    return NextResponse.json(
-      { erro: 'Erro ao atualizar notificação' },
-      { status: 500 }
-    )
-  }
+async function obterNotificacaoAutorizada(request: NextRequest, id: string) {
+  const auth = await requireAuth(request)
+  if (auth.error || !auth.session) return { auth, notificacao: null }
+  const notificacao = await prisma.notificacao.findFirst({
+    where: { id, ...escopoNotificacoes(auth.session) },
+    select: { id: true },
+  })
+  return { auth, notificacao }
 }
 
-// DELETE - Deletar notificação
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const { session, error, status } = await requireEmpresaAuth(request)
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+  const { auth, notificacao } = await obterNotificacaoAutorizada(request, params.id)
+  if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
+  if (!notificacao) return NextResponse.json({ erro: 'Notificação não encontrada.' }, { status: 404 })
 
-  if (error || !session) {
-    return NextResponse.json({ erro: error }, { status })
-  }
+  const parsed = atualizarSchema.safeParse(await request.json())
+  if (!parsed.success) return NextResponse.json({ erro: 'Estado de leitura inválido.' }, { status: 400 })
 
-  try {
-    const notificacao = await prisma.notificacao.findUnique({
-      where: { id: params.id }
-    })
+  return NextResponse.json(await prisma.notificacao.update({
+    where: { id: notificacao.id },
+    data: { lida: parsed.data.lida },
+  }))
+}
 
-    if (!notificacao) {
-      return NextResponse.json(
-        { erro: 'Notificação não encontrada' },
-        { status: 404 }
-      )
-    }
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+  const { auth, notificacao } = await obterNotificacaoAutorizada(request, params.id)
+  if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
+  if (!notificacao) return NextResponse.json({ erro: 'Notificação não encontrada.' }, { status: 404 })
 
-    if (notificacao.empresaId !== session.empresaId) {
-      return NextResponse.json(
-        { erro: 'Acesso negado' },
-        { status: 403 }
-      )
-    }
-
-    await prisma.notificacao.delete({
-      where: { id: params.id }
-    })
-
-    return NextResponse.json({ sucesso: true })
-  } catch (error) {
-    console.error('Erro ao deletar notificação:', error)
-    return NextResponse.json(
-      { erro: 'Erro ao deletar notificação' },
-      { status: 500 }
-    )
-  }
+  await prisma.notificacao.delete({ where: { id: notificacao.id } })
+  return NextResponse.json({ sucesso: true })
 }

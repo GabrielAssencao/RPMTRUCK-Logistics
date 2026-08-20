@@ -15,50 +15,48 @@ import {
   FileSpreadsheet,
   Lock,
   X,
-  AlertCircle
+  AlertCircle,
+  Archive,
+  Upload
 } from 'lucide-react'
 import { 
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend
 } from 'recharts'
 import { exportarExcel } from '@/utils/exportExcel'
 import { exportarPdf } from '@/utils/exportPdf'
+import { PLANOS_CONFIG, type PlanoTipo } from '@/utils/planos'
 
-type PlanoTipo = 'PREVIEW' | 'ESSENCIAL' | 'AVANCADO' | 'ENTERPRISE'
-
-// ─── DADOS FALSOS PARA PRÉ-VISUALIZAÇÃO (MOCK) ────────────────────────────────
-const MOCK_EFICIENCIA_MES = [
-  { mes: 'Jan', custoKm: 4.15, kmTotal: 45000 },
-  { mes: 'Fev', custoKm: 4.18, kmTotal: 42000 },
-  { mes: 'Mar', custoKm: 4.25, kmTotal: 51000 },
-  { mes: 'Abr', custoKm: 4.22, kmTotal: 48000 },
-  { mes: 'Mai', custoKm: 4.30, kmTotal: 55000 },
-  { mes: 'Jun', custoKm: 4.28, kmTotal: 53000 },
-  { mes: 'Jul', custoKm: 4.24, kmTotal: 58000 },
-]
-
-const MOCK_CUSTO_VEICULO = [
-  { veiculo: 'ABC-1234', combustivel: 14500, manutencao: 3200 },
-  { veiculo: 'XYZ-9876', combustivel: 12800, manutencao: 8500 },
-  { veiculo: 'DEF-5678', combustivel: 16100, manutencao: 1400 },
-  { veiculo: 'JKL-3456', combustivel: 13200, manutencao: 2800 },
-  { veiculo: 'GHI-9012', combustivel: 10100, manutencao: 9200 },
-]
+interface RelatorioArquivado {
+  id: string
+  nome_arquivo: string
+  tamanho_bytes: number
+  checksum_sha256: string
+  periodo_inicio: string
+  periodo_fim: string
+  criado_em: string
+}
 
 export default function RelatoriosPage() {
   const { primary } = useTheme()
   const [montado, setMontado] = useState(false)
   
   // Contexto do Plano da Empresa
-  const [planoEmpresa, setPlanoEmpresa] = useState<PlanoTipo>('ENTERPRISE')
+  const [planoEmpresa, setPlanoEmpresa] = useState<PlanoTipo>('ESSENCIAL')
 
   // Filtro de Tempo e Período
   const [periodo, setPeriodo] = useState('ESTE_MES')
   const [modalPersonalizarOpen, setModalPersonalizarOpen] = useState(false)
   const [mensagemExportacao, setMensagemExportacao] = useState('')
+  const [arquivoParaArquivar, setArquivoParaArquivar] = useState<File | null>(null)
+  const [arquivosPrivados, setArquivosPrivados] = useState<RelatorioArquivado[]>([])
+  const [usoStorage, setUsoStorage] = useState({ uso_bytes: 0, limite_interno_bytes: 0 })
+  const [arquivando, setArquivando] = useState(false)
+  const [eficienciaMes, setEficienciaMes] = useState<Array<{ mes: string; custoKm: number; kmTotal: number }>>([])
+  const [custoVeiculo, setCustoVeiculo] = useState<Array<{ veiculo: string; combustivel: number; manutencao: number }>>([])
 
   // Intervalo Personalizado
   const dataHojeStr = new Date().toISOString().split('T')[0]
-  const [dataInicio, setDataInicio] = useState('2026-01-01')
+  const [dataInicio, setDataInicio] = useState(`${dataHojeStr.slice(0, 7)}-01`)
   const [dataFim, setDataFim] = useState(dataHojeStr)
 
   useEffect(() => {
@@ -66,8 +64,20 @@ export default function RelatoriosPage() {
     const userData = localStorage.getItem('@rpmtruck:user')
     if (userData) {
       const parsed = JSON.parse(userData)
-      if (parsed.empresaInfo?.plano) setPlanoEmpresa(parsed.empresaInfo.plano)
+      const plano = parsed.empresaInfo?.plano ?? parsed.empresa?.plano
+      if (plano && plano in PLANOS_CONFIG) setPlanoEmpresa(plano)
     }
+
+    fetch('/api/relatorios/arquivos', { cache: 'no-store' })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar os arquivos.')
+        setArquivosPrivados(data.arquivos)
+        setUsoStorage(data.armazenamento)
+      })
+      .catch((error) => setMensagemExportacao(error instanceof Error ? error.message : 'Erro ao carregar arquivos.'))
+
+    fetch('/api/relatorios/dados', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setEficienciaMes(data.eficiencia); setCustoVeiculo(data.porVeiculo) }).catch(error => setMensagemExportacao(error instanceof Error ? error.message : 'Erro ao carregar dados dos relatórios.'))
   }, [])
 
   if (!montado) return null
@@ -89,17 +99,7 @@ export default function RelatoriosPage() {
   const corManutencaoAdaptativa = eTemaVermelho(primary) ? '#f97316' : '#ef4444'
 
   // 🧠 CÁLCULO DO LIMITE MÁXIMO DE DIAS PERMITIDO PELO PLANO
-  const obterDiasMaximosPlano = (plano: PlanoTipo): number => {
-    switch (plano) {
-      case 'ENTERPRISE': return 1095 // 3 Anos (365 * 3)
-      case 'AVANCADO': return 730    // 2 Anos (365 * 2)
-      case 'ESSENCIAL':
-      case 'PREVIEW':
-      default: return 365           // 1 Ano
-    }
-  }
-
-  const limiteDiasPlano = obterDiasMaximosPlano(planoEmpresa)
+  const limiteDiasPlano = PLANOS_CONFIG[planoEmpresa].historicoAnos * 365
 
   // Cálculo da quantidade de dias no modal personalizado
   const calcularDiferencaDias = () => {
@@ -140,6 +140,55 @@ export default function RelatoriosPage() {
     window.setTimeout(() => setMensagemExportacao(''), 3500)
   }
 
+  const carregarArquivosPrivados = async () => {
+    const response = await fetch('/api/relatorios/arquivos', { cache: 'no-store' })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar os arquivos.')
+    setArquivosPrivados(data.arquivos)
+    setUsoStorage(data.armazenamento)
+  }
+
+  const handleArquivar = async () => {
+    if (!arquivoParaArquivar) {
+      registrarExportacao('Selecione um PDF, XLS, XLSX ou CSV para arquivar.')
+      return
+    }
+
+    setArquivando(true)
+    try {
+      const formData = new FormData()
+      formData.append('arquivo', arquivoParaArquivar)
+      formData.append('periodo_inicio', dataInicio)
+      formData.append('periodo_fim', dataFim)
+      formData.append('tipo', periodo === 'CUSTOMIZADO' ? 'PERSONALIZADO' : 'OPERACIONAL')
+
+      const response = await fetch('/api/relatorios/arquivos', { method: 'POST', body: formData })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível arquivar o relatório.')
+
+      setArquivoParaArquivar(null)
+      await carregarArquivosPrivados()
+      registrarExportacao('Relatório arquivado no bucket privado.')
+    } catch (error) {
+      registrarExportacao(error instanceof Error ? error.message : 'Não foi possível arquivar o relatório.')
+    } finally {
+      setArquivando(false)
+    }
+  }
+
+  const handleDownloadArquivado = async (id: string) => {
+    try {
+      const response = await fetch(`/api/relatorios/arquivos/${id}/download`, { method: 'POST' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível liberar o download.')
+      window.location.assign(data.url)
+    } catch (error) {
+      registrarExportacao(error instanceof Error ? error.message : 'Não foi possível liberar o download.')
+    }
+  }
+
+  const formatarBytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
+
   const handleExportarExcel = () => {
     exportarExcel(`rpmtruck-relatorio-${periodo.toLowerCase()}`, [
       {
@@ -150,7 +199,7 @@ export default function RelatoriosPage() {
           { titulo: 'Manutenção (R$)', chave: 'manutencao', tipo: 'Number' },
           { titulo: 'Total (R$)', chave: 'total', tipo: 'Number' },
         ],
-        linhas: MOCK_CUSTO_VEICULO.map(linha => ({ ...linha, total: linha.combustivel + linha.manutencao })),
+        linhas: custoVeiculo.map(linha => ({ ...linha, total: linha.combustivel + linha.manutencao })),
       },
       {
         nome: 'Eficiência mensal',
@@ -159,7 +208,7 @@ export default function RelatoriosPage() {
           { titulo: 'Custo por KM (R$)', chave: 'custoKm', tipo: 'Number' },
           { titulo: 'KM total', chave: 'kmTotal', tipo: 'Number' },
         ],
-        linhas: MOCK_EFICIENCIA_MES.map(linha => ({ ...linha })),
+        linhas: eficienciaMes.map(linha => ({ ...linha })),
       },
     ])
     registrarExportacao('Planilha Excel gerada com 2 abas.')
@@ -180,7 +229,7 @@ export default function RelatoriosPage() {
           {
             titulo: 'Custos por veículo',
             colunas: ['Veículo', 'Combustível', 'Manutenção', 'Total'],
-            linhas: MOCK_CUSTO_VEICULO.map(linha => [
+            linhas: custoVeiculo.map(linha => [
               linha.veiculo,
               linha.combustivel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
               linha.manutencao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
@@ -190,7 +239,7 @@ export default function RelatoriosPage() {
           {
             titulo: 'Eficiência mensal',
             colunas: ['Mês', 'Custo por KM', 'KM total'],
-            linhas: MOCK_EFICIENCIA_MES.map(linha => [linha.mes, `R$ ${linha.custoKm.toFixed(2)}`, linha.kmTotal.toLocaleString('pt-BR')]),
+            linhas: eficienciaMes.map(linha => [linha.mes, `R$ ${linha.custoKm.toFixed(2)}`, linha.kmTotal.toLocaleString('pt-BR')]),
           },
         ],
       })
@@ -249,6 +298,63 @@ export default function RelatoriosPage() {
           {mensagemExportacao}
         </div>
       )}
+
+      <section className="border p-4 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Archive size={18} style={{ color: primary }} />
+            <div>
+              <h2 className="text-xs font-black uppercase tracking-widest">Arquivos privados</h2>
+              <p className="text-[10px] text-foreground-muted">
+                {formatarBytes(usoStorage.uso_bytes)} de {formatarBytes(usoStorage.limite_interno_bytes)} do limite interno utilizados.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="file"
+              accept=".pdf,.xls,.xlsx,.csv,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+              onChange={(event) => setArquivoParaArquivar(event.target.files?.[0] ?? null)}
+              className="max-w-[280px] text-[10px] file:mr-3 file:border file:border-border file:bg-transparent file:px-3 file:py-2 file:text-[10px] file:font-bold"
+              aria-label="Selecionar relatório para arquivar"
+            />
+            <button
+              type="button"
+              onClick={handleArquivar}
+              disabled={arquivando || !arquivoParaArquivar}
+              className="flex items-center justify-center gap-2 border px-4 py-2 text-[10px] font-black uppercase disabled:opacity-40"
+              style={{ borderColor: primary, color: primary }}
+            >
+              <Upload size={14} /> {arquivando ? 'Arquivando...' : 'Arquivar'}
+            </button>
+          </div>
+        </div>
+
+        {arquivosPrivados.length > 0 ? (
+          <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+            {arquivosPrivados.slice(0, 5).map((arquivo) => (
+              <div key={arquivo.id} className="flex items-center justify-between gap-3 py-3 text-xs">
+                <div className="min-w-0">
+                  <p className="font-bold truncate">{arquivo.nome_arquivo}</p>
+                  <p className="text-[9px] text-foreground-muted">
+                    {formatarBytes(arquivo.tamanho_bytes)} · SHA-256 {arquivo.checksum_sha256.slice(0, 12)}…
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadArquivado(arquivo.id)}
+                  className="shrink-0 border px-3 py-2 text-[10px] font-bold uppercase"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  Baixar
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[10px] text-foreground-muted">Nenhum relatório arquivado neste bucket.</p>
+        )}
+      </section>
 
       {/* ─── BARRA DE FILTRO DE TEMPO INTELIGENTE ─── */}
       <div className="flex flex-col md:flex-row gap-4 mb-8">
@@ -330,7 +436,7 @@ export default function RelatoriosPage() {
           
           <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={MOCK_CUSTO_VEICULO} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} layout="vertical">
+              <BarChart data={custoVeiculo} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={true} vertical={false} />
                 <XAxis type="number" stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value/1000}k`} />
                 <YAxis dataKey="veiculo" type="category" stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} width={80} />
@@ -366,7 +472,7 @@ export default function RelatoriosPage() {
 
           <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={MOCK_EFICIENCIA_MES} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+              <LineChart data={eficienciaMes} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="mes" stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value}`} domain={['dataMin - 0.5', 'dataMax + 0.5']} />

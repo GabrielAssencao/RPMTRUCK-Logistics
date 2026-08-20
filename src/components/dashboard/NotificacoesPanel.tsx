@@ -3,17 +3,25 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useNotificacoes } from '@/hooks/useNotificacoes'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, Trash2, Check } from 'lucide-react'
+import { Bell, Trash2, Check, CheckCheck } from 'lucide-react'
 
-export default function NotificacoesPanel() {
+interface NotificacoesPanelProps {
+  onPendenciasChange?: (pendencias: Record<string, number>) => void
+}
+
+export default function NotificacoesPanel({ onPendenciasChange }: NotificacoesPanelProps) {
   const { primary } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
-  const { notificacoes, naoLidas, marcarComoLida, deletarNotificacao } =
+  const { notificacoes, naoLidas, loading, error, pendenciasPorModulo, marcarComoLida, marcarTodasComoLidas, deletarNotificacao } =
     useNotificacoes()
+
+  useEffect(() => {
+    onPendenciasChange?.(pendenciasPorModulo)
+  }, [onPendenciasChange, pendenciasPorModulo])
 
   const moduloCorMap: Record<string, string> = {
     FROTA: '#f59e0b',
@@ -28,6 +36,7 @@ export default function NotificacoesPanel() {
       {/* Bell Icon */}
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-label={naoLidas > 0 ? `Abrir notificações, ${naoLidas} não lidas` : 'Abrir notificações'}
         className="relative p-2 rounded-lg hover:opacity-70 transition-all"
         style={{ backgroundColor: `${primary}10` }}
       >
@@ -75,9 +84,21 @@ export default function NotificacoesPanel() {
               </button>
             </div>
 
+            {naoLidas > 0 && (
+              <div className="px-4 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
+                <button onClick={marcarTodasComoLidas} className="flex items-center gap-2 text-xs font-bold hover:underline" style={{ color: primary }}>
+                  <CheckCheck size={14} /> Marcar todas como lidas
+                </button>
+              </div>
+            )}
+
             {/* Lista de Notificações */}
             <div className="max-h-96 overflow-y-auto">
-              {notificacoes.length === 0 ? (
+              {loading ? (
+                <div className="p-8 text-center text-foreground-muted text-sm">Carregando notificações...</div>
+              ) : error ? (
+                <div className="p-8 text-center text-red-500 text-sm">{error}</div>
+              ) : notificacoes.length === 0 ? (
                 <div className="p-8 text-center text-foreground-muted text-sm">
                   Nenhuma notificação
                 </div>
@@ -138,7 +159,7 @@ export default function NotificacoesPanel() {
 
                         {/* Ações */}
                         {!notif.lida && (
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0">
                             <button
                               onClick={() => marcarComoLida(notif.id)}
                               className="p-1 hover:opacity-70 transition-opacity"

@@ -17,13 +17,8 @@ export default function LocalizacoesPage() {
   const { primary } = useTheme()
   const [montado, setMontado] = useState(false)
 
-  // Lista de Localizações
-  const [localizacoes, setLocalizacoes] = useState<LocalizacaoBase[]>([
-    { id: '1', nome: 'Santos - SP', cidadeUF: 'Santos / SP', capacidade: 15 },
-    { id: '2', nome: 'Garagem Central', cidadeUF: 'São Paulo / SP', capacidade: 30 },
-    { id: '3', nome: 'Guarujá - SP', cidadeUF: 'Guarujá / SP', capacidade: 10 },
-    { id: '4', nome: 'Pátio Principal', cidadeUF: 'Cubatao / SP', capacidade: 50 },
-  ])
+  const [localizacoes, setLocalizacoes] = useState<LocalizacaoBase[]>([])
+  const [feedback, setFeedback] = useState('')
 
   // Modal para Criar/Editar
   const [modalOpen, setModalOpen] = useState(false)
@@ -32,7 +27,10 @@ export default function LocalizacoesPage() {
 
   const [form, setForm] = useState({ nome: '', cidadeUF: '', capacidade: '' })
 
-  useEffect(() => setMontado(true), [])
+  useEffect(() => {
+    setMontado(true)
+    fetch('/api/localizacoes', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setLocalizacoes(data) }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar bases.'))
+  }, [])
 
   if (!montado) return null
 
@@ -48,36 +46,27 @@ export default function LocalizacoesPage() {
     setModalOpen(true)
   }
 
-  const handleSalvar = (e: React.FormEvent) => {
+  const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (editandoId) {
-      setLocalizacoes(prev => prev.map(l => l.id === editandoId ? {
-        ...l,
-        nome: form.nome,
-        cidadeUF: form.cidadeUF,
-        capacidade: Number(form.capacidade) || 0
-      } : l))
-    } else {
-      const nova: LocalizacaoBase = {
-        id: String(Date.now()),
-        nome: form.nome,
-        cidadeUF: form.cidadeUF,
-        capacidade: Number(form.capacidade) || 0
-      }
-      setLocalizacoes(prev => [nova, ...prev])
-    }
-
+    const response = await fetch(editandoId ? `/api/localizacoes/${editandoId}` : '/api/localizacoes', { method: editandoId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, capacidade: Number(form.capacidade) }) })
+    const data = await response.json()
+    if (!response.ok) return setFeedback(data.erro || 'Não foi possível salvar a base.')
+    setLocalizacoes(prev => editandoId ? prev.map(item => item.id === editandoId ? data : item) : [data, ...prev])
     setModalOpen(false)
   }
 
-  const handleExcluir = (id: string) => {
+  const handleExcluir = async (id: string) => {
+    const response = await fetch(`/api/localizacoes/${id}`, { method: 'DELETE' })
+    const data = await response.json()
+    if (!response.ok) return setFeedback(data.erro || 'Não foi possível excluir a base.')
     setLocalizacoes(prev => prev.filter(l => l.id !== id))
     setExcluindoId(null)
   }
 
   return (
     <div className="space-y-6 max-w-[1200px] mx-auto font-mono">
+      {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
       
       {/* ─── CABEÇALHO ─── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">

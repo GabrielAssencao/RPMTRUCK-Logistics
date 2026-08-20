@@ -69,13 +69,12 @@ export default function UsuariosPage() {
 
   const [usuarios, setUsuarios] = useState<UsuarioLocal[]>([])
   
-  // TODO: No futuro, este estado virá do contexto de Autenticação/Sessão real
-  const [perfilLogado] = useState<'GESTOR_EMPRESA' | 'OPERADOR'>('GESTOR_EMPRESA')
+  const [perfilLogado, setPerfilLogado] = useState<'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'>('VISUALIZADOR')
 
   // Carrega os usuários salvos no Supabase ao carregar a página
   useEffect(() => {
     setMontado(true)
-    carregarUsuarios()
+    fetch('/api/empresa/perfil', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (response.ok) { setPerfilLogado(data.usuario.role); if (data.usuario.role === 'GESTOR_EMPRESA' || data.usuario.role === 'GESTOR') void carregarUsuarios() } else setLoading(false) }).catch(() => setLoading(false))
   }, [])
 
   const carregarUsuarios = async () => {
@@ -152,7 +151,9 @@ export default function UsuariosPage() {
 
   const handleExcluirUsuario = async (id: string) => {
     if (confirm('Deseja realmente remover o acesso deste operador?')) {
-      // Atualização otimista na tela
+      const response = await fetch(`/api/empresa/usuarios/${id}`, { method: 'DELETE' })
+      const data = await response.json()
+      if (!response.ok) return alert(data.erro || 'Não foi possível remover o usuário.')
       setUsuarios((prev) => prev.filter(u => u.id !== id))
     }
   }

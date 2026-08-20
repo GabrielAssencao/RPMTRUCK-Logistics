@@ -1,32 +1,44 @@
 'use client'
 
-// src/contexts/ContainersContext.tsx
-
-import { createContext, useContext, useState, useMemo, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 export type StatusContainer = 'AGENDADO' | 'EM_TRANSITO' | 'ENTREGUE' | 'CANCELADO'
 export type TipoContainer = '20 PÉS' | '40 PÉS' | '40 HC' | 'REEFER' | 'TANQUE' | 'OUTRO'
 
+export interface DuplaAlocada {
+  id: string
+  veiculoId: string
+  veiculoPlaca: string
+  veiculoModelo: string
+  motoristaId?: string | null
+  motoristaNome: string
+}
+
 export interface RegistroContainer {
   id: string
-  data: string // YYYY-MM-DD
-  codigo: string // ex: MSCU 734521-0
+  data: string
+  codigo: string
   tipo: TipoContainer
   terminalInicio: string
   terminalFim: string
   duplaId: string
+  veiculoId: string
+  motoristaId?: string | null
   frete: number
   comissao: number
   status: StatusContainer
   observacoes?: string
+  itensConteudo?: Array<{ nome: string; porcentagem: number }>
 }
 
 interface ContainersContextType {
   containers: RegistroContainer[]
-  adicionarContainer: (registro: Omit<RegistroContainer, 'id'>) => void
-  atualizarContainer: (id: string, dados: Partial<RegistroContainer>) => void
-  removerContainer: (id: string) => void
-  // Agregados prontos para qualquer módulo consumir sem recalcular tudo de novo
+  duplas: DuplaAlocada[]
+  loading: boolean
+  erro: string
+  adicionarContainer: (registro: Omit<RegistroContainer, 'id' | 'veiculoId' | 'motoristaId'>) => Promise<boolean>
+  atualizarContainer: (id: string, dados: Partial<RegistroContainer>) => Promise<boolean>
+  removerContainer: (id: string) => Promise<boolean>
   totalEmTransito: number
   totalContainersMes: number
   totalFreteMes: number
@@ -35,71 +47,77 @@ interface ContainersContextType {
 
 const ContainersContext = createContext<ContainersContextType | undefined>(undefined)
 
-// Mock inicial — substituir por fetch ao Supabase quando o backend estiver pronto
-const CONTAINERS_INICIAIS: RegistroContainer[] = [
-  { id: 'ct1', data: '2026-08-05', codigo: 'MSCU 734521-0', tipo: '40 HC', terminalInicio: 'Porto de Santos', terminalFim: 'CD Guarulhos', duplaId: 'd1', frete: 4200, comissao: 420, status: 'EM_TRANSITO' },
-  { id: 'ct2', data: '2026-08-04', codigo: 'TCLU 112938-4', tipo: '20 PÉS', terminalInicio: 'Terminal Embraport', terminalFim: 'Porto de Santos', duplaId: 'd2', frete: 1800, comissao: 180, status: 'ENTREGUE' },
-  { id: 'ct3', data: '2026-08-08', codigo: 'HLXU 998217-1', tipo: 'REEFER', terminalInicio: 'CD Cubatão', terminalFim: 'Porto de Santos', duplaId: 'd3', frete: 3100, comissao: 310, status: 'AGENDADO' },
-  { id: 'ct4', data: '2026-07-28', codigo: 'CMAU 553012-7', tipo: '40 PÉS', terminalInicio: 'Porto de Santos', terminalFim: 'CD Cajamar', duplaId: 'd1', frete: 3900, comissao: 390, status: 'ENTREGUE' },
-]
-
 export function ContainersProvider({ children }: { children: ReactNode }) {
-  const [containers, setContainers] = useState<RegistroContainer[]>(CONTAINERS_INICIAIS)
+  const [containers, setContainers] = useState<RegistroContainer[]>([])
+  const [duplas, setDuplas] = useState<DuplaAlocada[]>([])
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState('')
 
-  const adicionarContainer = (registro: Omit<RegistroContainer, 'id'>) => {
-    setContainers(prev => [{ ...registro, id: String(Date.now()) }, ...prev])
+  const carregar = useCallback(async () => {
+    try {
+      const response = await fetch('/api/containers', { cache: 'no-store' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar containers.')
+      setContainers(data.containers)
+      setDuplas(data.duplas)
+    } catch (cause) {
+      setErro(cause instanceof Error ? cause.message : 'Falha ao carregar containers.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void carregar() }, [carregar])
+
+  const adicionarContainer = async (registro: Omit<RegistroContainer, 'id' | 'veiculoId' | 'motoristaId'>) => {
+    const dupla = duplas.find(item => item.id === registro.duplaId)
+    if (!dupla) { setErro('Selecione um veículo válido.'); return false }
+    const response = await fetch('/api/containers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...registro, veiculoId: dupla.veiculoId, motoristaId: dupla.motoristaId }) })
+    const data = await response.json()
+    if (!response.ok) { setErro(data.erro || 'Não foi possível salvar o container.'); return false }
+    setErro('')
+    setContainers(prev => [data, ...prev])
+    return true
   }
 
-  const atualizarContainer = (id: string, dados: Partial<RegistroContainer>) => {
-    setContainers(prev => prev.map(c => (c.id === id ? { ...c, ...dados } : c)))
+  const atualizarContainer = async (id: string, dados: Partial<RegistroContainer>) => {
+    const dupla = dados.duplaId ? duplas.find(item => item.id === dados.duplaId) : undefined
+    const response = await fetch(`/api/containers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...dados, ...(dupla ? { veiculoId: dupla.veiculoId, motoristaId: dupla.motoristaId } : {}) }) })
+    const data = await response.json()
+    if (!response.ok) { setErro(data.erro || 'Não foi possível atualizar o container.'); return false }
+    setErro('')
+    setContainers(prev => prev.map(container => container.id === id ? data : container))
+    return true
   }
 
-  const removerContainer = (id: string) => {
-    setContainers(prev => prev.filter(c => c.id !== id))
+  const removerContainer = async (id: string) => {
+    const response = await fetch(`/api/containers/${id}`, { method: 'DELETE' })
+    const data = await response.json()
+    if (!response.ok) { setErro(data.erro || 'Não foi possível remover o container.'); return false }
+    setErro('')
+    setContainers(prev => prev.filter(container => container.id !== id))
+    return true
   }
 
   const hoje = new Date()
-  const pertenceAoMesAtual = (data: string) => {
-    const d = new Date(data)
-    return d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear()
-  }
+  const containersDoMes = useMemo(() => containers.filter(container => {
+    const data = new Date(`${container.data}T12:00:00`)
+    return data.getMonth() === hoje.getMonth() && data.getFullYear() === hoje.getFullYear()
+  }), [containers, hoje])
 
-  const totalEmTransito = useMemo(
-    () => containers.filter(c => c.status === 'EM_TRANSITO').length,
-    [containers]
-  )
+  const value = useMemo(() => ({
+    containers, duplas, loading, erro, adicionarContainer, atualizarContainer, removerContainer,
+    totalEmTransito: containers.filter(container => container.status === 'EM_TRANSITO').length,
+    totalContainersMes: containersDoMes.length,
+    totalFreteMes: containersDoMes.reduce((total, container) => total + container.frete, 0),
+    totalComissaoMes: containersDoMes.reduce((total, container) => total + container.comissao, 0),
+  }), [containers, duplas, loading, erro, containersDoMes])
 
-  const containersDoMes = useMemo(
-    () => containers.filter(c => pertenceAoMesAtual(c.data)),
-    [containers]
-  )
-
-  const totalContainersMes = containersDoMes.length
-  const totalFreteMes = useMemo(() => containersDoMes.reduce((acc, c) => acc + c.frete, 0), [containersDoMes])
-  const totalComissaoMes = useMemo(() => containersDoMes.reduce((acc, c) => acc + c.comissao, 0), [containersDoMes])
-
-  return (
-    <ContainersContext.Provider
-      value={{
-        containers,
-        adicionarContainer,
-        atualizarContainer,
-        removerContainer,
-        totalEmTransito,
-        totalContainersMes,
-        totalFreteMes,
-        totalComissaoMes
-      }}
-    >
-      {children}
-    </ContainersContext.Provider>
-  )
+  return <ContainersContext.Provider value={value}>{children}</ContainersContext.Provider>
 }
 
 export function useContainers() {
-  const ctx = useContext(ContainersContext)
-  if (!ctx) {
-    throw new Error('useContainers precisa ser usado dentro de um <ContainersProvider>')
-  }
-  return ctx
+  const context = useContext(ContainersContext)
+  if (!context) throw new Error('useContainers precisa ser usado dentro de um ContainersProvider')
+  return context
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Truck, Users, DollarSign, Settings, CheckCircle } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { MODULOS, MODULOS_CONFIG } from '@/utils/planos';
 
 export default function AdminCompanyDetail({ id, onBack }) {
   const { primary } = useTheme();
@@ -55,10 +56,10 @@ export default function AdminCompanyDetail({ id, onBack }) {
         <div className="border p-6" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
           <h3 className="font-bold text-sm mb-4">MÓDULOS HABILITADOS</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {['frota', 'controle_gestao', 'relatorios'].map(m => (
+            {MODULOS.map(m => (
               <div key={m} className="flex items-center gap-3 p-3 border" style={{ borderColor: 'var(--border)' }}>
                 <input type="checkbox" checked={company.modulos.includes(m)} className="accent-primary" readOnly />
-                <span className="capitalize text-sm font-bold">{m.replace('_', ' ')}</span>
+                <span className="text-sm font-bold">{MODULOS_CONFIG[m].nome}</span>
               </div>
             ))}
           </div>

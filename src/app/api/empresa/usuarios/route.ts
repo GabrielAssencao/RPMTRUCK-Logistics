@@ -1,8 +1,9 @@
-import { requireEmpresaAuth } from '@/lib/auth'
+import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { criarNotificacao } from '@/lib/notificacoes'
 
 const criarOperadorSchema = z.object({
   nome: z.string().trim().min(3).max(100),
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
       },
       select: { id: true, nome: true, email: true, role: true, criado_em: true }
     })
+    await criarNotificacao({ titulo: 'Acesso criado', mensagem: 'Seu usuário foi adicionado à empresa. Revise suas tarefas e notificações no painel.', modulo: 'USUARIOS', empresaId: session.empresaId, usuarioId: usuario.id })
     return NextResponse.json(usuario, { status: 201 })
   } catch (cause) {
     console.error('Erro ao criar usuário:', cause)

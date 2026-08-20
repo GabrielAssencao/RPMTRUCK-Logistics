@@ -13,9 +13,6 @@ export default function SettingsModule() {
   const handleSave = async (settings) => {
     setSalvando(true);
     
-    // Simulação rápida de um carregamento para dar feedback ao usuário
-    await new Promise(r => setTimeout(r, 400));
-
     // Salva o modo Escuro/Claro diretamente na função nativa do Contexto
     if (settings.theme !== undefined) {
       setIsLight(settings.theme === 'light');

@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient, PlanoTipo } from '@prisma/client';
 import { requireAdminAuth } from '@/lib/auth';
+import { notificarAdmins } from '@/lib/notificacoes';
 
 const prisma = new PrismaClient();
 
@@ -77,6 +78,8 @@ export async function POST(request: NextRequest) {
         status: 'PENDENTE'
       }
     });
+
+    await notificarAdmins({ titulo: 'Nova solicitação de acesso', mensagem: `${novaSolicitacao.empresa} solicitou o plano ${novaSolicitacao.plano}.`, modulo: 'ACESSO' });
 
     return NextResponse.json(
       { sucesso: true, id: novaSolicitacao.id },

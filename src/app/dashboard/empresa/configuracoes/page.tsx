@@ -28,20 +28,29 @@ export default function ConfiguracoesPage() {
   const [montado, setMontado] = useState(false)
   const [tabAtiva, setTabAtiva] = useState<'PERFIL' | 'APARENCIA' | 'SEGURANCA'>('APARENCIA')
 
-  // Mock dos dados da empresa
   const [form, setForm] = useState({
-    nome: 'Logística RPM Ltda',
-    cnpj: '12.345.678/0001-99',
-    email: 'contato@logrpm.com.br',
-    telefone: '+351 912 345 678'
+    nome: '', cnpj: '', email: '', telefone: ''
   })
+  const [salvando, setSalvando] = useState(false)
+  const [feedback, setFeedback] = useState('')
 
-  useEffect(() => setMontado(true), [])
+  useEffect(() => {
+    setMontado(true)
+    fetch('/api/empresa/perfil', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setForm({ nome: data.empresa.nome || '', cnpj: data.empresa.cnpj || '', email: data.empresa.email || '', telefone: data.empresa.telefone || '' }) }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar perfil.'))
+  }, [])
+
+  const salvarPerfil = async () => {
+    setSalvando(true); setFeedback('')
+    const response = await fetch('/api/empresa/perfil', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, cnpj: form.cnpj || null, telefone: form.telefone || null }) })
+    const data = await response.json(); setSalvando(false)
+    setFeedback(response.ok ? 'Dados da empresa salvos com sucesso.' : data.erro || 'Não foi possível salvar o perfil.')
+  }
 
   if (!montado) return null
 
   return (
     <div className="space-y-6 max-w-[1200px] mx-auto">
+      {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
       
       {/* ─── CABEÇALHO ─── */}
       <div className="mb-8">
@@ -159,6 +168,8 @@ export default function ConfiguracoesPage() {
 
                   <div className="pt-4 flex justify-end">
                     <motion.button 
+                      onClick={() => void salvarPerfil()}
+                      disabled={salvando}
                       whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                       className="flex items-center gap-2 px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all font-mono"
                       style={{ 
@@ -166,7 +177,7 @@ export default function ConfiguracoesPage() {
                         clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))'
                       }}
                     >
-                      <Save size={16} /> Salvar Alterações
+                      <Save size={16} /> {salvando ? 'Salvando...' : 'Salvar Alterações'}
                     </motion.button>
                   </div>
                 </div>

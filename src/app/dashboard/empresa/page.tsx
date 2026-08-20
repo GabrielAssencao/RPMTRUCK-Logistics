@@ -25,12 +25,12 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   PieChart, Pie, Cell
 } from 'recharts'
+import type { PlanoTipo } from '@/utils/planos'
 
 type Urgencia = 'ALTA' | 'MEDIA' | 'BAIXA'
-type PlanoTipo = 'PREVIEW' | 'ESSENCIAL' | 'AVANCADO' | 'ENTERPRISE'
 
 interface AlertaInteligente {
-  id: number
+  id: string
   categoria: 'VEICULO' | 'MOTORISTA'
   subtipo: 'NAO_REALIZADA' | 'PENDENTE' | 'CANCELADA' | 'MULTA' | 'SALARIO' | 'DOCUMENTO' | 'ATRASO' | 'HORARIO'
   foco: string
@@ -43,64 +43,6 @@ interface OperadorOption {
   cargo: string
 }
 
-const DADOS_GRAFICOS: Record<string, any[]> = {
-  '7_DIAS': [
-    { dia: 'Seg', combustivel: 4000, manutencao: 2400, pedagio: 850 },
-    { dia: 'Ter', combustivel: 3000, manutencao: 1398, pedagio: 620 },
-    { dia: 'Qua', combustivel: 2000, manutencao: 9800, pedagio: 1100 },
-    { dia: 'Qui', combustivel: 2780, manutencao: 3908, pedagio: 740 },
-    { dia: 'Sex', combustivel: 1890, manutencao: 4800, pedagio: 950 },
-    { dia: 'Sáb', combustivel: 2390, manutencao: 3800, pedagio: 410 },
-    { dia: 'Dom', combustivel: 3490, manutencao: 4300, pedagio: 300 },
-  ],
-  '15_DIAS': [
-    { dia: 'Semana 1', combustivel: 18500, manutencao: 12400, pedagio: 4200 },
-    { dia: 'Semana 2', combustivel: 21000, manutencao: 8900, pedagio: 4800 },
-  ],
-  '30_DIAS': [
-    { dia: 'Semana 1', combustivel: 18500, manutencao: 12400, pedagio: 4200 },
-    { dia: 'Semana 2', combustivel: 21000, manutencao: 8900, pedagio: 4800 },
-    { dia: 'Semana 3', combustivel: 19400, manutencao: 15200, pedagio: 3900 },
-    { dia: 'Semana 4', combustivel: 23100, manutencao: 6400, pedagio: 5100 },
-  ]
-}
-
-const dadosDistribuicaoCustos = [
-  { name: 'Combustível', value: 65 },
-  { name: 'Manutenção', value: 20 },
-  { name: 'Pedágios', value: 10 },
-  { name: 'Outros', value: 5 },
-]
-
-const ALERTAS_INICIAIS: AlertaInteligente[] = [
-  { 
-    id: 1, 
-    categoria: 'VEICULO', 
-    subtipo: 'NAO_REALIZADA', 
-    foco: 'VOLVO FH540 (ABC-1234)', 
-    descricao: 'Manutenção preventiva da caixa de transmissão não foi realizada dentro do prazo estipulado e o caminhão encontra-se em viagem de longa distância.' 
-  },
-  { 
-    id: 2, 
-    categoria: 'MOTORISTA', 
-    subtipo: 'MULTA', 
-    foco: 'Carlos Eduardo (Motorista)', 
-    descricao: 'Infração grave cometida por excesso de velocidade na Rodovia dos Imigrantes (KM 42). Necessita de indicação de condutor iminente.' 
-  },
-  { 
-    id: 3, 
-    categoria: 'MOTORISTA', 
-    subtipo: 'DOCUMENTO', 
-    foco: 'João Silva (Motorista)', 
-    descricao: 'Exame toxicológico e CNH da categoria E expiram nos próximos 15 dias uteis.' 
-  },
-]
-
-const OPERADORES_DISPONIVEIS: OperadorOption[] = [
-  { id: 'op1', nome: 'Carlos Eduardo', cargo: 'Operador Logístico Senior' },
-  { id: 'op2', nome: 'Ana Paula', cargo: 'Supervisora de Frota' },
-]
-
 export default function PainelEmpresa() {
   const { primary } = useTheme()
   const [montado, setMontado] = useState(false)
@@ -108,6 +50,13 @@ export default function PainelEmpresa() {
   const [nomeUsuario, setNomeUsuario] = useState('Gabriel Souza')
   const [nomeEmpresa, setNomeEmpresa] = useState('Transportes RPM')
   const [planoEmpresa, setPlanoEmpresa] = useState<PlanoTipo>('ESSENCIAL') // Padrão Essencial para teste
+  const [tarefasHabilitadas, setTarefasHabilitadas] = useState(false)
+  const [dadosGraficos, setDadosGraficos] = useState<Record<string, Array<{ dia: string; combustivel: number; manutencao: number; pedagio: number }>>>({ '7_DIAS': [], '15_DIAS': [], '30_DIAS': [] })
+  const [dadosDistribuicaoCustos, setDadosDistribuicaoCustos] = useState<Array<{ name: string; value: number }>>([])
+  const [alertas, setAlertas] = useState<AlertaInteligente[]>([])
+  const [operadores, setOperadores] = useState<OperadorOption[]>([])
+  const [metricas, setMetricas] = useState({ totalVeiculos: 0, totalAtivos: 0, totalOperacionais: 0, custoMes: 0, custoKm: 0, tarefasPendentes: 0 })
+  const [feedback, setFeedback] = useState('')
 
   const [recorteDias, setRecorteDias] = useState<'7_DIAS' | '15_DIAS' | '30_DIAS'>('7_DIAS')
 
@@ -122,13 +71,21 @@ export default function PainelEmpresa() {
 
   useEffect(() => {
     setMontado(true)
-    const userData = localStorage.getItem('@rpmtruck:user')
-    if (userData) {
-      const parsed = JSON.parse(userData)
-      if (parsed.nome) setNomeUsuario(parsed.nome)
-      if (parsed.empresaInfo?.nome) setNomeEmpresa(parsed.empresaInfo.nome)
-      if (parsed.empresaInfo?.plano) setPlanoEmpresa(parsed.empresaInfo.plano)
-    }
+    fetch('/api/dashboard/empresa', { cache: 'no-store' })
+      .then(async response => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar o painel.')
+        setNomeUsuario(data.usuario.nome)
+        setNomeEmpresa(data.empresa.nome)
+        setPlanoEmpresa(data.empresa.plano)
+        setTarefasHabilitadas(data.empresa.modulos.includes('TAREFAS'))
+        setMetricas(data.metricas)
+        setDadosGraficos(data.graficos)
+        setDadosDistribuicaoCustos(data.graficos.distribuicao)
+        setAlertas(data.alertas)
+        setOperadores(data.operadores)
+      })
+      .catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar painel.'))
   }, [])
 
   if (!montado) return null
@@ -149,7 +106,7 @@ export default function PainelEmpresa() {
 
   // 🎯 GATILHO DE CLIQUE EM DELEGAR TAREFA
   const handleClicarDelegar = (alerta: AlertaInteligente) => {
-    if (planoEmpresa === 'ESSENCIAL') {
+    if (!tarefasHabilitadas) {
       // Abre o modal de incentivo ao upgrade
       setModalUpgradeOpen(true)
     } else {
@@ -158,8 +115,32 @@ export default function PainelEmpresa() {
     }
   }
 
+  const handleDelegarTarefa = async () => {
+    if (!alertaParaDelegar || !operadorSelecionado) return
+    const response = await fetch('/api/tarefas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        titulo: `${alertaParaDelegar.categoria}: ${alertaParaDelegar.foco}`,
+        descricao: instrucaoDelegacao || alertaParaDelegar.descricao,
+        prioridade: calcularUrgencia(alertaParaDelegar) === 'ALTA' ? 'ALTA' : 'MEDIA',
+        responsavelId: operadorSelecionado,
+        modulo: alertaParaDelegar.categoria === 'VEICULO' ? 'FROTA' : 'MOTORISTAS',
+        origemId: alertaParaDelegar.id,
+      }),
+    })
+    const data = await response.json()
+    if (!response.ok) return setFeedback(data.erro || 'Não foi possível delegar a tarefa.')
+    setFeedback('Tarefa delegada e responsável notificado com sucesso.')
+    setAlertaParaDelegar(null)
+    setOperadorSelecionado('')
+    setInstrucaoDelegacao('')
+    setMetricas(atual => ({ ...atual, tarefasPendentes: atual.tarefasPendentes + 1 }))
+  }
+
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
+      {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
       
       {/* ─── CABEÇALHO ─── */}
       <div className="mb-6 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -185,10 +166,10 @@ export default function PainelEmpresa() {
 
       {/* ─── LINHA 1: METRICAS ─── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricaCard titulo="FROTA ATIVA" valor="42 / 45" icone={<Truck size={20} />} variacao="+2 operacionais" positivo={true} primary={primary} />
-        <MetricaCard titulo="EM ROTA AGORA" valor="28" icone={<MapPin size={20} />} variacao="62% de ocupação" positivo={true} primary={primary} />
-        <MetricaCard titulo="CUSTO ACUMULADO (MÊS)" valor="R$ 185.280,00" icone={<DollarSign size={20} />} variacao="+12% vs. mês passado" positivo={false} primary={primary} />
-        <MetricaCard titulo="CUSTO MÉDIO POR KM" valor="R$ 4,82" icone={<TrendingDown size={20} />} variacao="-R$ 0,15 (Eficiência)" positivo={true} primary={primary} />
+        <MetricaCard titulo="FROTA ATIVA" valor={`${metricas.totalAtivos} / ${metricas.totalVeiculos}`} icone={<Truck size={20} />} variacao={`${metricas.totalOperacionais} operacionais`} positivo={true} primary={primary} />
+        <MetricaCard titulo="OPERACIONAIS AGORA" valor={String(metricas.totalOperacionais)} icone={<MapPin size={20} />} variacao={`${metricas.totalVeiculos ? Math.round(metricas.totalOperacionais / metricas.totalVeiculos * 100) : 0}% da frota`} positivo={true} primary={primary} />
+        <MetricaCard titulo="CUSTO ACUMULADO (MÊS)" valor={metricas.custoMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icone={<DollarSign size={20} />} variacao="Dados consolidados do banco" positivo={metricas.custoMes === 0} primary={primary} />
+        <MetricaCard titulo="CUSTO MÉDIO POR KM" valor={metricas.custoKm.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icone={<TrendingDown size={20} />} variacao="Custo mensal / odômetros" positivo={true} primary={primary} />
       </div>
 
       {/* ─── LINHA 2: GRÁFICOS ─── */}
@@ -204,7 +185,7 @@ export default function PainelEmpresa() {
           </div>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={DADOS_GRAFICOS[recorteDias]} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+              <AreaChart data={dadosGraficos[recorteDias] ?? []} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="dia" stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v/1000}k`} />
@@ -284,10 +265,10 @@ export default function PainelEmpresa() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
         {[
-          { label: 'COBERTURA', value: '94,7%', trend: '+3,2% vs. semana', color: primary },
-          { label: 'DISPONIBILIDADE', value: '87,4%', trend: '18 veículos em rota', color: '#22c55e' },
-          { label: 'RISCO', value: 'Baixo', trend: '2 alertas críticos', color: '#f59e0b' },
-          { label: 'EFICIÊNCIA', value: '96,1%', trend: '+1,6% de melhoria', color: '#38bdf8' },
+          { label: 'COBERTURA', value: `${metricas.totalVeiculos ? Math.round(metricas.totalAtivos / metricas.totalVeiculos * 100) : 0}%`, trend: `${metricas.totalAtivos} veículos ativos`, color: primary },
+          { label: 'DISPONIBILIDADE', value: `${metricas.totalVeiculos ? Math.round(metricas.totalOperacionais / metricas.totalVeiculos * 100) : 0}%`, trend: `${metricas.totalOperacionais} operacionais`, color: '#22c55e' },
+          { label: 'RISCO', value: alertas.length ? 'Atenção' : 'Baixo', trend: `${alertas.length} alertas pendentes`, color: '#f59e0b' },
+          { label: 'TAREFAS', value: String(metricas.tarefasPendentes), trend: 'pendentes ou em andamento', color: '#38bdf8' },
         ].map((card, index) => (
           <motion.div
             key={card.label}
@@ -326,7 +307,8 @@ export default function PainelEmpresa() {
               </tr>
             </thead>
             <tbody className="divide-y [&>tr]:border-[var(--border)]" style={{ color: 'var(--foreground)' }}>
-              {ALERTAS_INICIAIS.map((alerta) => {
+              {alertas.length === 0 && <tr><td colSpan={4} className="px-5 py-10 text-center text-xs text-foreground-muted">Nenhum alerta operacional pendente.</td></tr>}
+              {alertas.map((alerta) => {
                 const urgencia = calcularUrgencia(alerta)
                 const descCurta = alerta.descricao.length > 55 ? `${alerta.descricao.substring(0, 55)}...` : alerta.descricao
 
@@ -354,11 +336,11 @@ export default function PainelEmpresa() {
                         onClick={() => handleClicarDelegar(alerta)}
                         className="px-3 py-1.5 border text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ml-auto hover:bg-white/5 transition-all cursor-pointer relative"
                         style={{ 
-                          borderColor: planoEmpresa === 'ESSENCIAL' ? 'var(--border)' : primary, 
-                          color: planoEmpresa === 'ESSENCIAL' ? 'var(--foreground-muted)' : primary 
+                          borderColor: tarefasHabilitadas ? primary : 'var(--border)',
+                          color: tarefasHabilitadas ? primary : 'var(--foreground-muted)'
                         }}
                       >
-                        {planoEmpresa === 'ESSENCIAL' ? (
+                        {!tarefasHabilitadas ? (
                           <>
                             <Lock size={12} className="text-yellow-500" />
                             <span>Delegar</span>
@@ -378,6 +360,22 @@ export default function PainelEmpresa() {
           </table>
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {alertaParaDelegar && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} className="w-full max-w-lg space-y-5 border p-6" style={{ backgroundColor: 'var(--background)', borderColor: primary }}>
+              <div className="flex items-start justify-between border-b pb-4" style={{ borderColor: 'var(--border)' }}>
+                <div><p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: primary }}>Delegar alerta</p><h2 className="mt-1 font-bold">{alertaParaDelegar.foco}</h2></div>
+                <button onClick={() => setAlertaParaDelegar(null)} aria-label="Fechar"><X size={18} /></button>
+              </div>
+              <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase text-foreground-muted">Responsável</span><select value={operadorSelecionado} onChange={event => setOperadorSelecionado(event.target.value)} className="w-full border bg-background p-3 text-sm outline-none" style={{ borderColor: 'var(--border)' }}><option value="">Selecione um usuário</option>{operadores.map(operador => <option key={operador.id} value={operador.id}>{operador.nome} — {operador.cargo}</option>)}</select></label>
+              <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase text-foreground-muted">Instruções</span><textarea rows={4} value={instrucaoDelegacao} onChange={event => setInstrucaoDelegacao(event.target.value)} placeholder={alertaParaDelegar.descricao} className="w-full resize-y border bg-transparent p-3 text-sm outline-none" style={{ borderColor: 'var(--border)' }} /></label>
+              <div className="flex justify-end gap-3"><button onClick={() => setAlertaParaDelegar(null)} className="border px-4 py-2 text-xs font-bold" style={{ borderColor: 'var(--border)' }}>Cancelar</button><button disabled={!operadorSelecionado} onClick={() => void handleDelegarTarefa()} className="px-4 py-2 text-xs font-black text-black disabled:opacity-40" style={{ backgroundColor: primary }}>Delegar e notificar</button></div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* 🚀 MODAL DE INCENTIVO AO UPGRADE (RECURSO AVANÇADO/ENTERPRISE) */}
       <AnimatePresence>

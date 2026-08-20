@@ -141,6 +141,34 @@ npx prisma migrate deploy
 npm run dev
 ```
 
+### Bucket privado de relatórios no Supabase Free
+
+A migração `20260819000000_padroniza_planos_e_arquivos_privados` cria o bucket
+`relatorios-privados` como privado, com limite de 10 MB por arquivo. Para habilitar
+upload e download, copie a chave `service_role` de **Supabase > Project Settings > API**
+para `SUPABASE_SERVICE_ROLE_KEY` no ambiente do servidor. Nunca use essa chave em uma
+variável `NEXT_PUBLIC_*`.
+
+O aplicativo aplica um teto interno padrão de 900 MiB para preservar margem dentro
+do 1 GB do plano Free. O valor pode ser reduzido por
+`RELATORIOS_STORAGE_SOFT_LIMIT_BYTES`. O teto considera os relatórios registrados
+pelo aplicativo; outros buckets também consomem a franquia e devem ser acompanhados
+no painel do Supabase.
+
+O bucket não aceita leitura pública. A aplicação grava os arquivos pelo servidor,
+registra SHA-256, período e tamanho no PostgreSQL e libera downloads por URLs
+assinadas válidas por 60 segundos. Esses arquivos são um arquivo operacional; para
+recuperação de desastre, mantenha futuramente uma cópia externa ao projeto Supabase.
+
+### Fotos privadas de motoristas
+
+A migração `20260820010000_bucket_privado_fotos_motoristas` cria o bucket privado
+`motoristas-fotos`, limitado a WebP de 200 KiB. A API aceita JPG, PNG ou WebP de até
+5 MiB, valida o conteúdo real, remove metadados, recorta em 3:4 e grava somente a
+versão final de 480 × 640 pixels. Cada motorista possui um único arquivo, substituído
+quando a foto é atualizada e removido junto com o cadastro. A leitura usa URL assinada
+por uma hora; o navegador não recebe a chave `service_role`.
+
 A aplicação estará disponível em [http://localhost:3000](http://localhost:3000).
 
 ## Comandos úteis

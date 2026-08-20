@@ -2,8 +2,8 @@
 import { Building2, Truck, FileText, DollarSign } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export default function DashboardStats({ empresas, solicitacoes, receita }) {
-  const ativas = empresas.filter(c => c.status === 'ativo').length;
+export default function DashboardStats({ empresas, solicitacoesPendentes, receita }) {
+  const ativas = empresas.filter(c => c.status === 'ATIVO').length;
 
   const stats = [
     {
@@ -22,7 +22,7 @@ export default function DashboardStats({ empresas, solicitacoes, receita }) {
     },
     {
       label: 'PENDENTES',
-      value: solicitacoes.length,
+      value: solicitacoesPendentes,
       icon: FileText,
       color: '#f59e0b',
       bg: 'rgba(245, 158, 11, 0.12)',

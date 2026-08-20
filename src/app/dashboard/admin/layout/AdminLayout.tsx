@@ -17,6 +17,7 @@ import {
   CheckCheck
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
+import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
 
 // ─── Marcadores Operacionais do Super Admin ─────────────────────────────────
 const NAV_ADMIN = [
@@ -51,6 +52,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
   const { primary, isLight } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarExpandida, setSidebarExpandida] = useState(false)
+  const [pendenciasPorModulo, setPendenciasPorModulo] = useState<Record<string, number>>({})
 
   const handleLogout = () => {
     localStorage.removeItem('@rpmtruck:admin')
@@ -98,6 +100,8 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
             {NAV_ADMIN.map((item) => {
               const active = activeTab === item.id
               const Icon = item.icon
+              const moduloNotificacao = item.id === 'requests' ? 'ACESSO' : item.id === 'resets' ? 'SENHAS' : item.id === 'companies' ? 'EMPRESAS' : 'SISTEMA'
+              const totalPendencias = pendenciasPorModulo[moduloNotificacao] ?? 0
 
               return (
                 <button 
@@ -116,7 +120,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
                 >
                   <span className="relative shrink-0 flex items-center justify-center w-5">
                     <Icon size={18} className={active ? 'text-black' : 'text-foreground-muted'} />
-                    {!expandida && item.id === 'resets' && (
+                    {!expandida && totalPendencias > 0 && (
                       <span
                         className="absolute -top-1 -right-1.5 w-2.5 h-2.5 rounded-full border border-black animate-pulse"
                         style={{ backgroundColor: primary }}
@@ -125,12 +129,12 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
                   </span>
                   {expandida && <span className="flex-1 text-left truncate">{item.label}</span>}
                   
-                  {expandida && item.id === 'resets' && (
+                  {expandida && totalPendencias > 0 && (
                     <span
                       className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0"
                       style={{ backgroundColor: active ? '#000' : primary, color: active ? primary : '#000' }}
                     >
-                      3
+                      {totalPendencias}
                     </span>
                   )}
                 </button>
@@ -206,7 +210,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
           </div>
 
           <div className="flex items-center gap-4">
-            <SininhoNotificacoesAdmin />
+            <NotificacoesPanel onPendenciasChange={setPendenciasPorModulo} />
             <ThemeToggle />
             <div className="w-px h-6 bg-border hidden sm:block" style={{ backgroundColor: 'var(--border)' }} />
             <div className="hidden sm:flex flex-col text-right font-mono">
@@ -257,11 +261,7 @@ function SininhoNotificacoesAdmin() {
   const { primary } = useTheme()
   const [aberto, setAberto] = useState(false)
 
-  const [notificacoes, setNotificacoes] = useState([
-    { id: '1', tipo: 'solicitacao', modulo: 'ACESSO', titulo: 'Nova Solicitação', mensagem: 'A Transportadora Alpha Soluções solicitou acesso ao plano Enterprise.', tempo: 'Há 5 min', lida: false },
-    { id: '2', tipo: 'financeiro', modulo: 'FINANÇAS', titulo: 'Pagamento Confirmado', mensagem: 'Logística BR pagou a taxa de Setup do plano Avançado.', tempo: 'Há 2 horas', lida: false },
-    { id: '3', tipo: 'sistema', modulo: 'SISTEMA', titulo: 'Alerta de Banco de Dados', mensagem: 'Pico de acessos identificado na API de rastreamento.', tempo: 'Há 1 dia', lida: true },
-  ])
+  const [notificacoes, setNotificacoes] = useState<Array<{ id: string; tipo: string; modulo: string; titulo: string; mensagem: string; tempo: string; lida: boolean }>>([])
 
   const naoLidas = notificacoes.filter(n => !n.lida).length
   const marcarTodasComoLidas = () => setNotificacoes(prev => prev.map(n => ({ ...n, lida: true })))

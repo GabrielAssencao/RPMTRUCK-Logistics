@@ -84,6 +84,12 @@ export default function Plans() {
       background-color: var(--btn-hover-bg) !important;
       color: var(--btn-hover-text) !important;
     }
+    .plan-card {
+      border-color: var(--border);
+    }
+    .plan-card-featured {
+      border-color: ${primary};
+    }
   `
 
   return (
@@ -113,12 +119,7 @@ export default function Plans() {
               initial={{ opacity: 0, y: 30 }}
               animate={inView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.5, delay: i * 0.1 }}
-              className="relative p-8 border transition-all duration-300 flex flex-col justify-between"
-              style={{
-                borderColor: plan.featured ? primary : 'var(--border)',
-                backgroundColor: 'var(--card)',
-                marginTop: plan.featured ? '16px' : '0',
-              }}
+              className={`plan-card relative flex flex-col justify-between border bg-card p-8 transition-all duration-300 ${plan.featured ? 'plan-card-featured mt-4' : ''}`}
             >
               <div>
                 {/* Badge */}

@@ -8,7 +8,7 @@ import CompanyFinancialControl from './CompanyFinancialControl';
 
 export default function CompaniesModule() {
   const { primary } = useTheme();
-  const { empresas, loading } = useAdminData();
+  const { empresas, loading, refresh } = useAdminData();
   const [filtroBusca, setFiltroBusca] = useState('');
   const [empresaSelecionada, setEmpresaSelecionada] = useState(null);
 
@@ -65,7 +65,13 @@ export default function CompaniesModule() {
                       </td>
 
                       <td className="px-5 py-4">
-                        {empresa.plano === 'PREVIEW' ? <span className="text-[10px] px-2 py-1 uppercase font-mono border bg-blue-500/10 text-blue-400 border-blue-500/20">✦ PREVIEW</span> : '...'}
+                        {empresa.plano === 'PREVIEW' ? (
+                          <span className="text-[10px] px-2 py-1 uppercase font-mono border bg-blue-500/10 text-blue-400 border-blue-500/20">✦ PREVIEW</span>
+                        ) : (
+                          <span className={`text-[10px] px-2 py-1 uppercase font-mono border ${empresa.status === 'ATIVO' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
+                            {empresa.status}
+                          </span>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         <button onClick={() => setEmpresaSelecionada(empresa)} className="px-3 py-1.5 text-xs font-black bg-primary text-black">GERENCIAR</button>
@@ -79,7 +85,13 @@ export default function CompaniesModule() {
         ) : (
           <motion.div key="detalhe-view" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
             <button onClick={() => setEmpresaSelecionada(null)} className="mb-4 flex items-center gap-2 text-xs font-black opacity-50"><ArrowLeft size={14}/> VOLTAR</button>
-            <CompanyFinancialControl empresa={empresaSelecionada} onUpdate={() => setEmpresaSelecionada(null)} />
+            <CompanyFinancialControl
+              empresa={empresaSelecionada}
+              onUpdate={(empresaAtualizada) => {
+                setEmpresaSelecionada(atual => ({ ...atual, ...empresaAtualizada }));
+                void refresh();
+              }}
+            />
           </motion.div>
         )}
       </AnimatePresence>

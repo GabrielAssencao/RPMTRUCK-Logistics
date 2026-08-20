@@ -2,7 +2,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-import { requireEmpresaAuth } from '@/lib/auth';
+import { requireEmpresaAuth } from '@/lib/empresaAuth';
 import { criarUsuarioSchema, validateInput } from '@/lib/validation';
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
 

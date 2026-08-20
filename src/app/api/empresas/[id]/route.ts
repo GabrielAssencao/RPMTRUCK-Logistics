@@ -1,60 +1,94 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { PlanoTipo } from '@prisma/client';
-import { requireAdminAuth } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { requireAdminAuth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { notificarAdmins, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
+import {
+  calcularMensalidade,
+  MODULOS,
+  normalizarModulos,
+  obterModulosPadrao,
+  PLANOS,
+  STATUS_EMPRESA,
+} from '@/utils/planos'
 
-// TABELA DE PREÇOS FIXA E OFICIAL DO RPMTRUCK
-const TABELA_PRECOS = {
-  PREVIEW: { base: 0.00, veiculoExtra: 0.00, usuarioExtra: 0.00 },
-  ESSENCIAL: { base: 450.00, veiculoExtra: 30.00, usuarioExtra: 25.00 },
-  AVANCADO: { base: 650.00, veiculoExtra: 30.00, usuarioExtra: 25.00 },
-  ENTERPRISE: { base: 1250.00, veiculoExtra: 30.00, usuarioExtra: 25.00 }
-};
+const atualizarEmpresaSchema = z.object({
+  plano: z.enum(PLANOS).optional(),
+  status: z.enum(STATUS_EMPRESA).optional(),
+  status_motivo: z.string().trim().max(500).nullable().optional(),
+  modulos: z.array(z.enum(MODULOS)).max(MODULOS.length).optional(),
+  usuarios_adicionais: z.coerce.number().int().min(0).max(10_000).optional(),
+  veiculos_adicionais: z.coerce.number().int().min(0).max(100_000).optional(),
+})
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await requireAdminAuth(req);
-  if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status });
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  const auth = await requireAdminAuth(request)
+  if (auth.error || !auth.session) {
+    return NextResponse.json({ erro: auth.error }, { status: auth.status })
+  }
+
+  const parsed = atualizarEmpresaSchema.safeParse(await request.json())
+  if (!parsed.success) {
+    return NextResponse.json({ erro: 'Configuração de plano inválida.' }, { status: 400 })
+  }
+
   try {
-    const { id } = params;
-    const dadosFormulario = await req.json();
+    const empresaAtual = await prisma.empresa.findUnique({ where: { id: params.id } })
+    if (!empresaAtual) {
+      return NextResponse.json({ erro: 'Empresa não encontrada.' }, { status: 404 })
+    }
 
-    // 1. Busca os dados atuais da empresa no Supabase
-    const empresaAtual = await prisma.empresa.findUnique({ where: { id } });
-    if (!empresaAtual) return NextResponse.json({ erro: 'Empresa não encontrada' }, { status: 404 });
+    const plano = parsed.data.plano ?? empresaAtual.plano
+    const status = parsed.data.status ?? empresaAtual.status
+    const mudouStatus = status !== empresaAtual.status
+    const mudouMotivo = parsed.data.status_motivo !== undefined
+      && parsed.data.status_motivo !== empresaAtual.status_motivo
+    const mudouControleAcesso = mudouStatus || mudouMotivo
+    const modulos = parsed.data.modulos
+      ? normalizarModulos(parsed.data.modulos)
+      : parsed.data.plano && parsed.data.plano !== empresaAtual.plano
+        ? obterModulosPadrao(plano)
+        : normalizarModulos(empresaAtual.modulos)
+    const usuariosAdicionais = parsed.data.usuarios_adicionais ?? empresaAtual.usuarios_adicionais
+    const veiculosAdicionais = parsed.data.veiculos_adicionais ?? empresaAtual.veiculos_adicionais
 
-    // Mescla os dados recebidos com os já existentes
-    const planoAlvo = (dadosFormulario.plano || empresaAtual.plano) as PlanoTipo;
-    const modulosAlvo = dadosFormulario.modulos !== undefined ? dadosFormulario.modulos : empresaAtual.modulos;
-    const veiculosExtras = dadosFormulario.veiculos_adicionais !== undefined ? dadosFormulario.veiculos_adicionais : empresaAtual.veiculos_adicionais;
-    const usuariosExtras = dadosFormulario.usuarios_adicionais !== undefined ? dadosFormulario.usuarios_adicionais : empresaAtual.usuarios_adicionais;
-
-    // 2. Coleta as taxas com base na tabela oficial
-    const precosDoPlano = TABELA_PRECOS[planoAlvo];
-
-    // 3. CÁLCULO AUTOMÁTICO DE DEBITO / CRÉDITO
-    // Se for PREVIEW, a conta resulta em 0 automaticamente
-    const novaMensalidade = precosDoPlano.base + 
-      (veiculosExtras * precosDoPlano.veiculoExtra) + 
-      (usuariosExtras * precosDoPlano.usuarioExtra);
-
-    // 4. Salva o novo contrato recalculado de forma transparente
-    const empresaAtualizada = await prisma.empresa.update({
-      where: { id },
+    const empresa = await prisma.empresa.update({
+      where: { id: params.id },
       data: {
-        plano: planoAlvo,
-        modulos: modulosAlvo,
-        veiculos_adicionais: veiculosExtras,
-        usuarios_adicionais: usuariosExtras
-      }
-    });
+        plano,
+        status,
+        modulos,
+        usuarios_adicionais: usuariosAdicionais,
+        veiculos_adicionais: veiculosAdicionais,
+        status_motivo: status === 'ATIVO' ? null : parsed.data.status_motivo,
+        status_alterado_em: mudouControleAcesso ? new Date() : empresaAtual.status_alterado_em,
+        status_alterado_por_id: mudouControleAcesso ? auth.session.userId : empresaAtual.status_alterado_por_id,
+      },
+    })
+
+    const alteracoes = [
+      plano !== empresaAtual.plano ? `plano ${empresaAtual.plano} → ${plano}` : null,
+      status !== empresaAtual.status ? `status ${empresaAtual.status} → ${status}` : null,
+      JSON.stringify(modulos) !== JSON.stringify(normalizarModulos(empresaAtual.modulos)) ? 'módulos atualizados' : null,
+    ].filter(Boolean).join(', ')
+
+    if (alteracoes) {
+      const resultados = await Promise.allSettled([
+        notificarAdmins({ titulo: 'Regras da empresa atualizadas', mensagem: `${empresa.nome}: ${alteracoes}.`, modulo: 'EMPRESAS' }),
+        notificarUsuariosDaEmpresa(empresa.id, { titulo: 'Configuração de acesso atualizada', mensagem: `O SuperAdmin alterou: ${alteracoes}.`, modulo: 'GERAL' }),
+      ])
+      resultados.forEach(resultado => {
+        if (resultado.status === 'rejected') console.error('Falha ao registrar notificação de alteração da empresa:', resultado.reason)
+      })
+    }
 
     return NextResponse.json({
-      ...empresaAtualizada,
-      mensalidade: parseFloat(novaMensalidade.toFixed(2))
-    });
+      sucesso: true,
+      empresa,
+      mensalidade: calcularMensalidade(plano, usuariosAdicionais, veiculosAdicionais),
+    })
   } catch (error) {
-    console.error('Erro ao recalcular faturamento do SaaS:', error);
-    return NextResponse.json({ erro: 'Erro interno no cálculo de faturamento.' }, { status: 500 });
+    console.error('Erro ao atualizar plano da empresa:', error)
+    return NextResponse.json({ erro: 'Erro interno ao salvar a configuração.' }, { status: 500 })
   }
 }

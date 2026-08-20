@@ -18,21 +18,25 @@ import {
   LogOut,
   Menu,
   X,
+  ClipboardList,
   Bell,
   CheckCheck,
   Container as ContainerIcon
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
+import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
+import { normalizarModulos, type ModuloCodigo } from '@/utils/planos'
 
 // ─── Marcadores Operacionais do Cliente (Empresa) ─────────────────────────────
 const NAV_EMPRESA = [
-  { path: '/dashboard/empresa', icon: LayoutDashboard, label: 'PAINEL OPERACIONAL' },
-  { path: '/dashboard/empresa/frota', icon: Truck, label: 'FROTA / VEÍCULOS' },
-  { path: '/dashboard/empresa/motoristas', icon: Users, label: 'MOTORISTAS' },
-  { path: '/dashboard/empresa/containers', icon: ContainerIcon, label: 'CONTAINERS' },
-  { path: '/dashboard/empresa/custos', icon: DollarSign, label: 'CUSTOS / DESPESAS' },
-  { path: '/dashboard/empresa/relatorios', icon: FilePieChart, label: 'RELATÓRIOS' },
-  { path: '/dashboard/empresa/usuarios', icon: UserSquare2, label: 'OPERADORES' },
+  { path: '/dashboard/empresa', icon: LayoutDashboard, label: 'PAINEL OPERACIONAL', modulo: null, notificacaoModulo: 'GERAL' },
+  { path: '/dashboard/empresa/frota', icon: Truck, label: 'FROTA / VEÍCULOS', modulo: 'FROTA', notificacaoModulo: 'FROTA' },
+  { path: '/dashboard/empresa/motoristas', icon: Users, label: 'MOTORISTAS', modulo: 'FROTA', notificacaoModulo: 'MOTORISTAS' },
+  { path: '/dashboard/empresa/containers', icon: ContainerIcon, label: 'CONTAINERS', modulo: 'FROTA', notificacaoModulo: 'CONTAINERS' },
+  { path: '/dashboard/empresa/custos', icon: DollarSign, label: 'CUSTOS / DESPESAS', modulo: 'GESTAO', notificacaoModulo: 'CUSTOS' },
+  { path: '/dashboard/empresa/tarefas', icon: ClipboardList, label: 'TAREFAS', modulo: 'TAREFAS', notificacaoModulo: 'TAREFAS' },
+  { path: '/dashboard/empresa/relatorios', icon: FilePieChart, label: 'RELATÓRIOS', modulo: 'RELATORIOS', notificacaoModulo: 'RELATORIOS' },
+  { path: '/dashboard/empresa/usuarios', icon: UserSquare2, label: 'OPERADORES', modulo: null, notificacaoModulo: 'USUARIOS' },
 ]
 
 const CONFIG_ITEM = { path: '/dashboard/empresa/configuracoes', icon: Settings, label: 'CONFIGURAÇÕES' }
@@ -55,21 +59,54 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarExpandida, setSidebarExpandida] = useState(false)
   const [nomeEmpresa, setNomeEmpresa] = useState('Minha Empresa')
+  const [modulosAtivos, setModulosAtivos] = useState<ModuloCodigo[]>([])
+  const [pendenciasPorModulo, setPendenciasPorModulo] = useState<Record<string, number>>({})
+  const [acessoCarregado, setAcessoCarregado] = useState(false)
 
   // Resgata os dados da sessão guardada no login
   useEffect(() => {
     const userData = localStorage.getItem('@rpmtruck:user')
     if (userData) {
       const parsed = JSON.parse(userData)
-      if (parsed.empresaInfo?.nome) {
-        setNomeEmpresa(parsed.empresaInfo.nome)
-      }
+      const empresaLocal = parsed.empresaInfo ?? parsed.empresa
+      if (empresaLocal?.nome) setNomeEmpresa(empresaLocal.nome)
+      setModulosAtivos(normalizarModulos(empresaLocal?.modulos))
     }
+
+    fetch('/api/empresa/perfil', { cache: 'no-store' })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.erro || 'Acesso suspenso.')
+        setNomeEmpresa(data.empresa.nome)
+        setModulosAtivos(normalizarModulos(data.empresa.modulos))
+
+        const usuarioLocal = userData ? JSON.parse(userData) : {}
+        localStorage.setItem('@rpmtruck:user', JSON.stringify({
+          ...usuarioLocal,
+          empresa: data.empresa,
+          empresaInfo: data.empresa,
+        }))
+      })
+      .catch(() => {
+        localStorage.removeItem('@rpmtruck:user')
+        window.location.replace('/auth/login')
+      })
+      .finally(() => setAcessoCarregado(true))
   }, [])
+
+  useEffect(() => {
+    if (!acessoCarregado) return
+    const pagina = [...NAV_EMPRESA]
+      .sort((a, b) => b.path.length - a.path.length)
+      .find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))
+    if (pagina?.modulo && !modulosAtivos.includes(pagina.modulo as ModuloCodigo)) {
+      window.location.replace('/dashboard/empresa')
+    }
+  }, [acessoCarregado, modulosAtivos, pathname])
 
   const handleLogout = () => {
     localStorage.removeItem('@rpmtruck:user')
-    window.location.href = '/login'
+    window.location.href = '/auth/login'
   }
 
   // ─── Conteúdo Interno da Sidebar ───────────────────────────────────────────
@@ -111,10 +148,12 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
 
           {/* Links de Navegação */}
           <nav className="space-y-1">
-            {NAV_EMPRESA.map((item) => {
+            {NAV_EMPRESA.filter((item) => !item.modulo || modulosAtivos.includes(item.modulo as ModuloCodigo)).map((item) => {
               const active = pathname === item.path
               const Icon = item.icon
               const mostrarBadgeContainers = item.path === '/dashboard/empresa/containers' && totalEmTransito > 0
+              const totalPendencias = pendenciasPorModulo[item.notificacaoModulo] ?? 0
+              const mostrarIndicador = mostrarBadgeContainers || totalPendencias > 0
 
               return (
                 <Link 
@@ -134,7 +173,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
                 >
                   <span className="relative shrink-0 flex items-center justify-center w-5">
                     <Icon size={18} className={active ? 'text-black' : 'text-foreground-muted'} />
-                    {!expandida && mostrarBadgeContainers && (
+                    {!expandida && mostrarIndicador && (
                       <span
                         className="absolute -top-1 -right-1.5 w-2.5 h-2.5 rounded-full border border-black animate-pulse"
                         style={{ backgroundColor: primary }}
@@ -142,13 +181,13 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
                     )}
                   </span>
                   {expandida && <span className="flex-1 truncate">{item.label}</span>}
-                  {expandida && mostrarBadgeContainers && (
+                  {expandida && mostrarIndicador && (
                     <span
                       className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0"
                       style={{ backgroundColor: active ? '#000' : primary, color: active ? primary : '#000' }}
-                      title={`${totalEmTransito} container(s) em trânsito`}
+                      title={`${totalPendencias || totalEmTransito} pendência(s)`}
                     >
-                      {totalEmTransito}
+                      {totalPendencias || totalEmTransito}
                     </span>
                   )}
                 </Link>
@@ -231,7 +270,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
 
           {/* Área de Ferramentas (Sininho, Theme e Infos) */}
           <div className="flex items-center gap-4">
-            <SininhoNotificacoes />
+            <NotificacoesPanel onPendenciasChange={setPendenciasPorModulo} />
             <ThemeToggle />
             <div className="w-px h-6 bg-border hidden sm:block" style={{ backgroundColor: 'var(--border)' }} />
             <div className="hidden sm:flex flex-col text-right font-mono">
@@ -279,17 +318,20 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
 }
 
 // ─── NOVO COMPONENTE DO SININHO (DRAWER LATERAL) ────────────────────────────────────
-function SininhoNotificacoes() {
+function SininhoNotificacoes({
+  resumida = false,
+  exibirTarefas = false,
+}: {
+  resumida?: boolean
+  exibirTarefas?: boolean
+}) {
   const { primary } = useTheme()
   const [aberto, setAberto] = useState(false)
 
-  // Em um cenário real, você buscaria do banco e filtraria pelo plano do cliente
-  const [notificacoes, setNotificacoes] = useState([
-    { id: '1', tipo: 'frota', modulo: 'FROTA', titulo: 'Revisão Pendente', mensagem: 'Veículo VOLVO FH 540 atingiu o prazo de revisão de óleo.', tempo: 'Há 10 min', lida: false },
-    { id: '2', tipo: 'tarefa', modulo: 'TAREFAS', titulo: 'Nova Tarefa Atribuída', mensagem: 'Você foi designado para a retirada do Contêiner MSKU1234567.', tempo: 'Há 1 hora', lida: false },
-  ])
+  const [notificacoes, setNotificacoes] = useState<Array<{ id: string; tipo: string; modulo: string; titulo: string; mensagem: string; tempo: string; lida: boolean }>>([])
 
-  const naoLidas = notificacoes.filter(n => !n.lida).length
+  const notificacoesVisiveis = notificacoes.filter(n => exibirTarefas || n.tipo !== 'tarefa')
+  const naoLidas = notificacoesVisiveis.filter(n => !n.lida).length
   const marcarTodasComoLidas = () => setNotificacoes(prev => prev.map(n => ({ ...n, lida: true })))
 
   return (
@@ -327,7 +369,9 @@ function SininhoNotificacoes() {
               <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'var(--border)' }}>
                 <div className="flex items-center gap-2">
                   <Bell size={18} style={{ color: primary }} />
-                  <span className="text-sm font-black uppercase tracking-wider" style={{ color: 'var(--foreground)' }}>Central de Alertas</span>
+                  <span className="text-sm font-black uppercase tracking-wider" style={{ color: 'var(--foreground)' }}>
+                    {resumida ? 'Resumo de Alertas' : 'Central de Alertas'}
+                  </span>
                 </div>
                 <button onClick={() => setAberto(false)} className="text-foreground-muted hover:text-red-500 transition-colors">
                   <X size={20} />
@@ -345,10 +389,10 @@ function SininhoNotificacoes() {
 
               {/* Lista de Notificações */}
               <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                {notificacoes.length === 0 ? (
+                {notificacoesVisiveis.length === 0 ? (
                   <div className="text-xs text-center py-10 text-foreground-muted">Nenhuma notificação no momento.</div>
                 ) : (
-                  notificacoes.map((n) => (
+                  notificacoesVisiveis.map((n) => (
                     <div key={n.id} className="p-4 border text-xs transition-colors rounded-sm"
                       style={{ 
                         backgroundColor: n.lida ? 'transparent' : `${primary}10`, 
