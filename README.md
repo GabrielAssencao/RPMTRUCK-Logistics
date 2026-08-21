@@ -33,7 +33,7 @@ Cada empresa opera em seu próprio contexto, enquanto o administrador global con
 
 | Camada | Tecnologias |
 | --- | --- |
-| Aplicação | Next.js 14, React 18, TypeScript |
+| Aplicação | Next.js 16, React 18, TypeScript |
 | Interface | Tailwind CSS, Lucide React, Framer Motion, GSAP |
 | 3D | Three.js, React Three Fiber, Drei |
 | Formulários e validação | React Hook Form, Zod |
@@ -90,14 +90,30 @@ Algumas decisões incorporadas ao projeto:
 - credenciais privadas restritas ao ambiente do servidor;
 - cookies de sessão inacessíveis ao JavaScript do navegador;
 - autorização separada de autenticação;
+- sessão revalidada no banco e revogável por usuário;
 - identidade e empresa derivadas da sessão confiável nas APIs protegidas;
 - validação de dados nas fronteiras do backend;
 - senhas armazenadas somente como hashes;
+- redefinição de senha com token de uso único, hash e expiração;
 - respostas públicas agregadas e com exposição mínima;
-- limitação de requisições em operações sensíveis;
+- limitação persistente e atômica de requisições sensíveis no PostgreSQL;
+- auditoria por triggers com autor confiável, estado anterior/novo e logs imutáveis;
+- RLS habilitada e acesso direto negado aos papéis `anon` e `authenticated`;
+- CSP, HSTS em produção e cabeçalhos defensivos aplicados globalmente;
 - `.env` e artefatos locais excluídos do versionamento.
 
-> As políticas de segurança e isolamento devem continuar sendo validadas antes de qualquer implantação em produção, incluindo as políticas RLS do Supabase e as permissões de cada nova API.
+O projeto usa sessão própria validada nas APIs, e não `auth.uid()` do Supabase. Por
+isso, as tabelas não são expostas diretamente pelo SDK do navegador: o Prisma se
+conecta no servidor e as APIs aplicam papel, empresa e plano. Novas tabelas e APIs
+devem manter essa fronteira ou receber uma política RLS explicitamente revisada.
+
+A integração privilegiada com o Storage usa `SUPABASE_SECRET_KEY` no servidor. Essa
+variável recebe a chave moderna `sb_secret_...` e nunca deve possuir o prefixo
+`NEXT_PUBLIC_`. `SUPABASE_SERVICE_ROLE_KEY` é aceito apenas como fallback temporário
+para migração da chave JWT legada. Com a Data API desativada, a migração
+`20260820070000_data_api_desativada` mantém um schema vazio no PostgREST para evitar
+o erro recorrente `3F000`; antes de reativar a Data API, essa configuração precisa
+ser revertida e os schemas expostos devem ser revisados.
 
 ## Estado atual
 
@@ -115,7 +131,7 @@ Essa abordagem permite evoluir a interface e o domínio sem apresentar protótip
 
 ### Pré-requisitos
 
-- Node.js 20 ou superior
+- Node.js 20.9 ou superior
 - npm
 - banco PostgreSQL ou projeto Supabase
 
@@ -133,7 +149,11 @@ Crie o arquivo de ambiente a partir do exemplo:
 Copy-Item .env.example .env
 ```
 
-Preencha as credenciais locais sem versionar o arquivo `.env`. Em seguida:
+Preencha as credenciais locais sem versionar o arquivo `.env`. O `JWT_SECRET` deve
+conter pelo menos 32 caracteres aleatórios; a aplicação não utiliza chave de
+desenvolvimento como fallback. Defina também um `RATE_LIMIT_HASH_SECRET` independente,
+com pelo menos 32 caracteres, para pseudonimizar IPs e e-mails gravados pelo limitador.
+Se ele ainda não existir, o servidor usa temporariamente `JWT_SECRET`. Em seguida:
 
 ```bash
 npx prisma generate
@@ -146,8 +166,8 @@ npm run dev
 A migração `20260819000000_padroniza_planos_e_arquivos_privados` cria o bucket
 `relatorios-privados` como privado, com limite de 10 MB por arquivo. Para habilitar
 upload e download, copie a chave `service_role` de **Supabase > Project Settings > API**
-para `SUPABASE_SERVICE_ROLE_KEY` no ambiente do servidor. Nunca use essa chave em uma
-variável `NEXT_PUBLIC_*`.
+para `SUPABASE_SECRET_KEY` no ambiente do servidor. Prefira a chave moderna
+`sb_secret_...` e nunca use essa chave em uma variável `NEXT_PUBLIC_*`.
 
 O aplicativo aplica um teto interno padrão de 700 MiB para preservar margem dentro
 do 1 GB do plano Free para fotos e outros objetos. O valor pode ser reduzido por

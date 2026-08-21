@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, useScroll, useTransform } from 'framer-motion'
@@ -20,25 +21,29 @@ export default function Navbar() {
   const router = useRouter()
 
   const { scrollY } = useScroll()
-  const navBg     = useTransform(scrollY, [0, 80], ['rgba(8,8,8,0)', 'var(--background)'])
-  const navBorder = useTransform(scrollY, [0, 80], ['rgba(255,255,255,0)', 'var(--border)'])
+  const navChromeOpacity = useTransform(scrollY, [0, 80], [0, 1])
 
   const currentLogo = COLORS.find(c => c.value === primary)?.logoName || 'logoRPMTRUCK_verde.png'
 
   return (
     <>
-      <motion.nav
-        style={{ backgroundColor: navBg, borderBottomColor: navBorder }}
-        className="fixed top-0 left-0 right-0 z-50 border-b backdrop-blur-md"
-      >
-        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between py-4">
+      <nav className="fixed top-0 left-0 right-0 z-50">
+        <motion.div
+          aria-hidden="true"
+          style={{ opacity: navChromeOpacity }}
+          className="absolute inset-0 border-b border-border bg-background pointer-events-none"
+        />
+        <div className="relative max-w-7xl mx-auto px-6 flex items-center justify-between py-4">
 
           {/* LOGO */}
           <Link href="/" className="flex items-center gap-2 select-none">
-            <img 
-              src={`/logos/${currentLogo}`} 
-              alt="RPM Truck Logo" 
-              className="h-8 w-auto object-contain transition-all duration-300" 
+            <Image
+              src={`/logos/${currentLogo}`}
+              alt="RPM Truck Logo"
+              width={32}
+              height={32}
+              className="h-8 w-8 object-contain transition-all duration-300"
+              priority
             />
             <span 
               className="text-xl font-bold tracking-tight text-foreground hidden sm:block ml-2" 
@@ -126,7 +131,7 @@ export default function Navbar() {
             </button>
           </div>
         </div>
-      </motion.nav>
+      </nav>
 
       {/* MENU MOBILE EXPANDIDO (Cores + Login) */}
       {mobileOpen && (

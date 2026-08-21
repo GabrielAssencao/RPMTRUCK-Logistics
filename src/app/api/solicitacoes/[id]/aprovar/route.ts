@@ -6,11 +6,10 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PLANOS_CONFIG as PLANOS_PADRONIZADOS } from '@/utils/planos';
 import { randomBytes } from 'crypto';
+import { executarComAuditoria } from '@/lib/auditoria';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const auth = await requireAdminAuth(request);
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status });
   const { id } = params;
@@ -41,7 +40,7 @@ export async function POST(
     const senhaHash = await bcrypt.hash(senhaProvisoria, salt);
 
     // 2. Executa a TRANSACTION (Garante que se um passo falhar, nenhum dado corrompido é gravado)
-    const resultado = await prisma.$transaction(async (tx) => {
+    const resultado = await executarComAuditoria({ usuarioId: auth.session.userId, origem: 'SUPERADMIN' }, async (tx) => {
       
       // Passo A: Atualizar o status do Lead de entrada
       await tx.solicitacaoAcesso.update({

@@ -11,6 +11,7 @@ import {
 import { notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const registro = await prisma.$transaction(async (tx) => {
+    const registro = await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
       const criado = await tx.relatorioArquivo.create({
         data: {
           id: arquivoId,

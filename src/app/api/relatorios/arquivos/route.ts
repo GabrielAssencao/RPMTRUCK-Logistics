@@ -14,6 +14,7 @@ import {
 } from '@/lib/relatoriosStorage'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { notificarAdmins, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -209,7 +210,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const registro = await prisma.relatorioArquivo.create({
+      const registro = await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.relatorioArquivo.create({
         data: {
           nome_arquivo: nomeArquivo,
           caminho_storage: caminho,
@@ -225,7 +226,7 @@ export async function POST(request: NextRequest) {
           empresaId: auth.empresaId,
           criadoPorId: auth.session.userId,
         },
-      })
+      }))
 
       return NextResponse.json(registro, { status: 201 })
     } catch (error) {

@@ -16,7 +16,8 @@ async function obterNotificacaoAutorizada(request: NextRequest, id: string) {
   return { auth, notificacao }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { auth, notificacao } = await obterNotificacaoAutorizada(request, params.id)
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
   if (!notificacao) return NextResponse.json({ erro: 'Notificação não encontrada.' }, { status: 404 })
@@ -30,7 +31,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }))
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { auth, notificacao } = await obterNotificacaoAutorizada(request, params.id)
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
   if (!notificacao) return NextResponse.json({ erro: 'Notificação não encontrada.' }, { status: 404 })

@@ -113,7 +113,7 @@ export default function ResetPage() {
               <span className="font-bold uppercase tracking-widest block mb-1 flex items-center gap-1" style={{ color: primary, fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}>
                 <ShieldAlert size={12} /> Log de Auditoria
               </span>
-              O chamado de redefinição será enviado diretamente ao painel do administrador geral. Após a liberação, uma chave temporária de máscara <code className="text-foreground font-bold">RPM-XXXXXX</code> será disponibilizada.
+              O chamado será enviado ao administrador geral. Após a aprovação, será disponibilizado um código de uso único, válido por 30 minutos e nunca armazenado em texto legível.
             </div>
 
             <motion.button 
@@ -159,7 +159,7 @@ export default function ResetPage() {
             </p>
           </div>
           <p className="text-xs max-w-xs mx-auto text-foreground-muted leading-relaxed">
-            Aguarde o processamento técnico. Assim que o administrador autenticar o chamado, você poderá entrar na tela de login utilizando o token gerado para registrar sua senha forte definitiva.
+            Aguarde a aprovação. Quando receber o código, acesse “Recuperar senha” para cadastrar uma nova senha forte. O código só poderá ser utilizado uma vez.
           </p>
           <div className="pt-4">
             <Link 

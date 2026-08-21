@@ -7,6 +7,7 @@ import { nomeOperacional, nomePessoa, textoOperacional } from '@/lib/domainValid
 import { prisma } from '@/lib/prisma';
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
 import { PLANOS_CONFIG } from '@/utils/planos';
+import { executarComAuditoria } from '@/lib/auditoria';
 
 const solicitacaoSchema = z.object({
   empresa: nomeOperacional(2, 150),
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
 // ─── 2. ROTA DO CLIENTE: ENVIAR FORMULÁRIO DA LANDING PAGE (POST) ───
 export async function POST(request: NextRequest) {
   try {
-    const bloqueio = applyRateLimit(request, `solicitacao:${getClientIp(request)}`, RATE_LIMITS.SIGNUP.limit, RATE_LIMITS.SIGNUP.windowMs);
+    const bloqueio = await applyRateLimit(request, `solicitacao:${getClientIp(request)}`, RATE_LIMITS.SIGNUP.limit, RATE_LIMITS.SIGNUP.windowMs);
     if (bloqueio) return bloqueio;
     const parsed = solicitacaoSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ erro: 'Revise os dados da solicitação.' }, { status: 400 });
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const novaSolicitacao = await prisma.solicitacaoAcesso.create({
+    const novaSolicitacao = await executarComAuditoria({ origem: 'PUBLIC_API' }, (tx) => tx.solicitacaoAcesso.create({
       data: {
         empresa,
         responsavel,
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
         contatoPref: contatoPref || 'email',
         status: 'PENDENTE'
       }
-    });
+    }));
 
     await notificarAdmins({ titulo: 'Nova solicitação de acesso', mensagem: `${novaSolicitacao.empresa} solicitou o plano ${novaSolicitacao.plano}.`, modulo: 'ACESSO' });
 

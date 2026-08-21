@@ -105,7 +105,7 @@ export default function LoginPage() {
         setError('')
         if (step > 0) setStep(s => s === 3 ? 1 : s - 1) 
       }}
-      onForgot={() => setTab('forgot')}
+      onForgot={() => { window.location.href = '/auth/recuperar-senha' }}
       onReset={resetLogin}
       primary={primary}
       isLight={isLight}

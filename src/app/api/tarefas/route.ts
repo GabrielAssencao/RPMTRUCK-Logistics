@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import { textoOperacional } from '@/lib/domainValidation'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
   })
   if (!responsavel) return NextResponse.json({ erro: 'Responsável não pertence à empresa.' }, { status: 400 })
 
-  const tarefa = await prisma.$transaction(async tx => {
+  const tarefa = await executarComAuditoria({ usuarioId: auth.session.userId }, async tx => {
     const criada = await tx.tarefa.create({
       data: {
         titulo: parsed.data.titulo,

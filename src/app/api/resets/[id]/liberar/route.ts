@@ -1,80 +1,78 @@
-// src/app/api/resets/[id]/liberar/route.ts
-import { NextResponse } from 'next/server';
-import bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
-import { requireAdminAuth } from '@/lib/auth';
-import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
+import { requireAdminAuth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { executarComAuditoria } from '@/lib/auditoria'
+import {
+  gerarTokenReset,
+  hashTokenReset,
+  RESET_TOKEN_TTL_MS,
+} from '@/lib/resetToken'
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const auth = await requireAdminAuth(request);
-  if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status });
-  const { id } = params;
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const auth = await requireAdminAuth(request)
+  if (auth.error || !auth.session) {
+    return NextResponse.json({ erro: auth.error }, { status: auth.status })
+  }
+
+  const token = gerarTokenReset()
+  const tokenHash = hashTokenReset(token)
+  const expiraEm = new Date(Date.now() + RESET_TOKEN_TTL_MS)
 
   try {
-    // 1. Localiza a requisição de reset de senha
-    const chamadoReset = await prisma.resetSenha.findUnique({
-      where: { id }
-    });
-
-    if (!chamadoReset) {
-      return NextResponse.json({ erro: 'Chamado de segurança não localizado.' }, { status: 404 });
+    const reset = await prisma.resetSenha.findUnique({
+      where: { id: params.id },
+      select: { id: true, email: true, status: true },
+    })
+    if (!reset) {
+      return NextResponse.json({ erro: 'Solicitação de segurança não encontrada.' }, { status: 404 })
+    }
+    if (reset.status !== 'PENDENTE') {
+      return NextResponse.json({ erro: 'Esta solicitação já foi processada ou revogada.' }, { status: 409 })
     }
 
-    if (chamadoReset.status !== 'PENDENTE') {
-      return NextResponse.json({ erro: 'Este reset de credenciais já foi processado ou revogado.' }, { status: 400 });
-    }
-
-    // 2. Gera a String do Token Temporário para Cópia (Igual ao formato do Front)
-    const chaveTemporaria = `RPM-${randomBytes(6).toString('base64url')}`;
-    
-    // Criptografa a nova senha provisória para salvar no cadastro do usuário
-    const salt = await bcrypt.genSalt(10);
-    const novaSenhaHash = await bcrypt.hash(chaveTemporaria, salt);
-
-    // 3. Executa a TRANSACTION de atualização de segurança
-    await prisma.$transaction(async (tx) => {
-      const usuario = await tx.usuario.findUnique({
-        where: { email: chamadoReset.email },
-        select: { id: true, empresaId: true },
-      });
-      if (!usuario) throw new Error('Usuário do reset não encontrado.');
-      // Atualiza o log do reset para concluído e anexa a chave para auditoria do Admin
-      await tx.resetSenha.update({
-        where: { id },
+    await executarComAuditoria({ usuarioId: auth.session.userId, origem: 'SUPERADMIN' }, async (tx) => {
+      const atualizado = await tx.resetSenha.updateMany({
+        where: { id: reset.id, status: 'PENDENTE' },
         data: {
-          status: 'CONCLUIDO',
-          chave: chaveTemporaria
-        }
-      });
-      // Força a alteração da senha real do usuário alvo na tabela de credenciais
-      await tx.usuario.update({
-        where: { email: chamadoReset.email },
-        data: { senha_hash: novaSenhaHash }
-      });
+          status: 'APROVADO',
+          chave: null,
+          token_hash: tokenHash,
+          token_expira_em: expiraEm,
+          token_usado_em: null,
+        },
+      })
+      if (atualizado.count !== 1) throw new Error('RESET_JA_PROCESSADO')
+
+      const usuario = await tx.usuario.findUnique({
+        where: { email: reset.email },
+        select: { id: true, empresaId: true },
+      })
+      if (!usuario) throw new Error('USUARIO_RESET_NAO_ENCONTRADO')
+
       await tx.notificacao.create({
         data: {
-          titulo: 'Senha temporária liberada',
-          mensagem: 'O SuperAdmin concluiu sua solicitação de redefinição de senha.',
+          titulo: 'Redefinição de senha aprovada',
+          mensagem: 'Um código de uso único foi liberado. Ele expira em 30 minutos.',
           modulo: 'GERAL',
           empresaId: usuario.empresaId,
           usuarioId: usuario.id,
         },
-      });
-    });
+      })
+    })
 
-    // O retorno entrega a chave limpa para o Admin copiar com o botão "LIBERAR RESET"
     return NextResponse.json({
       sucesso: true,
-      chave: chaveTemporaria,
-      mensagem: 'Nova senha aplicada e injetada no cadastro do usuário.'
-    }, { status: 200 });
-
+      token,
+      expiraEm: expiraEm.toISOString(),
+      mensagem: 'Código de uso único liberado. Ele não será armazenado nem exibido novamente.',
+    })
   } catch (error) {
-    console.error('Erro ao processar liberação de reset:', error);
-    return NextResponse.json({ erro: 'Erro interno ao reconfigurar chaves no banco.' }, { status: 500 });
+    if (error instanceof Error && error.message === 'RESET_JA_PROCESSADO') {
+      return NextResponse.json({ erro: 'Esta solicitação já foi processada.' }, { status: 409 })
+    }
+    console.error('Erro ao aprovar redefinição de senha:', error)
+    return NextResponse.json({ erro: 'Não foi possível aprovar a redefinição.' }, { status: 500 })
   }
 }

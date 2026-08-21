@@ -3,6 +3,7 @@ import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { nomeOperacional } from '@/lib/domainValidation'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,7 +49,7 @@ export async function PATCH(request: NextRequest) {
   const parsed = atualizarPerfilSchema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ erro: 'Dados da empresa inválidos.' }, { status: 400 })
   try {
-    const empresa = await prisma.empresa.update({ where: { id: auth.session.empresaId }, data: parsed.data })
+    const empresa = await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.empresa.update({ where: { id: auth.session!.empresaId! }, data: parsed.data }))
     return NextResponse.json({ empresa })
   } catch {
     return NextResponse.json({ erro: 'CNPJ ou e-mail já utilizado por outra empresa.' }, { status: 409 })

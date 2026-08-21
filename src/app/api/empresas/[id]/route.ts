@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { requireAdminAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notificarAdmins, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
+import { executarComAuditoria } from '@/lib/auditoria'
 import {
   calcularMensalidade,
   MODULOS,
@@ -21,7 +22,8 @@ const atualizarEmpresaSchema = z.object({
   veiculos_adicionais: z.coerce.number().int().min(0).max(100_000).optional(),
 })
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const auth = await requireAdminAuth(request)
   if (auth.error || !auth.session) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
@@ -52,7 +54,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const usuariosAdicionais = parsed.data.usuarios_adicionais ?? empresaAtual.usuarios_adicionais
     const veiculosAdicionais = parsed.data.veiculos_adicionais ?? empresaAtual.veiculos_adicionais
 
-    const empresa = await prisma.empresa.update({
+    const empresa = await executarComAuditoria({ usuarioId: auth.session!.userId, origem: 'SUPERADMIN' }, (tx) => tx.empresa.update({
       where: { id: params.id },
       data: {
         plano,
@@ -62,9 +64,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         veiculos_adicionais: veiculosAdicionais,
         status_motivo: status === 'ATIVO' ? null : parsed.data.status_motivo,
         status_alterado_em: mudouControleAcesso ? new Date() : empresaAtual.status_alterado_em,
-        status_alterado_por_id: mudouControleAcesso ? auth.session.userId : empresaAtual.status_alterado_por_id,
+        status_alterado_por_id: mudouControleAcesso ? auth.session!.userId : empresaAtual.status_alterado_por_id,
       },
-    })
+    }))
 
     const alteracoes = [
       plano !== empresaAtual.plano ? `plano ${empresaAtual.plano} → ${plano}` : null,

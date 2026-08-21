@@ -5,6 +5,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { criarNotificacao } from '@/lib/notificacoes'
 import { nomePessoa } from '@/lib/domainValidation'
+import { Prisma } from '@prisma/client'
+import {
+  criarUsuarioEmpresaComLimite,
+  LimiteUsuariosError,
+} from '@/lib/usuariosEmpresa'
 
 const criarOperadorSchema = z.object({
   nome: nomePessoa(3, 100),
@@ -61,20 +66,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'E-mail já cadastrado no sistema.' }, { status: 409 })
     }
 
-    const usuario = await prisma.usuario.create({
-      data: {
-        nome,
-        email,
-        senha_hash: await bcrypt.hash(senha, 10),
-        role,
-        acessoDashboardGeral,
-        empresaId: session.empresaId,
-      },
-      select: { id: true, nome: true, email: true, role: true, acessoDashboardGeral: true, criado_em: true }
+    const usuario = await criarUsuarioEmpresaComLimite({
+      empresaId: session.empresaId,
+      nome,
+      email,
+      senhaHash: await bcrypt.hash(senha, 10),
+      role,
+      acessoDashboardGeral,
+      criadoPorId: session.userId,
     })
     await criarNotificacao({ titulo: 'Acesso criado', mensagem: 'Seu usuário foi adicionado à empresa. Revise suas tarefas e notificações no painel.', modulo: 'USUARIOS', empresaId: session.empresaId, usuarioId: usuario.id })
     return NextResponse.json(usuario, { status: 201 })
   } catch (cause) {
+    if (cause instanceof LimiteUsuariosError) {
+      return NextResponse.json({ error: cause.message }, { status: 409 })
+    }
+    if (cause instanceof Prisma.PrismaClientKnownRequestError) {
+      if (cause.code === 'P2002') return NextResponse.json({ error: 'E-mail já cadastrado no sistema.' }, { status: 409 })
+      if (cause.code === 'P2034') return NextResponse.json({ error: 'Cadastro concorrente detectado. Tente novamente.' }, { status: 409 })
+    }
     console.error('Erro ao criar usuário:', cause)
     return NextResponse.json({ error: 'Erro interno ao criar usuário.' }, { status: 500 })
   }

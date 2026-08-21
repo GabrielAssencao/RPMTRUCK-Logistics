@@ -7,6 +7,7 @@ import {
   salvarFotoMotorista,
 } from '@/lib/motoristaFotos'
 import { prisma } from '@/lib/prisma'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -15,8 +16,9 @@ function podeGerenciarMotoristas(role: string) {
   return role === 'GESTOR_EMPRESA' || role === 'GESTOR' || role === 'OPERADOR'
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
   if (auth.error || !auth.session?.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
@@ -38,10 +40,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     const upload = await salvarFotoMotorista(auth.session.empresaId, motorista.id, foto)
-    await prisma.motorista.update({
+    await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.motorista.update({
       where: { id: motorista.id },
       data: { foto_url: upload.caminho },
-    })
+    }))
     if (motorista.foto_url && motorista.foto_url !== upload.caminho) {
       await removerFotoMotorista(motorista.foto_url).catch((error) => console.error('Falha ao remover foto anterior:', error))
     }
@@ -62,8 +64,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
   if (auth.error || !auth.session?.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
@@ -77,10 +80,9 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   })
   if (!motorista) return NextResponse.json({ erro: 'Motorista não encontrado.' }, { status: 404 })
 
-  await prisma.motorista.update({ where: { id: motorista.id }, data: { foto_url: null } })
+  await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.motorista.update({ where: { id: motorista.id }, data: { foto_url: null } }))
   await removerFotoMotorista(motorista.foto_url).catch((error) => {
     console.error('Foto removida do cadastro, mas permaneceu órfã no Storage:', error)
   })
   return NextResponse.json({ sucesso: true })
 }
-

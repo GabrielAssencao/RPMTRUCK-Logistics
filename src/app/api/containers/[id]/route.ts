@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
+import { executarComAuditoria } from '@/lib/auditoria'
+import type { Container } from '@prisma/client'
 import {
   calcularComissao,
   codigoContainerSchema,
@@ -33,7 +35,7 @@ const schema = z.object({
   if (ocupacao > 100) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['itensConteudo'], message: 'A ocupação total não pode ultrapassar 100%.' })
 })
 
-const serializar = (container: any) => ({
+const serializar = (container: Container) => ({
   id: container.id,
   data: container.data.toISOString().slice(0, 10),
   codigo: container.codigo,
@@ -51,8 +53,9 @@ const serializar = (container: any) => ({
   itensConteudo: container.itens_conteudo || [],
 })
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
   if (auth.error || !auth.session?.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
@@ -76,7 +79,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const frete = dados.frete ?? atual.frete
   const percentualComissao = dados.percentualComissao ?? atual.percentual_comissao
 
-  const container = await prisma.$transaction(async (tx) => {
+  const container = await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
     const atualizado = await tx.container.update({
       where: { id: atual.id },
       data: {
@@ -120,8 +123,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   return NextResponse.json(serializar(container))
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
   if (auth.error || !auth.session?.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
@@ -136,6 +140,6 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   }
 
   // O registro mínimo da movimentação permanece por exigência de auditoria.
-  await prisma.container.delete({ where: { id: atual.id } })
+  await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.container.delete({ where: { id: atual.id } }))
   return NextResponse.json({ sucesso: true })
 }

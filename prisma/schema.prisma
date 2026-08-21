@@ -42,6 +42,7 @@ enum StatusSolicitacao {
 
 enum StatusReset {
   PENDENTE
+  APROVADO
   CONCLUIDO
   REJEITADO
 }
@@ -109,13 +110,18 @@ model SolicitacaoAcesso {
 }
 
 model ResetSenha {
-  id            String      @id @default(uuid())
-  email         String
-  status        StatusReset @default(PENDENTE)
-  chave         String? // Chave temporária gerada via Admin (Ex: RPM-123456)
-  criado_em     DateTime    @default(now())
-  atualizado_em DateTime    @updatedAt
+  id              String      @id @default(uuid())
+  email           String
+  status          StatusReset @default(PENDENTE)
+  chave           String? // Coluna legada; novas chaves nunca são armazenadas em texto puro.
+  token_hash      String?
+  token_expira_em DateTime?
+  token_usado_em  DateTime?
+  criado_em       DateTime    @default(now())
+  atualizado_em   DateTime    @updatedAt
 
+  @@index([email, status])
+  @@index([token_expira_em])
   @@map("resets_senha")
 }
 
@@ -170,6 +176,7 @@ model Usuario {
   senha_hash           String // Hash de segurança (bcrypt)
   role                 Role    @default(GESTOR_EMPRESA)
   acessoDashboardGeral Boolean @default(false) @map("acesso_dashboard_geral")
+  sessaoVersao         Int     @default(0) @map("sessao_versao")
 
   // Se for nulo, indica que o usuário é da equipe interna RPMTruck (Geral Admin)
   empresaId String?
@@ -522,4 +529,33 @@ model RelatorioArquivo {
   @@index([empresaId, criado_em])
   @@index([empresaId, periodo_inicio, periodo_fim])
   @@map("relatorios_arquivados")
+}
+
+model RateLimit {
+  chaveHash    String   @id @map("chave_hash")
+  contador     Int
+  janelaInicio DateTime @map("janela_inicio")
+  expiraEm     DateTime @map("expira_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@index([expiraEm])
+  @@map("rate_limits")
+}
+
+model AuditoriaLog {
+  id              String   @id @default(uuid())
+  tabela          String
+  acao            String
+  registroId      String?  @map("registro_id")
+  empresaId       String?  @map("empresa_id")
+  usuarioId       String?  @map("usuario_id")
+  dadosAnteriores Json?    @map("dados_anteriores")
+  dadosNovos      Json?    @map("dados_novos")
+  origem          String   @default("DATABASE")
+  criadoEm        DateTime @default(now()) @map("criado_em")
+
+  @@index([empresaId, criadoEm])
+  @@index([tabela, registroId, criadoEm])
+  @@index([usuarioId, criadoEm])
+  @@map("auditoria_logs")
 }

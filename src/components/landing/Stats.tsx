@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useEffect, useState } from 'react'
-import { motion, useInView } from 'framer-motion'
+import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 
 // Estado neutro: evita publicar números fictícios quando o banco estiver indisponível.
@@ -16,33 +16,34 @@ function Counter({ target, suffix }: { target: number; suffix: string }) {
   const [count, setCount] = useState(0)
   const ref = useRef<HTMLSpanElement>(null)
   const inView = useInView(ref, { once: true, margin: '-40px' })
+  const prefersReducedMotion = useReducedMotion()
 
   useEffect(() => {
-    if (!inView) return
-    let start = 0
+    if (!inView || target <= 0 || prefersReducedMotion) return
+
     const duration = 1500
-    
-    if (target === 0) {
-      setCount(0)
-      return
-    }
-    
-    const step = Math.ceil(target / (duration / 16))
-    const timer = setInterval(() => {
-      start += step
-      if (start >= target) {
-        setCount(target)
-        clearInterval(timer)
-      } else {
-        setCount(start)
+    const startedAt = performance.now()
+    let animationFrame = 0
+
+    const updateCount = (now: number) => {
+      const progress = Math.min((now - startedAt) / duration, 1)
+      const easedProgress = 1 - Math.pow(1 - progress, 3)
+      setCount(Math.round(target * easedProgress))
+
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(updateCount)
       }
-    }, 16)
-    return () => clearInterval(timer)
-  }, [inView, target])
+    }
+
+    animationFrame = requestAnimationFrame(updateCount)
+    return () => cancelAnimationFrame(animationFrame)
+  }, [inView, prefersReducedMotion, target])
+
+  const displayedCount = inView && prefersReducedMotion ? target : count
 
   return (
     <span ref={ref}>
-      {count}{suffix}
+      {displayedCount}{suffix}
     </span>
   )
 }

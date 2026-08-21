@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,7 +9,8 @@ function gestorAutorizado(role: string) {
   return role === 'GESTOR_EMPRESA' || role === 'GESTOR'
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const auth = await requireEmpresaAuth(request)
   if (auth.error || !auth.session || !auth.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
@@ -29,13 +31,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ erro: 'Este processo de arquivamento já foi concluído.' }, { status: 409 })
   }
 
-  const confirmado = await prisma.relatorioArquivo.update({
+  const confirmado = await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.relatorioArquivo.update({
     where: { id: arquivo.id },
     data: {
       status: 'CONFIRMADO_GESTOR',
       confirmado_em: new Date(),
       confirmadoPorId: auth.session.userId,
     },
-  })
+  }))
   return NextResponse.json(confirmado)
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useGLTF } from '@react-three/drei'
-import { useRef, useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { useTheme } from '@/contexts/ThemeContext'
 
@@ -12,94 +12,61 @@ interface VolvoTruckProps {
   [key: string]: unknown
 }
 
+const MODEL_PATH = '/models/Volvo-opt.glb'
+const DRACO_DECODER_PATH = '/draco/gltf/'
+
 export function VolvoTruck({
   position = [0, 0, 0],
   rotation = [0, 0, 0],
   scale = 1,
   ...props
 }: VolvoTruckProps) {
-  const group = useRef<THREE.Group>(null)
   const { primary } = useTheme()
+  const { scene } = useGLTF(MODEL_PATH, DRACO_DECODER_PATH)
 
-  const modelPath = '/models/Volvo.glb'
-  const { nodes, materials } = useGLTF(modelPath) as any
+  const { model, ownedMaterials } = useMemo(() => {
+    const clonedScene = scene.clone(true)
+    const clonedMaterials: THREE.Material[] = []
 
-  // ── CORREÇÃO: atualiza APENAS a cor, sem recriar o material ──────────────────
-  // Antes: `materials.paint.color = new THREE.Color(primary)` funcionava,
-  // mas quando o componente re-renderizava por mudança de tema (isLight),
-  // o material era recriado do zero e perdia o estado.
-  // Agora: usamos uma ref para garantir que só atualizamos quando primary muda.
-  const lastPrimary = useRef<string>('')
+    clonedScene.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return
+
+      // ContactShadows fornece a sombra de solo sem ativar shadow maps globais.
+      object.castShadow = false
+      object.receiveShadow = false
+
+      const sourceMaterials = Array.isArray(object.material)
+        ? object.material
+        : [object.material]
+
+      const mappedMaterials = sourceMaterials.map((material) => {
+        if (material.name !== 'paint') return material
+
+        const paintMaterial = material.clone()
+        if (paintMaterial instanceof THREE.MeshStandardMaterial) {
+          paintMaterial.color.set(primary)
+        }
+        clonedMaterials.push(paintMaterial)
+        return paintMaterial
+      })
+
+      object.material = Array.isArray(object.material)
+        ? mappedMaterials
+        : mappedMaterials[0]
+    })
+
+    return { model: clonedScene, ownedMaterials: clonedMaterials }
+  }, [primary, scene])
 
   useEffect(() => {
-    if (!materials?.paint) return
-    if (lastPrimary.current === primary) return  // evita update desnecessário
-
-    lastPrimary.current = primary
-
-    // Cria a cor uma vez e reatribui
-    const color = new THREE.Color(primary)
-    materials.paint.color.set(color)
-    materials.paint.needsUpdate = true
-  }, [primary, materials])
-
-  const s = typeof scale === 'number' ? scale * 2.5 : scale
+    return () => ownedMaterials.forEach((material) => material.dispose())
+  }, [ownedMaterials])
 
   return (
-    <group ref={group} {...props} position={position} rotation={rotation} dispose={null}>
-      <group rotation={[-Math.PI / 2, 0, 0]} scale={s}>
-        <group rotation={[Math.PI / 2, 0, 0]}>
-
-          {/* black_matte */}
-          <group position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003}>
-            <mesh castShadow receiveShadow geometry={nodes.Object_6?.geometry}  material={materials.black_matte} />
-            <mesh castShadow receiveShadow geometry={nodes.Object_7?.geometry}  material={materials.black_matte} />
-            <mesh castShadow receiveShadow geometry={nodes.Object_8?.geometry}  material={materials.black_matte} />
-            <mesh castShadow receiveShadow geometry={nodes.Object_9?.geometry}  material={materials.black_matte} />
-            <mesh castShadow receiveShadow geometry={nodes.Object_10?.geometry} material={materials.black_matte} />
-            <mesh castShadow receiveShadow geometry={nodes.Object_11?.geometry} material={materials.black_matte} />
-          </group>
-
-          {/* chrome */}
-          <group position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003}>
-            <mesh castShadow receiveShadow geometry={nodes.Object_13?.geometry} material={materials.chrome} />
-            <mesh castShadow receiveShadow geometry={nodes.Object_14?.geometry} material={materials.chrome} />
-          </group>
-
-          {/* paint — cor dinâmica */}
-          <group position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003}>
-            <mesh castShadow receiveShadow geometry={nodes.Object_16?.geometry} material={materials.paint} />
-            <mesh castShadow receiveShadow geometry={nodes.Object_17?.geometry} material={materials.paint} />
-            <mesh castShadow receiveShadow geometry={nodes.Object_18?.geometry} material={materials.paint} />
-          </group>
-
-          {/* chrome 2 */}
-          <group position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003}>
-            <mesh castShadow receiveShadow geometry={nodes.Object_20?.geometry} material={materials.chrome} />
-            <mesh castShadow receiveShadow geometry={nodes.Object_21?.geometry} material={materials.chrome} />
-          </group>
-
-          {/* restante */}
-          <mesh castShadow receiveShadow geometry={nodes.Object_4?.geometry}  material={materials['Plane.035__0']} position={[0, 0, -0.102]} scale={[0.606, 0.477, 1.148]} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_23?.geometry} material={materials.black_paint}        position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_25?.geometry} material={materials.glass}              position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_27?.geometry} material={materials.lights}             position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_29?.geometry} material={materials.glass}              position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_31?.geometry} material={materials.tire}               position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_33?.geometry} material={materials.black_matte}        position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_35?.geometry} material={materials['black_matte.002']} position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_37?.geometry} material={materials.red_glass}          position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_39?.geometry} material={materials['black_matte.003']} position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_41?.geometry} material={materials['black_matte.002']} position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_43?.geometry} material={materials.glass}              position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_45?.geometry} material={materials.red_glass}          position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_47?.geometry} material={materials.black_paint}        position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-          <mesh castShadow receiveShadow geometry={nodes.Object_49?.geometry} material={materials['black_matte.001']} position={[0, 0, -0.006]} rotation={[Math.PI / 2, 0, 0]} scale={0.003} />
-
-        </group>
-      </group>
+    <group {...props} position={position} rotation={rotation} dispose={null}>
+      <primitive object={model} scale={scale} />
     </group>
   )
 }
 
-useGLTF.preload('/models/Volvo.glb')
+useGLTF.preload(MODEL_PATH, DRACO_DECODER_PATH)

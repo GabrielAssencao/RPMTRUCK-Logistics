@@ -1,12 +1,14 @@
 'use client'
 
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Environment, ContactShadows } from '@react-three/drei'
-import { Suspense, useRef, useEffect, useMemo } from 'react'
+import { ContactShadows, PerformanceMonitor } from '@react-three/drei'
+import { Suspense, useRef, useEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { useRouter } from 'next/navigation'
+import { useReducedMotion } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { VolvoTruck } from './VolvoTruck'
+import { TruckEnvironment } from './TruckEnvironment'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
@@ -75,6 +77,28 @@ interface Fragment {
   maxLifespan: number
 }
 
+function deterministicValue(index: number, salt: number) {
+  const value = Math.sin((index + 1) * 12.9898 + salt * 78.233) * 43758.5453
+  return value - Math.floor(value)
+}
+
+function createOrbitData(geometryCount: number, palette: string[]): CubeItem[] {
+  return Array.from({ length: 8 }, (_, index) => ({
+    radius: 2.5 + (index % 4) * 0.7,
+    angle: (index / 8) * Math.PI * 2,
+    y: 1.4 + (deterministicValue(index, 0) - 0.5) * 3.2,
+    depth: (deterministicValue(index, 1) - 0.5) * 7,
+    scale: 0.5 + deterministicValue(index, 2) * 0.9,
+    speed: 0.35 + deterministicValue(index, 3),
+    phase: deterministicValue(index, 4) * Math.PI * 2,
+    geometryIndex: index % geometryCount,
+    color: palette[index % palette.length],
+    alpha: 0.8,
+    visible: true,
+    broken: false,
+  }))
+}
+
 function GeometricField({ animStateRef, color, isLight }: { animStateRef: React.MutableRefObject<AnimState>; color: string; isLight: boolean }) {
   const groupRef = useRef<THREE.Group>(null)
   const meshesRef = useRef<THREE.Mesh[]>([])
@@ -104,39 +128,15 @@ function GeometricField({ animStateRef, color, isLight }: { animStateRef: React.
     [color, isLight]
   )
 
-  const orbitData = useRef<CubeItem[]>(
-    Array.from({ length: 8 }, (_, index) => ({
-      radius: 2.5 + (index % 4) * 0.7,
-      angle: (index / 8) * Math.PI * 2,
-      y: 1.4 + (Math.random() - 0.5) * 3.2,
-      depth: (Math.random() - 0.5) * 7,
-      scale: 0.5 + Math.random() * 0.9,
-      speed: 0.35 + Math.random() * 1,
-      phase: Math.random() * Math.PI * 2,
-      geometryIndex: index % geometrySet.length,
-      color: palette[index % palette.length],
-      alpha: 0.8,
-      visible: true,
-      broken: false,
-    }))
+  const renderedOrbitData = useMemo(
+    () => createOrbitData(geometrySet.length, palette),
+    [geometrySet, palette]
   )
+  const orbitData = useRef<CubeItem[]>(renderedOrbitData.map((item) => ({ ...item })))
 
   useEffect(() => {
-    orbitData.current = Array.from({ length: 8 }, (_, index) => ({
-      radius: 2.5 + (index % 4) * 0.7,
-      angle: (index / 8) * Math.PI * 2,
-      y: 1.4 + (Math.random() - 0.5) * 3.2,
-      depth: (Math.random() - 0.5) * 7,
-      scale: 0.5 + Math.random() * 0.9,
-      speed: 0.35 + Math.random() * 1,
-      phase: Math.random() * Math.PI * 2,
-      geometryIndex: index % geometrySet.length,
-      color: palette[index % palette.length],
-      alpha: 0.8,
-      visible: true,
-      broken: false,
-    }))
-  }, [color, isLight, geometrySet, palette])
+    orbitData.current = renderedOrbitData.map((item) => ({ ...item }))
+  }, [renderedOrbitData])
 
   const createFragments = (position: THREE.Vector3, color: string, scale: number) => {
     const fragmentCount = 4 + Math.floor(Math.random() * 3)
@@ -225,12 +225,6 @@ function GeometricField({ animStateRef, color, isLight }: { animStateRef: React.
       mesh.rotation.y += delta * 0.8
       mesh.scale.setScalar(item.scale * breath)
 
-      const material = mesh.material as THREE.MeshStandardMaterial
-      if (material) {
-        material.color.set(item.color)
-        material.emissive.set(item.color)
-        material.opacity = item.alpha
-      }
     })
 
     // Update fragments with gravity and fade
@@ -242,7 +236,7 @@ function GeometricField({ animStateRef, color, isLight }: { animStateRef: React.
 
       // Apply gravity
       frag.velocity.y -= 9.8 * delta * 0.3
-      frag.position.add(frag.velocity.clone().multiplyScalar(delta))
+      frag.position.addScaledVector(frag.velocity, delta)
 
       // Apply rotation
       frag.rotation.x += frag.rotationVelocity.x * delta
@@ -277,7 +271,7 @@ function GeometricField({ animStateRef, color, isLight }: { animStateRef: React.
   return (
     <group ref={groupRef}>
       {/* Main cubes */}
-      {orbitData.current.map((item, index) => (
+      {renderedOrbitData.map((item, index) => (
         <mesh
           key={`cube-${index}`}
           visible={item.visible}
@@ -334,14 +328,26 @@ function SceneHelpers({
 }) {
   const gridRef = useRef<THREE.GridHelper>(null)
   const pointLightRef = useRef<THREE.PointLight>(null)
+  const cameraStateRef = useRef({ z: Number.NaN, lookAtY: Number.NaN })
 
   useFrame((state) => {
     const s = animStateRef.current
 
-    // Update camera zoom / position dynamically based on scroll
-    state.camera.position.z = 8 * (1 / s.cameraZoom)
-    state.camera.lookAt(0, s.truckY + 1.2, 0)
-    state.camera.updateProjectionMatrix()
+    // Atualiza a câmera somente quando os valores controlados pelo scroll mudam.
+    const cameraZ = 8 / s.cameraZoom
+    const lookAtY = s.truckY + 1.2
+    const previousCameraState = cameraStateRef.current
+
+    if (
+      !Number.isFinite(previousCameraState.z) ||
+      Math.abs(previousCameraState.z - cameraZ) > 0.0001 ||
+      Math.abs(previousCameraState.lookAtY - lookAtY) > 0.0001
+    ) {
+      state.camera.position.z = cameraZ
+      state.camera.lookAt(0, lookAtY, 0)
+      previousCameraState.z = cameraZ
+      previousCameraState.lookAtY = lookAtY
+    }
 
     // Update grid helper position
     if (gridRef.current) {
@@ -359,7 +365,7 @@ function SceneHelpers({
   return (
     <>
       <ambientLight intensity={isLight ? 0.65 : 0.04} />
-      <directionalLight position={[8, 8, 5]} intensity={isLight ? 1.4 : 0.15} castShadow />
+      <directionalLight position={[8, 8, 5]} intensity={isLight ? 1.4 : 0.15} />
       <pointLight ref={pointLightRef} position={[3, 1, 4]} color={primary} distance={15} decay={1.5} />
       <spotLight position={[-5, 5, -5]} color={primary} intensity={isLight ? 0 : 10} angle={0.6} penumbra={1} distance={18} />
 
@@ -368,6 +374,7 @@ function SceneHelpers({
         opacity={isLight ? 0.2 : 0.8}
         scale={18}
         blur={2.5}
+        resolution={256}
         color="#000"
       />
       <gridHelper
@@ -383,6 +390,9 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
   const theme = useTheme()
   const { isLight, primary } = theme
   const router = useRouter()
+  const prefersReducedMotion = useReducedMotion()
+  const [isSceneAnimating, setIsSceneAnimating] = useState(true)
+  const [maxSceneDpr, setMaxSceneDpr] = useState(1.25)
 
   // Initial animation parameters
   const animStateRef = useRef<AnimState>({
@@ -405,19 +415,31 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
     ? `radial-gradient(circle at 50% 32%, ${primary}20 0%, rgba(255,255,255,0.68) 18%, rgba(255,255,255,0.42) 32%, rgba(255,255,255,0.12) 52%, rgba(255,255,255,0.04) 72%, transparent 100%), linear-gradient(90deg, rgba(255,255,255,0.06) 0%, ${primary}08 22%, rgba(255,255,255,0.04) 52%, ${primary}08 100%)`
     : `radial-gradient(circle at 50% 32%, ${primary}18 0%, rgba(10,10,10,0.68) 18%, rgba(10,10,10,0.5) 32%, rgba(10,10,10,0.16) 52%, rgba(10,10,10,0.03) 74%, transparent 100%), linear-gradient(90deg, rgba(255,255,255,0.01) 0%, ${primary}08 22%, rgba(10,10,10,0.08) 52%, ${primary}08 100%)`
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    window.history.scrollRestoration = 'manual'
-    const t = setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: 'auto' })
-    }, 0)
-
-    return () => clearTimeout(t)
-  }, [])
-
   useGSAP(() => {
     if (!containerRef.current) return
+
+    if (prefersReducedMotion) {
+      gsap.set([
+        '#hero-title-main',
+        '#hero-subtitle',
+        '.hero-button',
+        '#card-wrapper-1',
+        '#card-wrapper-2',
+        '#card-wrapper-3',
+        '#tech-banner-text',
+        '#main-content-start',
+      ], {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+      })
+      gsap.set('#tech-banner-line', {
+        opacity: 1,
+        width: 'min(70vw, 760px)',
+      })
+
+      return
+    }
 
     gsap.fromTo('#hero-title-main',
       { opacity: 0, y: 50 },
@@ -432,15 +454,21 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
       { opacity: 1, scale: 1, duration: 0.8, stagger: 0.15, ease: 'back.out(1.2)', delay: 0.9 }
     )
 
+    const transitionSection = containerRef.current.querySelector<HTMLElement>('#trigger-transition')
+    if (!transitionSection) return
+
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: containerRef.current,
         start: 'top top',
-        end: '+=2200',
-        scrub: 1.8,
-        anticipatePin: 0.5,
+        endTrigger: transitionSection,
+        end: 'bottom bottom',
+        scrub: 0.35,
         invalidateOnRefresh: true,
-        fastScrollEnd: true,
+        onEnter: () => setIsSceneAnimating(true),
+        onEnterBack: () => setIsSceneAnimating(true),
+        onLeave: () => setIsSceneAnimating(false),
+        onLeaveBack: () => setIsSceneAnimating(true),
       }
     })
 
@@ -459,13 +487,13 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
       y: 0,
       duration: 0.5,
       ease: 'power2.out'
-    }, 0.25)
+    }, 0.2)
     tl.to('#card-wrapper-1', {
       opacity: 0,
       y: -40,
       duration: 0.6,
       ease: 'power2.in'
-    }, 0.9)
+    }, 1.8)
 
     tl.to(animStateRef.current, {
       truckX: -2.2,
@@ -473,20 +501,20 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
       truckRotY: -Math.PI * 0.6,
       duration: 1,
       ease: 'sine.inOut'
-    }, 1.0)
+    }, 1.45)
 
     tl.to('#card-wrapper-2', {
       opacity: 1,
       y: 0,
       duration: 0.5,
       ease: 'power2.out'
-    }, 1.2)
+    }, 1.5)
     tl.to('#card-wrapper-2', {
       opacity: 0,
       y: -40,
       duration: 0.6,
       ease: 'power2.in'
-    }, 1.8)
+    }, 3.1)
 
     tl.to(animStateRef.current, {
       truckX: 0,
@@ -495,68 +523,115 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
       truckRotX: 0.24,
       duration: 1,
       ease: 'sine.inOut'
-    }, 2.0)
+    }, 2.7)
 
     tl.to('#card-wrapper-3', {
       opacity: 1,
       y: 0,
       duration: 0.5,
       ease: 'power2.out'
-    }, 2.15)
+    }, 2.8)
     tl.to('#card-wrapper-3', {
       opacity: 0,
       y: -40,
       duration: 0.6,
       ease: 'power2.in'
-    }, 2.75)
+    }, 4.45)
+
+    // Alinha o caminhão à estrada antes da arrancada final.
+    tl.to(animStateRef.current, {
+      truckX: 0.55,
+      truckY: -1.5,
+      truckZ: -1.2,
+      truckRotX: 0,
+      truckRotY: -Math.PI * 2.04,
+      truckRotZ: 0,
+      truckScale: 0.92,
+      cameraZoom: 1.08,
+      duration: 0.45,
+      ease: 'power2.out'
+    }, 4.15)
+
+    // Acelera em perspectiva até o horizonte, em vez de cair para fora da cena.
+    tl.to(animStateRef.current, {
+      truckX: 0,
+      truckY: -1.08,
+      truckZ: -18,
+      truckRotY: -Math.PI * 2,
+      truckScale: 0.18,
+      gridY: -4.8,
+      cameraZoom: 0.92,
+      pointLightIntensity: 2,
+      duration: 0.75,
+      ease: 'power3.in'
+    }, 4.4)
 
     tl.to(animStateRef.current, {
-      truckX: 1.6,
-      truckY: -10,
-      truckZ: 2.4,
-      truckRotX: 0.7,
-      truckRotY: -Math.PI * 2.8,
-      truckScale: 0.07,
-      gridY: -14,
-      cameraZoom: 0.45,
+      truckZ: -28,
+      truckScale: 0.01,
       pointLightIntensity: 0,
-      duration: 1.2,
-      ease: 'power3.inOut'
-    }, 3.0)
+      duration: 0.25,
+      ease: 'power2.in'
+    }, 5.15)
 
     tl.to(animStateRef.current, {
       particlesSpeed: 0.2,
-      duration: 0.8,
+      duration: 0.55,
       ease: 'power2.in'
-    }, 3.2)
+    }, 4.3)
     tl.to(animStateRef.current, {
       particlesSpeed: 0.012,
-      duration: 0.9,
+      duration: 0.4,
       ease: 'power2.out'
-    }, 4.0)
+    }, 5.0)
+
+    tl.fromTo('#truck-departure-glow',
+      { opacity: 0, scale: 0.72 },
+      { opacity: isLight ? 0.28 : 0.55, scale: 1.08, duration: 0.35, ease: 'power2.out' },
+      4.3
+    )
+    tl.to('#truck-departure-glow', {
+      opacity: 0,
+      scale: 1.35,
+      duration: 0.45,
+      ease: 'power2.in'
+    }, 4.8)
 
     tl.to('#tech-banner-text', {
       opacity: 1,
       scale: 1,
       letterSpacing: '0.18em',
-      duration: 0.6,
+      duration: 0.4,
       ease: 'back.out(1.5)'
-    }, 3.1)
+    }, 4.25)
+    tl.fromTo('#tech-banner-line',
+      { opacity: 0, width: 0 },
+      { opacity: 0.75, width: 'min(70vw, 760px)', duration: 0.45, ease: 'power3.out' },
+      4.25
+    )
     tl.to('#tech-banner-text', {
       opacity: 0,
       y: -60,
-      duration: 0.5,
+      duration: 0.3,
       ease: 'power2.in'
-    }, 3.9)
+    }, 5.05)
+    tl.to('#tech-banner-line', {
+      opacity: 0,
+      duration: 0.25,
+      ease: 'power2.in'
+    }, 5.1)
 
     tl.fromTo('#main-content-start',
       { opacity: 0, y: 40 },
-      { opacity: 1, y: 0, duration: 0.9, ease: 'power3.out' },
-      3.6
+      { opacity: 1, y: 0, duration: 0.55, ease: 'power3.out' },
+      4.85
     )
-
-    ScrollTrigger.refresh()
-  }, { scope: containerRef, dependencies: [primary, isLight] })
+    tl.to('#truck-scene-layer', {
+      autoAlpha: 0,
+      duration: 0.35,
+      ease: 'power2.inOut'
+    }, 5.05)
+  }, { scope: containerRef, dependencies: [primary, isLight, prefersReducedMotion] })
 
   return (
     <div
@@ -565,13 +640,11 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
     >
       {/* 3D Canvas fixed in background */}
       <div
+        id="truck-scene-layer"
         className="fixed inset-0 z-0 overflow-hidden transition-colors duration-500 pointer-events-none"
         style={{
-          background: sceneBackdrop,
+          backgroundImage: sceneBackdrop,
           backgroundColor: isLight ? '#f4f4f5' : '#080808',
-          backdropFilter: 'blur(4px) saturate(0.85)',
-          WebkitBackdropFilter: 'blur(4px) saturate(0.85)',
-          filter: 'saturate(0.8) brightness(0.96)',
         }}
       >
         <div
@@ -580,23 +653,37 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
             background: isLight
               ? 'linear-gradient(135deg, rgba(255,255,255,0.02), rgba(255,255,255,0.08), rgba(255,255,255,0.02))'
               : 'linear-gradient(135deg, rgba(255,255,255,0.008), rgba(255,255,255,0.02), rgba(255,255,255,0.005))',
-            backdropFilter: 'blur(3px)',
-            WebkitBackdropFilter: 'blur(3px)',
+          }}
+        />
+        <div
+          id="truck-departure-glow"
+          aria-hidden="true"
+          className="absolute inset-0 opacity-0 pointer-events-none"
+          style={{
+            background: `radial-gradient(ellipse 28% 22% at 50% 48%, ${primary}70 0%, ${primary}20 34%, transparent 72%)`,
+            willChange: 'opacity, transform',
           }}
         />
         <Canvas
-          shadows
+          frameloop={prefersReducedMotion || !isSceneAnimating ? 'never' : 'always'}
           camera={{ position: [0, 1, 8], fov: 45 }}
-          dpr={[1, 1.5]}
-          gl={{ preserveDrawingBuffer: true, antialias: true }}
+          dpr={[0.9, maxSceneDpr]}
+          gl={{ antialias: true, powerPreference: 'high-performance' }}
         >
-          <Environment preset="city" />
+          <PerformanceMonitor
+            flipflops={3}
+            onDecline={() => setMaxSceneDpr((current) => Math.max(0.9, current - 0.15))}
+            onIncline={() => setMaxSceneDpr((current) => Math.min(1.25, current + 0.1))}
+            onFallback={() => setMaxSceneDpr(0.9)}
+          >
+            <TruckEnvironment primary={primary} isLight={isLight} />
 
-          <Suspense fallback={null}>
-            <AutoTruck animStateRef={animStateRef} />
-            <GeometricField animStateRef={animStateRef} color={primary} isLight={isLight} />
-            <SceneHelpers animStateRef={animStateRef} primary={primary} isLight={isLight} />
-          </Suspense>
+            <Suspense fallback={null}>
+              <AutoTruck animStateRef={animStateRef} />
+              <GeometricField animStateRef={animStateRef} color={primary} isLight={isLight} />
+              <SceneHelpers animStateRef={animStateRef} primary={primary} isLight={isLight} />
+            </Suspense>
+          </PerformanceMonitor>
         </Canvas>
       </div>
 
@@ -722,7 +809,7 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
         {/* Section 4: Zoom/Transition Spacer */}
         <section
           id="trigger-transition"
-          className="w-full min-h-[46vh] relative flex items-center justify-center pointer-events-none"
+          className="w-full min-h-[46vh] relative flex flex-col items-center justify-center pointer-events-none"
         >
           <h2
             id="tech-banner-text"
@@ -735,6 +822,15 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
           >
             EFICIÊNCIA ABSOLUTA
           </h2>
+          <div
+            id="tech-banner-line"
+            aria-hidden="true"
+            className="mt-6 h-px w-0 opacity-0"
+            style={{
+              background: `linear-gradient(90deg, transparent, ${primary}, transparent)`,
+              boxShadow: `0 0 18px ${primary}80`,
+            }}
+          />
         </section>
 
         {/* CONTEÚDO ESTÁTICO DE MÓDULOS (CTA, Planos, Ticker, etc.) */}

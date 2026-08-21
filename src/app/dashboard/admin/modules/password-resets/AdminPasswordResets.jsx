@@ -75,17 +75,21 @@ export default function AdminRequestsAndResets() {
   };
 
   const handleGerarSenhaTemporaria = async (id) => {
-    // Gera a chave e atualiza no banco de dados real
+    // Gera um token exibido uma única vez; o banco armazena somente o hash.
     try {
       const response = await fetch(`/api/resets/${id}/liberar`, { method: 'POST' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.erro || 'Não foi possível liberar o reset.');
 
-      setGeneratedKey({ id, key: data.chave });
-      setResets(resets.map(r => r.id === id ? { ...r, status: 'CONCLUIDO', chave: data.chave } : r));
+      setGeneratedKey({ id, key: data.token });
+      setResets(resets.map(r => r.id === id ? {
+        ...r,
+        status: 'APROVADO',
+        token_expira_em: data.expiraEm,
+      } : r));
     } catch (error) {
       console.error("Erro ao liberar reset:", error);
-      alert(error instanceof Error ? error.message : 'Erro ao liberar a senha temporária.');
+      alert(error instanceof Error ? error.message : 'Erro ao liberar o código de uso único.');
     }
   };
 
@@ -122,7 +126,7 @@ export default function AdminRequestsAndResets() {
             </button>
           ))
         ) : (
-          ['PENDENTE', 'CONCLUIDO', 'REJEITADO', 'ALL'].map(f => (
+          ['PENDENTE', 'APROVADO', 'CONCLUIDO', 'REJEITADO', 'ALL'].map(f => (
             <button key={f} onClick={() => setFiltroResets(f)} className="px-3 py-1.5 text-[9px] font-mono border uppercase tracking-widest font-black" style={{ backgroundColor: filtroResets === f ? primary : 'transparent', borderColor: filtroResets === f ? primary : 'var(--border)', color: filtroResets === f ? '#000' : 'var(--foreground-muted)' }}>
               {f} ({f === 'ALL' ? resets.length : resets.filter(r => r.status === f).length})
             </button>
@@ -179,7 +183,7 @@ export default function AdminRequestsAndResets() {
               <table className="w-full text-left border-collapse">
                 <thead className="bg-background-secondary border-b" style={{ borderColor: 'var(--border)' }}>
                   <tr>
-                    {['USUÁRIO SOLICITANTE', 'DATA DO PEDIDO', 'STATUS LOG', 'CHAVE GERADA', 'INFRAESTRUTURA AÇÕES'].map(h => (
+                    {['USUÁRIO SOLICITANTE', 'DATA DO PEDIDO', 'STATUS LOG', 'CÓDIGO DE USO ÚNICO', 'AÇÕES'].map(h => (
                       <th key={h} className="px-5 py-3 text-[10px] font-black tracking-widest opacity-60 uppercase">{h}</th>
                     ))}
                   </tr>
@@ -197,16 +201,20 @@ export default function AdminRequestsAndResets() {
                         <span className={`text-[9px] font-mono px-2 py-0.5 border font-black ${r.status === 'PENDENTE' ? 'text-yellow-500 bg-yellow-500/5 animate-pulse' : 'text-green-500 bg-green-500/5'}`}>{r.status}</span>
                       </td>
                       <td className="px-5 py-4 font-mono text-xs">
-                        {(r.chave || generatedKey.id === r.id) ? (
-                          <div onClick={() => handleCopyToClipboard(r.chave || generatedKey.key)} className="inline-flex items-center gap-2 border border-dashed px-2 py-1 bg-black/5 text-primary cursor-pointer hover:bg-white/5 transition-colors">
-                            <span className="text-[11px]">{r.chave || generatedKey.key}</span><Copy size={11} />
+                        {generatedKey.id === r.id ? (
+                          <div onClick={() => handleCopyToClipboard(generatedKey.key)} className="inline-flex items-center gap-2 border border-dashed px-2 py-1 bg-black/5 text-primary cursor-pointer hover:bg-white/5 transition-colors">
+                            <span className="text-[11px]">{generatedKey.key}</span><Copy size={11} />
                           </div>
-                        ) : <span className="opacity-30 italic text-xs font-normal">Nenhuma chave ativa</span>}
+                        ) : (
+                          <span className="opacity-50 text-xs font-normal">
+                            {r.status === 'APROVADO' ? 'Código já entregue; não armazenado' : 'Nenhum código ativo'}
+                          </span>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         {r.status === 'PENDENTE' && (
                           <button onClick={() => handleGerarSenhaTemporaria(r.id)} className="px-3 py-1.5 text-[10px] font-black border tracking-widest hover:bg-primary/10 transition-colors" style={{ color: primary, borderColor: primary }}>
-                            LIBERAR RESET
+                            GERAR CÓDIGO
                           </button>
                         )}
                       </td>

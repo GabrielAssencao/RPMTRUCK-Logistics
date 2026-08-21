@@ -4,6 +4,7 @@ import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,7 +15,8 @@ function gestorAutorizado(role: string) {
   return role === 'GESTOR_EMPRESA' || role === 'GESTOR'
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const auth = await requireEmpresaAuth(request)
   if (auth.error || !auth.session || !auth.empresaId || !auth.empresa) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
@@ -48,7 +50,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   let removidos = { containers: 0, custos: 0, manutencoes: 0 }
   if (arquivo.status === 'CONFIRMADO_GESTOR') {
-    removidos = await prisma.$transaction(async (tx) => {
+    removidos = await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
       const [containers, custos, manutencoes] = await Promise.all([
         tx.container.deleteMany({ where: { empresaId: auth.empresaId!, relatorioArquivoId: arquivo.id } }),
         tx.custo.deleteMany({ where: { empresaId: auth.empresaId!, relatorioArquivoId: arquivo.id } }),
@@ -81,10 +83,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }, { status: 202 })
   }
 
-  await prisma.relatorioArquivo.update({
+  await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.relatorioArquivo.update({
     where: { id: arquivo.id },
     data: { status: 'ARQUIVO_REMOVIDO', arquivo_removido_em: new Date() },
-  })
+  }))
   await notificarUsuariosDaEmpresa(auth.empresaId, {
     titulo: 'Arquivamento concluído',
     mensagem: `Os detalhes de ${arquivo.periodo_inicio.toLocaleDateString('pt-BR')} a ${arquivo.periodo_fim.toLocaleDateString('pt-BR')} foram removidos. O histórico permanente dos containers foi preservado.`,

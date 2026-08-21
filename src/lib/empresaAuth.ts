@@ -10,6 +10,7 @@ import {
 
 interface EmpresaAuthOptions {
   modulo?: ModuloCodigo
+  acao?: 'LEITURA' | 'ESCRITA' | 'GESTAO'
 }
 
 /**
@@ -21,6 +22,28 @@ export async function requireEmpresaAuth(request: NextRequest, options: EmpresaA
 
   if (auth.error || !auth.session) {
     return { error: auth.error, status: auth.status, session: null, empresa: null }
+  }
+
+  if (options.acao === 'ESCRITA' && auth.session.role === 'VISUALIZADOR') {
+    return {
+      error: 'Seu perfil possui acesso somente para visualização.',
+      status: 403,
+      session: null,
+      empresa: null,
+    }
+  }
+
+  if (
+    options.acao === 'GESTAO' &&
+    auth.session.role !== 'GESTOR_EMPRESA' &&
+    auth.session.role !== 'GESTOR'
+  ) {
+    return {
+      error: 'Esta ação está disponível somente para o gestor.',
+      status: 403,
+      session: null,
+      empresa: null,
+    }
   }
 
   if (!auth.session.empresaId) {

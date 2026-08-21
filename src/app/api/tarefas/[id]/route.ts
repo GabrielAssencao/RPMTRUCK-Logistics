@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import { textoOperacional } from '@/lib/domainValidation'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 const atualizarSchema = z.object({
   titulo: textoOperacional(3, 160).optional(),
@@ -13,7 +14,8 @@ const atualizarSchema = z.object({
   responsavelId: z.string().uuid().optional(),
 }).strict()
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS' })
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
 
@@ -37,7 +39,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (!responsavel) return NextResponse.json({ erro: 'Responsável inválido.' }, { status: 400 })
   }
 
-  const tarefa = await prisma.$transaction(async tx => {
+  const tarefa = await executarComAuditoria({ usuarioId: auth.session.userId }, async tx => {
     const atualizada = await tx.tarefa.update({
       where: { id: atual.id },
       data: {
@@ -73,7 +75,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   return NextResponse.json(tarefa)
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS' })
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
 
@@ -82,6 +85,6 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   const gestor = ['GESTOR_EMPRESA', 'GESTOR'].includes(auth.session.role)
   if (!gestor) return NextResponse.json({ erro: 'Apenas o gestor pode excluir tarefas.' }, { status: 403 })
 
-  await prisma.tarefa.delete({ where: { id: tarefa.id } })
+  await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.tarefa.delete({ where: { id: tarefa.id } }))
   return NextResponse.json({ sucesso: true })
 }

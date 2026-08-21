@@ -5,6 +5,8 @@ import bcrypt from 'bcrypt';
 import { requireEmpresaAuth } from '@/lib/empresaAuth';
 import { criarUsuarioSchema, validateInput } from '@/lib/validation';
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
+import { Prisma } from '@prisma/client';
+import { criarUsuarioEmpresaComLimite, LimiteUsuariosError } from '@/lib/usuariosEmpresa';
 
 /**
  * GET /api/usuarios
@@ -51,7 +53,7 @@ export async function POST(request: NextRequest) {
   try {
     // 1. Rate limiting: protege signup contra força bruta
     const clientIp = getClientIp(request);
-    const rateLimitResult = applyRateLimit(
+    const rateLimitResult = await applyRateLimit(
       request,
       `signup:${clientIp}`,
       RATE_LIMITS.SIGNUP.limit,
@@ -102,24 +104,24 @@ export async function POST(request: NextRequest) {
     const senhaCriptografada = await bcrypt.hash(senha, 10);
 
     // 7. Cria o usuário
-    const novoUsuario = await prisma.usuario.create({
-      data: {
-        nome,
-        email,
-        senha_hash: senhaCriptografada,
-        role: (cargo as 'ADMIN_RPM' | 'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR') || 'OPERADOR',
-        empresaId: empresaAlvo,
-      },
-      select: {
-        id: true,
-        nome: true,
-        email: true,
-        role: true,
-      },
+    const novoUsuario = await criarUsuarioEmpresaComLimite({
+      empresaId: empresaAlvo,
+      nome,
+      email,
+      senhaHash: senhaCriptografada,
+      role: cargo ?? 'OPERADOR',
+      criadoPorId: session!.userId,
     });
 
     return NextResponse.json({ usuario: novoUsuario }, { status: 201 });
   } catch (error) {
+    if (error instanceof LimiteUsuariosError) {
+      return NextResponse.json({ erro: error.message }, { status: 409 });
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') return NextResponse.json({ erro: 'Email já registrado' }, { status: 409 });
+      if (error.code === 'P2034') return NextResponse.json({ erro: 'Cadastro concorrente detectado. Tente novamente.' }, { status: 409 });
+    }
     console.error('Erro ao criar usuário:', error);
     return NextResponse.json({ erro: 'Erro interno' }, { status: 500 });
   }

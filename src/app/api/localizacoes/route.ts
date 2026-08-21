@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import { nomeOperacional } from '@/lib/domainValidation'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 const schema = z.object({ nome: nomeOperacional(2, 100), cidadeUF: nomeOperacional(2, 100), capacidade: z.coerce.number().int().min(0).max(100000) }).strict()
 
@@ -13,9 +14,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
   const parsed = schema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ erro: 'Dados da localização inválidos.' }, { status: 400 })
-  return NextResponse.json(await prisma.localizacao.create({ data: { ...parsed.data, empresaId: auth.session.empresaId } }), { status: 201 })
+  return NextResponse.json(await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.localizacao.create({ data: { ...parsed.data, empresaId: auth.session!.empresaId! } })), { status: 201 })
 }

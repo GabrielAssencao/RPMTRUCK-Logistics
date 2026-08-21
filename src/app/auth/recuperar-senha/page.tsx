@@ -37,7 +37,7 @@ export default function RecuperarSenhaPage() {
     setError('')
 
     try {
-      const res = await fetch('/api/resets', {
+      const res = await fetch('/api/auth/reset-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -64,7 +64,7 @@ export default function RecuperarSenhaPage() {
     setError('')
 
     try {
-      const res = await fetch('/api/resets/validar', {
+      const res = await fetch('/api/auth/reset-confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, token, novaSenha })
@@ -108,7 +108,7 @@ export default function RecuperarSenhaPage() {
           <div>
             <div className="text-xs uppercase tracking-[0.25em] font-bold mb-2" style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}>SOLICITAÇÃO REGISTRADA</div>
             <h2 className="text-4xl font-black" style={{ fontFamily: 'Rajdhani, sans-serif' }}>VALIDAR TOKENS</h2>
-            <p className="text-sm mt-1" style={{ color: 'var(--foreground-muted)' }}>Entre em contato com nossa equipe administrativa para receber seu código de 6 dígitos válido por 24 horas.</p>
+            <p className="text-sm mt-1" style={{ color: 'var(--foreground-muted)' }}>Use o código de uso único liberado pelo administrador. Por segurança, ele expira em 30 minutos.</p>
           </div>
 
           {error && <ErrorAlert message={error} />}
@@ -121,9 +121,9 @@ export default function RecuperarSenhaPage() {
 
           <div>
             <label className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold mb-2" style={{ color: 'var(--foreground-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
-              <span style={{ color: primary }}><Key size={14} /></span> Código de Validação (6 Dígitos)
+              <span style={{ color: primary }}><Key size={14} /></span> Código de uso único
             </label>
-            <input type="text" maxLength={6} placeholder="000000" value={token} onChange={e => setToken(e.target.value)} autoFocus className="w-full px-4 py-3 text-sm outline-none transition-all duration-200 border text-center font-mono tracking-[0.5em] text-lg font-bold" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)', color: 'var(--foreground)' }} onFocus={e => e.target.style.borderColor = primary} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+            <input type="text" maxLength={64} placeholder="RPM-..." value={token} onChange={e => setToken(e.target.value.trim())} autoComplete="one-time-code" autoFocus className="w-full px-4 py-3 text-sm outline-none transition-all duration-200 border text-center font-mono tracking-wider font-bold" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)', color: 'var(--foreground)' }} onFocus={e => e.target.style.borderColor = primary} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
           </div>
 
           <div>
@@ -134,9 +134,10 @@ export default function RecuperarSenhaPage() {
               <input type={showPass ? 'text' : 'password'} placeholder="••••••••" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} className="w-full px-4 py-3 text-sm outline-none transition-all duration-200 border pr-12 font-mono" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)', color: 'var(--foreground)' }} onFocus={e => e.target.style.borderColor = primary} onBlur={e => e.target.style.borderColor = 'var(--border)'} onKeyDown={e => e.key === 'Enter' && handleValidarEAtualizar()} />
               <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 transition-opacity hover:opacity-60" style={{ color: 'var(--foreground-muted)' }}>{showPass ? <EyeOff size={16} /> : <Eye size={16} />}</button>
             </div>
+            <p className="text-[11px] mt-2" style={{ color: 'var(--foreground-muted)' }}>Use ao menos 10 caracteres, com letra maiúscula, minúscula e número.</p>
           </div>
 
-          <SubmitBtn onClick={handleValidarEAtualizar} disabled={token.length !== 6 || !novaSenha} loading={false} primary={primary} label="ATUALIZAR CREDENCIAIS →" />
+          <SubmitBtn onClick={handleValidarEAtualizar} disabled={token.length < 20 || novaSenha.length < 10} loading={false} primary={primary} label="ATUALIZAR CREDENCIAIS →" />
         </motion.div>
       )}
 
@@ -161,7 +162,7 @@ export default function RecuperarSenhaPage() {
             <h3 className="text-2xl font-black uppercase" style={{ fontFamily: 'Rajdhani, sans-serif' }}>SENHA REDEFINIDA!</h3>
             <p className="text-xs max-w-xs mx-auto mt-2" style={{ color: 'var(--foreground-muted)' }}>Sua credencial de segurança corporativa foi atualizada com sucesso no banco de dados.</p>
           </div>
-          <Link href="/login" className="w-full py-4 font-black text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all duration-200" style={{ fontFamily: 'Rajdhani, sans-serif', backgroundColor: primary, color: '#000', clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))' }}>
+          <Link href="/auth/login" className="w-full py-4 font-black text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all duration-200" style={{ fontFamily: 'Rajdhani, sans-serif', backgroundColor: primary, color: '#000', clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))' }}>
             RETORNAR AO LOGIN →
           </Link>
         </motion.div>

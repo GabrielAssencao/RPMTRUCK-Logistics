@@ -11,6 +11,7 @@ import {
 import { criarNotificacao } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
 import { dataIsoSchema, nomePessoa } from '@/lib/domainValidation'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
   if (auth.error || !auth.session?.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
@@ -116,34 +117,37 @@ export async function POST(request: NextRequest) {
 
   const fotoEntrada = formData.get('foto')
   const foto = fotoEntrada instanceof File && fotoEntrada.size > 0 ? fotoEntrada : null
+  const empresaId = auth.session.empresaId
+  const usuarioId = auth.session.userId
   let motorista: Awaited<ReturnType<typeof prisma.motorista.create>> | null = null
   let caminhoFoto: string | null = null
 
   try {
-    motorista = await prisma.motorista.create({
+    motorista = await executarComAuditoria({ usuarioId }, (tx) => tx.motorista.create({
       data: {
         ...parsed.data,
         validade,
         foto_url: null,
-        empresaId: auth.session.empresaId,
+        empresaId,
       },
-    })
+    }))
 
     if (foto) {
-      const upload = await salvarFotoMotorista(auth.session.empresaId, motorista.id, foto)
+      const motoristaId = motorista.id
+      const upload = await salvarFotoMotorista(empresaId, motoristaId, foto)
       caminhoFoto = upload.caminho
-      motorista = await prisma.motorista.update({
-        where: { id: motorista.id },
+      motorista = await executarComAuditoria({ usuarioId }, (tx) => tx.motorista.update({
+        where: { id: motoristaId },
         data: { foto_url: caminhoFoto },
-      })
+      }))
     }
 
     await criarNotificacao({
       titulo: 'Motorista cadastrado',
       mensagem: `${motorista.nome} foi adicionado à equipe.`,
       modulo: 'MOTORISTAS',
-      empresaId: auth.session.empresaId,
-      usuarioId: auth.session.userId,
+      empresaId,
+      usuarioId,
     }).catch((error) => console.error('Falha ao notificar cadastro de motorista:', error))
 
     return NextResponse.json(motorista, { status: 201 })
@@ -152,7 +156,7 @@ export async function POST(request: NextRequest) {
       await removerFotoMotorista(caminhoFoto).catch((cause) => console.error('Falha ao compensar upload de foto:', cause))
     }
     if (motorista) {
-      await prisma.motorista.delete({ where: { id: motorista.id } }).catch((cause) => console.error('Falha ao compensar cadastro de motorista:', cause))
+      await executarComAuditoria({ usuarioId }, (tx) => tx.motorista.delete({ where: { id: motorista!.id } })).catch((cause) => console.error('Falha ao compensar cadastro de motorista:', cause))
     }
     if (error instanceof FotoMotoristaError) {
       return NextResponse.json({ erro: error.message }, { status: error.status })

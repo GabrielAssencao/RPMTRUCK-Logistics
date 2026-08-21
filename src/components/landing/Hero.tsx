@@ -1,9 +1,39 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useEffect, useState, ReactNode } from 'react'
+import { ReactNode, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
+import { MotionConfig } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
+
+const MOBILE_MEDIA_QUERY = '(max-width: 767px)'
+
+function subscribeToMobileViewport(onStoreChange: () => void) {
+  const mediaQuery = window.matchMedia(MOBILE_MEDIA_QUERY)
+  mediaQuery.addEventListener('change', onStoreChange)
+
+  return () => mediaQuery.removeEventListener('change', onStoreChange)
+}
+
+function getMobileViewportSnapshot() {
+  return window.matchMedia(MOBILE_MEDIA_QUERY).matches
+}
+
+function getDesktopServerSnapshot() {
+  return false
+}
+
+function subscribeToHydration() {
+  return () => undefined
+}
+
+function getHydratedSnapshot() {
+  return true
+}
+
+function getServerHydratedSnapshot() {
+  return false
+}
 
 // SSR=false obrigatório — Three.js usa APIs do browser
 const TruckScene = dynamic(() => import('@/components/landing/3d/TruckScene'), {
@@ -35,16 +65,16 @@ export default function Hero({ children }: { children?: ReactNode }) {
   const router = useRouter()
 
   // FIX: isMobile só avaliado no client, default false para evitar mismatch de hydration
-  const [isMobile, setIsMobile] = useState(false)
-  const [hydrated, setHydrated] = useState(false)
-
-  useEffect(() => {
-    setHydrated(true)
-    const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
+  const isMobile = useSyncExternalStore(
+    subscribeToMobileViewport,
+    getMobileViewportSnapshot,
+    getDesktopServerSnapshot,
+  )
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    getHydratedSnapshot,
+    getServerHydratedSnapshot,
+  )
 
   // Antes de hidratar: renderiza o container vazio com o fundo certo (sem flash)
   if (!hydrated) {
@@ -59,10 +89,11 @@ export default function Hero({ children }: { children?: ReactNode }) {
   // Mobile: versão sem 3D
   if (isMobile) {
     return (
-      <section
-        className="relative w-full pt-32 text-foreground transition-colors duration-300"
-        style={{ backgroundColor: 'var(--background)' }}
-      >
+      <MotionConfig reducedMotion="user">
+        <section
+          className="relative w-full pt-32 text-foreground transition-colors duration-300"
+          style={{ backgroundColor: 'var(--background)' }}
+        >
         <div className="px-6 py-12 text-center max-w-lg mx-auto">
           {/* Badge */}
           <div
@@ -136,14 +167,17 @@ export default function Hero({ children }: { children?: ReactNode }) {
 
         {/* Conteúdo estático (Ticker, Features, etc.) */}
         <div className="relative z-10">{children}</div>
-      </section>
+        </section>
+      </MotionConfig>
     )
   }
 
   // Desktop: versão com 3D (TruckScene controla o scroll inteiro)
   return (
-    <section className="relative w-full min-h-screen" style={{ backgroundColor: 'var(--background)' }}>
-      <TruckScene>{children}</TruckScene>
-    </section>
+    <MotionConfig reducedMotion="user">
+      <section className="relative w-full min-h-screen" style={{ backgroundColor: 'var(--background)' }}>
+        <TruckScene>{children}</TruckScene>
+      </section>
+    </MotionConfig>
   )
 }

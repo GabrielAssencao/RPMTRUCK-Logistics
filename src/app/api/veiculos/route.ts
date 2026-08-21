@@ -4,6 +4,7 @@ import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { criarNotificacao } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
 import { nomeOperacional, placaSchema, quilometragemSchema } from '@/lib/domainValidation'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 const veiculoSchema = z.object({
   modelo: nomeOperacional(2, 100),
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
   if (auth.error || !auth.session?.empresaId || !auth.empresa) return NextResponse.json({ erro: auth.error }, { status: auth.status })
 
   const parsed = veiculoSchema.safeParse(await request.json())
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const novoVeiculo = await prisma.$transaction(async (tx) => {
+    const novoVeiculo = await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
       const veiculo = await tx.veiculo.create({
         data: { ...parsed.data, empresaId },
         include: { localizacao: true, motoristas: { select: { id: true, nome: true } } },

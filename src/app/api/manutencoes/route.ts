@@ -4,6 +4,7 @@ import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
 import { dataIsoSchema, quilometragemSchema, textoOperacional, valorMonetarioSchema } from '@/lib/domainValidation'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 const schema = z.object({
   veiculoId: z.string().uuid(), dataAgendada: dataIsoSchema, tipo: z.enum(['PREVENTIVA', 'CORRETIVA', 'PNEUS', 'OLEO', 'COMBUSTIVEL']),
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
   const parsed = schema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ erro: 'Dados da manutenção inválidos.' }, { status: 400 })
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
   if (!veiculo) return NextResponse.json({ erro: 'Veículo inválido.' }, { status: 400 })
   const status = parsed.data.origem === 'FUTURA' ? 'PENDENTE' : 'CONCLUIDA'
   const dataAgendada = new Date(`${parsed.data.dataAgendada}T12:00:00`)
-  const registro = await prisma.$transaction(async (tx) => {
+  const registro = await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
     const historico = await tx.historicoVeiculo.create({ data: { data_agendada: dataAgendada, data_conclusao: status === 'CONCLUIDA' ? new Date() : null, tipo: parsed.data.tipo, pecas_substituidas: parsed.data.pecas, custo: parsed.data.custo, km_atual: parsed.data.kmAtual, status, origem: parsed.data.origem, veiculoId: veiculo.id, empresaId: auth.session!.empresaId! } })
     if (status === 'CONCLUIDA') {
       await tx.leituraQuilometragem.create({ data: { quilometragem: parsed.data.kmAtual, registrada_em: dataAgendada, origem: 'MANUTENCAO', veiculoId: veiculo.id, empresaId: auth.session!.empresaId! } })

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
+import { executarComAuditoria } from '@/lib/auditoria'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const auth = await requireEmpresaAuth(request)
   if (auth.error || !auth.session || !auth.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
@@ -34,14 +36,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ erro: 'Não foi possível liberar o download.' }, { status: 502 })
     }
 
-    await prisma.relatorioArquivo.update({
+    await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.relatorioArquivo.update({
       where: { id: arquivo.id },
       data: {
         status: arquivo.status === 'PRONTO_DOWNLOAD' ? 'DOWNLOAD_REGISTRADO' : undefined,
         baixado_em: new Date(),
         baixadoPorId: auth.session.userId,
       },
-    })
+    }))
 
     return NextResponse.json(
       { url: data.signedUrl, expira_em_segundos: 60 },
