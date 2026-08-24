@@ -28,9 +28,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const savedColor = localStorage.getItem('rpm-primary')
     const savedTheme = localStorage.getItem('rpm-light')
-    if (savedColor) setPrimaryState(savedColor)
-    if (savedTheme) setIsLightState(savedTheme === 'true')
-    setReady(true)
+    queueMicrotask(() => {
+      if (savedColor) setPrimaryState(savedColor)
+      if (savedTheme) setIsLightState(savedTheme === 'true')
+      setReady(true)
+    })
   }, [])
 
   // Aplica as variáveis CSS globais sempre que mudar

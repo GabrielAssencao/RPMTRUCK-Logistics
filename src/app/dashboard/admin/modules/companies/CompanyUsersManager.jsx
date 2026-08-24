@@ -188,7 +188,7 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
                   <div className="pt-2">
                     <div className="p-3 border text-[10px] flex gap-2 font-mono" style={{ borderColor: `${primary}30`, backgroundColor: `${primary}05`, color: primary }}>
                       <AlertTriangle size={14} className="shrink-0" />
-                      A senha padrão gerada será 'RPM-123456'. O usuário será forçado a alterar no primeiro login.
+                      A senha padrão gerada será “RPM-123456”. O usuário será forçado a alterar no primeiro login.
                     </div>
                   </div>
                 )}

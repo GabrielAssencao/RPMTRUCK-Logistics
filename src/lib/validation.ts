@@ -8,9 +8,10 @@ import { nomeOperacional, nomePessoa } from '@/lib/domainValidation';
  * Login validation schema
  */
 export const loginSchema = z.object({
-  email: z.string().email('Email inválido').toLowerCase().trim(),
+  email: z.string().email('Email inválido').max(254).toLowerCase().trim(),
   senha: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres').max(128),
-});
+  turnstileToken: z.string().max(2048).optional(),
+}).strict();
 
 export type LoginInput = z.infer<typeof loginSchema>;
 

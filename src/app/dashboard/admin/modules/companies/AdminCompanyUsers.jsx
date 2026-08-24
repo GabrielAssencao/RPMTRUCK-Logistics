@@ -15,8 +15,6 @@ export default function AdminCompanyUsers({ company, onUpdateCompany }) {
   const limiteBase = LIMITES_PLANOS[company?.plano?.toLowerCase()] || 5;
   const limiteTotal = limiteBase + (company?.extra_user_limit || 0);
 
-  useEffect(() => { loadUsuarios(); }, [company?.id]);
-
   const loadUsuarios = async () => {
     if (!company?.id) return;
     // Aqui você fará um fetch para buscar usuários vinculados a esta empresa
@@ -24,6 +22,8 @@ export default function AdminCompanyUsers({ company, onUpdateCompany }) {
     const data = await res.json();
     setUsuariosEmpresa(data);
   };
+
+  useEffect(() => { queueMicrotask(() => void loadUsuarios()); }, [company?.id]);
 
   const handleSalvarLimites = async () => {
     setSalvando(true);

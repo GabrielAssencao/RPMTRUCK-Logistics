@@ -28,7 +28,7 @@ export default function LocalizacoesPage() {
   const [form, setForm] = useState({ nome: '', cidadeUF: '', capacidade: '' })
 
   useEffect(() => {
-    setMontado(true)
+    queueMicrotask(() => setMontado(true))
     fetch('/api/localizacoes', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setLocalizacoes(data) }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar bases.'))
   }, [])
 

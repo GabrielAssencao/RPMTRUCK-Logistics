@@ -1,6 +1,6 @@
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
-import bcrypt from 'bcryptjs'
+import { hashPassword } from '@/lib/password'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { criarNotificacao } from '@/lib/notificacoes'
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       empresaId: session.empresaId,
       nome,
       email,
-      senhaHash: await bcrypt.hash(senha, 10),
+      senhaHash: await hashPassword(senha),
       role,
       acessoDashboardGeral,
       criadoPorId: session.userId,

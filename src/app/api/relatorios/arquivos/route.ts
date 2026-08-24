@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Erro ao arquivar relatório:', error)
     const message = error instanceof Error && error.message === 'SUPABASE_STORAGE_NOT_CONFIGURED'
-      ? 'Configure NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no servidor.'
+      ? 'Configure NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SECRET_KEY somente no servidor.'
       : 'Erro interno ao arquivar relatório.'
     return NextResponse.json({ erro: message }, { status: 500 })
   }

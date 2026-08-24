@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Mail, ArrowLeft, CheckCircle, AlertTriangle, Send, ShieldAlert } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import dynamic from 'next/dynamic'
+import TurnstileWidget from '@/components/security/TurnstileWidget'
 
 // ─── Importa o Canvas 3D apenas no cliente ─────────────────────────────────────
 const TruckPanel = dynamic(() => import('@/app/auth/login/TruckPanel'), { ssr: false })
@@ -18,6 +19,8 @@ export default function ResetPage() {
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
   const [isMobile, setIsMobile] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState('')
+  const [turnstileVersion, setTurnstileVersion] = useState(0)
 
   // Detecta visualização responsiva para desligar o 3D
   useEffect(() => {
@@ -30,6 +33,10 @@ export default function ResetPage() {
   const handleResetRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email) return
+    if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError('Conclua a verificação de segurança.')
+      return
+    }
 
     setLoading(true)
     setError('')
@@ -39,18 +46,20 @@ export default function ResetPage() {
       const res = await fetch('/api/auth/reset-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email, turnstileToken: turnstileToken || undefined })
       })
 
       const data = await res.json()
+      setTurnstileToken('')
+      setTurnstileVersion((value) => value + 1)
 
       if (!res.ok) {
         throw new Error(data.erro || 'Erro ao processar solicitação.')
       }
 
       setSent(true)
-    } catch (err: any) {
-      setError(err.message || 'Falha de comunicação com o servidor de segurança.')
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : 'Falha de comunicação com o servidor de segurança.')
     } finally {
       setLoading(false)
     }
@@ -115,6 +124,8 @@ export default function ResetPage() {
               </span>
               O chamado será enviado ao administrador geral. Após a aprovação, será disponibilizado um código de uso único, válido por 30 minutos e nunca armazenado em texto legível.
             </div>
+
+            <TurnstileWidget key={turnstileVersion} action="password_reset" onTokenChange={setTurnstileToken} />
 
             <motion.button 
               type="submit"

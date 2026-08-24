@@ -111,14 +111,26 @@ export default function CustosPage() {
   const [custos, setCustos] = useState<RegistroCusto[]>([])
 
   useEffect(() => {
-    setMontado(true)
-    Promise.all([fetch('/api/custos', { cache: 'no-store' }), fetch('/api/empresa/perfil', { cache: 'no-store' })]).then(async ([custosResponse, perfilResponse]) => {
-      const custosData = await custosResponse.json(); const perfilData = await perfilResponse.json()
-      if (!custosResponse.ok) throw new Error(custosData.erro || 'Falha ao carregar custos.')
-      setCustos(custosData)
+    queueMicrotask(() => setMontado(true))
+    fetch('/api/empresa/perfil', { cache: 'no-store' }).then(async perfilResponse => {
+      const perfilData = await perfilResponse.json()
       if (perfilResponse.ok && perfilData.empresa?.plano in PLANOS_CONFIG) setPlanoEmpresa(perfilData.empresa.plano)
-    }).catch(error => setErroFormulario(error instanceof Error ? error.message : 'Falha ao carregar custos.'))
+    }).catch(error => setErroFormulario(error instanceof Error ? error.message : 'Falha ao carregar o perfil.'))
   }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch(`/api/custos?ano=${anoSelecionado}`, { cache: 'no-store', signal: controller.signal })
+      .then(async response => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.erro || 'Falha ao carregar custos.')
+        setCustos(data)
+      })
+      .catch(error => {
+        if (error instanceof Error && error.name !== 'AbortError') setErroFormulario(error.message)
+      })
+    return () => controller.abort()
+  }, [anoSelecionado])
 
   if (!montado) return null
 
@@ -590,7 +602,7 @@ export default function CustosPage() {
       <div className="flex items-start gap-2 text-[10px] text-foreground-muted px-1">
         <Info size={13} className="shrink-0 mt-0.5" style={{ color: primary }} />
         <span>
-          O card "Comissão Containers (Auto)" já está somado dentro de "Total Semana" e "Total Acumulado" — não é um valor separado.
+          O card “Comissão Containers (Auto)” já está somado dentro de “Total Semana” e “Total Acumulado” — não é um valor separado.
           Ele aparece isolado só pra você enxergar quanto do total veio de containers sem precisar abrir o outro módulo.
         </span>
       </div>
@@ -900,7 +912,7 @@ export default function CustosPage() {
                   <label className="block text-[10px] uppercase font-bold mb-1">Categoria da Despesa *</label>
                   <select 
                     value={formCusto.categoria} 
-                    onChange={e => setFormCusto({...formCusto, categoria: e.target.value as any})} 
+                    onChange={e => setFormCusto({...formCusto, categoria: e.target.value as CategoriaCusto})}
                     className="w-full p-2.5 border bg-transparent outline-none cursor-pointer" 
                     style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
                   >
@@ -964,7 +976,7 @@ export default function CustosPage() {
                   <label className="block text-[10px] uppercase font-bold mb-1">Status *</label>
                   <select 
                     value={formCusto.status} 
-                    onChange={e => setFormCusto({...formCusto, status: e.target.value as any})} 
+                    onChange={e => setFormCusto({...formCusto, status: e.target.value as 'PAGO' | 'PENDENTE'})}
                     className="w-full p-2.5 border bg-transparent outline-none cursor-pointer" 
                     style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
                   >
@@ -1024,7 +1036,7 @@ function CardResumo({ titulo, valor, primary, icone, destaque = false, alerta = 
 }
 
 function BadgeCategoria({ categoria, primary }: { categoria: CategoriaCusto | 'COMISSAO_TRANSPORTE', primary: string }) {
-  let label = categoria.replace('_', ' ')
+  const label = categoria.replace('_', ' ')
   let icon = <FileText size={12} />
 
   if (categoria === 'COMBUSTIVEL') icon = <Fuel size={12} />

@@ -1,11 +1,13 @@
 // src/app/api/auth/login/route.ts
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcrypt';
+import { hashPassword, passwordNeedsRehash, verifyPassword } from '@/lib/password';
 import { createSession } from '@/lib/auth';
 import { loginSchema } from '@/lib/validation';
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
 import { normalizarModulos, PLANOS_CONFIG } from '@/utils/planos';
+import { verifyBotToken } from '@/lib/botProtection';
+import { pseudonymize, recordSecurityEvent, safeUserAgent } from '@/lib/securityEvents';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,8 +16,8 @@ export async function POST(request: NextRequest) {
     const rateLimitResult = await applyRateLimit(
       request,
       `login:${clientIp}`,
-      RATE_LIMITS.LOGIN.limit,
-      RATE_LIMITS.LOGIN.windowMs
+      RATE_LIMITS.LOGIN_IP.limit,
+      RATE_LIMITS.LOGIN_IP.windowMs
     );
 
     if (rateLimitResult) {
@@ -23,15 +25,24 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Parsear e validar entrada com Zod
-    const body = await request.json();
-    const { email, senha } = loginSchema.parse(body);
+    const parsed = loginSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json({ erro: 'Dados de entrada inválidos.' }, { status: 400 });
+    }
+    const { email, senha, turnstileToken } = parsed.data;
     const accountRateLimit = await applyRateLimit(
       request,
       `login-account:${email}`,
-      RATE_LIMITS.LOGIN.limit,
-      RATE_LIMITS.LOGIN.windowMs
+      RATE_LIMITS.LOGIN_ACCOUNT.limit,
+      RATE_LIMITS.LOGIN_ACCOUNT.windowMs
     );
     if (accountRateLimit) return accountRateLimit;
+
+    const bot = await verifyBotToken({ token: turnstileToken, remoteIp: clientIp, expectedAction: 'login' });
+    if (!bot.success) {
+      await recordSecurityEvent({ tipo: 'BOT_REJEITADO', request, email, ip: clientIp });
+      return NextResponse.json({ erro: 'Não foi possível validar a verificação de segurança.' }, { status: 403 });
+    }
 
     // 3. Busca o usuário pelo e-mail
     const usuario = await prisma.usuario.findUnique({
@@ -51,6 +62,7 @@ export async function POST(request: NextRequest) {
 
     // 4. Mensagem genérica para segurança (impede enum de emails)
     if (!usuario) {
+      await recordSecurityEvent({ tipo: 'LOGIN_FALHA', request, email, ip: clientIp });
       return NextResponse.json(
         { erro: 'Credenciais de acesso inválidas.' },
         { status: 401 }
@@ -58,13 +70,24 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Valida a senha antes de revelar qualquer estado da conta.
-    const senhaValida = await bcrypt.compare(senha, usuario.senha_hash);
+    const senhaValida = await verifyPassword(senha, usuario.senha_hash);
 
     if (!senhaValida) {
+      await recordSecurityEvent({
+        tipo: 'LOGIN_FALHA', request, usuarioId: usuario.id,
+        empresaId: usuario.empresaId, email, ip: clientIp,
+      });
       return NextResponse.json(
         { erro: 'Credenciais de acesso inválidas.' },
         { status: 401 }
       );
+    }
+
+    if (passwordNeedsRehash(usuario.senha_hash)) {
+      await prisma.usuario.update({
+        where: { id: usuario.id },
+        data: { senha_hash: await hashPassword(senha) },
+      });
     }
 
     if (usuario.empresaId && usuario.empresa?.status !== 'ATIVO') {
@@ -75,12 +98,41 @@ export async function POST(request: NextRequest) {
     }
 
     // 7. Cria sessão segura com JWT em HttpOnly Cookie
-    await createSession({
-      userId: usuario.id,
-      email: usuario.email,
-      role: (usuario.role as 'ADMIN_RPM' | 'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR') || 'OPERADOR',
-      empresaId: usuario.empresaId || undefined,
-      sessionVersion: usuario.sessaoVersao,
+    const expiraEm = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const sessao = await prisma.sessaoUsuario.create({
+      data: {
+        usuarioId: usuario.id,
+        empresaId: usuario.empresaId,
+        ipHash: pseudonymize(clientIp),
+        userAgent: safeUserAgent(request),
+        expiraEm,
+      },
+      select: { id: true },
+    });
+    try {
+      await createSession({
+        sessionId: sessao.id,
+        userId: usuario.id,
+        email: usuario.email,
+        role: (usuario.role as 'ADMIN_RPM' | 'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR') || 'OPERADOR',
+        empresaId: usuario.empresaId || undefined,
+        sessionVersion: usuario.sessaoVersao,
+      }, expiraEm);
+    } catch (error) {
+      await prisma.sessaoUsuario.delete({ where: { id: sessao.id } }).catch(() => undefined);
+      throw error;
+    }
+    await recordSecurityEvent({
+      tipo: 'LOGIN_SUCESSO', request, usuarioId: usuario.id,
+      empresaId: usuario.empresaId, email, ip: clientIp,
+    });
+    await prisma.sessaoUsuario.deleteMany({
+      where: {
+        OR: [
+          { expiraEm: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+          { revogadaEm: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+        ],
+      },
     });
 
     // 8. Retorna dados do usuário (sem senha)
@@ -115,13 +167,6 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    if (error instanceof Error && error.message.includes('ZodError')) {
-      return NextResponse.json(
-        { erro: 'Dados de entrada inválidos' },
-        { status: 400 }
-      );
-    }
-
     console.error('Erro no login:', error);
     return NextResponse.json(
       { erro: 'Erro interno do servidor' },

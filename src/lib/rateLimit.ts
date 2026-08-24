@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto'
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { recordSecurityEvent } from '@/lib/securityEvents'
 
 interface RateLimitResult {
   permitido: boolean
@@ -64,6 +65,16 @@ export async function applyRateLimit(
     const result = await rateLimit(identifier, limit, windowMs)
 
     if (!result.permitido) {
+      // Registra somente o primeiro bloqueio aproximado da janela para o próprio
+      // log não virar vetor de consumo de banco durante um ataque automatizado.
+      if (result.tentar_novamente >= Math.ceil(windowMs / 1000) - 5) {
+        await recordSecurityEvent({
+          tipo: 'RATE_LIMIT',
+          request: _request,
+          ip: getClientIp(_request),
+          contexto: { categoria: identifier.split(':', 1)[0] || 'unknown' },
+        })
+      }
       return NextResponse.json(
         {
           erro: 'Muitas requisições. Tente novamente mais tarde.',
@@ -94,17 +105,27 @@ export async function applyRateLimit(
 
 /** Extrai o endereço informado pelo proxy de borda. */
 export function getClientIp(request: NextRequest): string {
+  const cloudflareIp = request.headers.get('cf-connecting-ip')
   const forwardedFor = request.headers.get('x-forwarded-for')
   const realIp = request.headers.get('x-real-ip')
 
-  if (forwardedFor) return forwardedFor.split(',')[0].trim()
-  if (realIp) return realIp.trim()
+  const ip = cloudflareIp || forwardedFor?.split(',')[0] || realIp
+  if (ip) return ip.trim().slice(0, 64)
   return 'unknown'
 }
 
 export const RATE_LIMITS = {
-  LOGIN: { limit: 5, windowMs: 15 * 60 * 1000 },
-  SIGNUP: { limit: 3, windowMs: 60 * 60 * 1000 },
-  PASSWORD_RESET: { limit: 3, windowMs: 60 * 60 * 1000 },
-  API_GENERAL: { limit: 100, windowMs: 60 * 1000 },
+  // O IP recebe uma margem maior para não punir empresas atrás do mesmo NAT.
+  LOGIN_IP: { limit: 20, windowMs: 15 * 60 * 1000 },
+  LOGIN_ACCOUNT: { limit: 5, windowMs: 15 * 60 * 1000 },
+  PUBLIC_SIGNUP: { limit: 3, windowMs: 60 * 60 * 1000 },
+  PASSWORD_RESET_IP: { limit: 8, windowMs: 60 * 60 * 1000 },
+  PASSWORD_RESET_ACCOUNT: { limit: 3, windowMs: 60 * 60 * 1000 },
+  REPORT_GENERATE: { limit: 5, windowMs: 60 * 60 * 1000 },
+  REPORT_READ: { limit: 30, windowMs: 60 * 1000 },
+  FILE_UPLOAD: { limit: 10, windowMs: 60 * 60 * 1000 },
+  BULK_MUTATION: { limit: 12, windowMs: 60 * 1000 },
+  ADMIN_READ: { limit: 60, windowMs: 60 * 1000 },
+  ADMIN_MUTATION: { limit: 20, windowMs: 60 * 1000 },
+  PUBLIC_STATS: { limit: 60, windowMs: 60 * 1000 },
 } as const

@@ -5,12 +5,17 @@ import { z } from 'zod';
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
 import { prisma } from '@/lib/prisma';
 import { executarComAuditoria } from '@/lib/auditoria';
+import { verifyBotToken } from '@/lib/botProtection';
+import { recordSecurityEvent } from '@/lib/securityEvents';
 
-const schema = z.object({ email: z.string().trim().email().max(254).toLowerCase() }).strict();
+const schema = z.object({
+  email: z.string().trim().email().max(254).toLowerCase(),
+  turnstileToken: z.string().max(2048).optional(),
+}).strict();
 
 export async function POST(request: NextRequest) {
   try {
-    const bloqueio = await applyRateLimit(request, `reset:${getClientIp(request)}`, RATE_LIMITS.PASSWORD_RESET.limit, RATE_LIMITS.PASSWORD_RESET.windowMs);
+    const bloqueio = await applyRateLimit(request, `reset:${getClientIp(request)}`, RATE_LIMITS.PASSWORD_RESET_IP.limit, RATE_LIMITS.PASSWORD_RESET_IP.windowMs);
     if (bloqueio) return bloqueio;
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ erro: 'Informe um e-mail válido.' }, { status: 400 });
@@ -18,10 +23,19 @@ export async function POST(request: NextRequest) {
     const bloqueioConta = await applyRateLimit(
       request,
       `reset-account:${email}`,
-      RATE_LIMITS.PASSWORD_RESET.limit,
-      RATE_LIMITS.PASSWORD_RESET.windowMs,
+      RATE_LIMITS.PASSWORD_RESET_ACCOUNT.limit,
+      RATE_LIMITS.PASSWORD_RESET_ACCOUNT.windowMs,
     );
     if (bloqueioConta) return bloqueioConta;
+    const bot = await verifyBotToken({
+      token: parsed.data.turnstileToken,
+      remoteIp: getClientIp(request),
+      expectedAction: 'password_reset',
+    });
+    if (!bot.success) {
+      await recordSecurityEvent({ tipo: 'BOT_REJEITADO', request, email, ip: getClientIp(request) });
+      return NextResponse.json({ erro: 'Verificação de segurança recusada.' }, { status: 403 });
+    }
 
     // Verifica se o usuário de fato existe no ecossistema RPMTruck
     const usuarioExistente = await prisma.usuario.findUnique({

@@ -66,9 +66,9 @@ export default function ArquivosOperacionaisPage() {
   }, [])
 
   useEffect(() => {
-    carregar()
+    queueMicrotask(() => carregar()
       .catch(error => setMensagem(error instanceof Error ? error.message : 'Erro ao carregar os arquivos.'))
-      .finally(() => setCarregando(false))
+      .finally(() => setCarregando(false)))
   }, [carregar])
 
   const executar = async (acao: () => Promise<void>) => {

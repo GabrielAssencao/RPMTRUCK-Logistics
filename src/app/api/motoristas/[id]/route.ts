@@ -4,6 +4,7 @@ import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { removerFotoMotorista } from '@/lib/motoristaFotos'
 import { prisma } from '@/lib/prisma'
 import { executarComAuditoria } from '@/lib/auditoria'
+import { exposeMotorista } from '@/lib/fieldEncryption'
 
 const schema = z.object({
   veiculoId: z.string().uuid().nullable().optional(),
@@ -48,7 +49,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     })
   })
 
-  return NextResponse.json(atualizado)
+  return NextResponse.json(exposeMotorista(atualizado))
 }
 
 export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {

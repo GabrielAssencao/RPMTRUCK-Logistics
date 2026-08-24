@@ -1,11 +1,11 @@
-import { applyRateLimit, getClientIp } from '@/lib/rateLimit'
+import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-  const limited = await applyRateLimit(request, `public-stats:${getClientIp(request)}`, 60, 60_000)
+  const limited = await applyRateLimit(request, `public-stats:${getClientIp(request)}`, RATE_LIMITS.PUBLIC_STATS.limit, RATE_LIMITS.PUBLIC_STATS.windowMs)
   if (limited) return limited
 
   try {

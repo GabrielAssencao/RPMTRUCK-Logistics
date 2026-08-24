@@ -44,7 +44,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
 
   // 2. Recálculo automático de faturas que ainda estão pendentes
   useEffect(() => {
-    setFaturas(prevFaturas => 
+    queueMicrotask(() => setFaturas(prevFaturas =>
       prevFaturas.map(fatura => {
         if (fatura.status === 'pendente') {
           if (fatura.tipo === 'IMPLEMENTACAO') {
@@ -56,7 +56,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
         }
         return fatura;
       })
-    );
+    ));
   }, [plano, uExtra, vExtra, mensalidadeCalculada, config.taxaImplantacao]);
 
   const toggleModulo = (mod) => {

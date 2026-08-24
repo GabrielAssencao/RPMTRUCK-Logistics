@@ -54,67 +54,101 @@ export function ContainersProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState('')
 
-  const carregar = useCallback(async () => {
-    try {
-      const response = await fetch('/api/containers', { cache: 'no-store' })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar containers.')
-      setContainers(data.containers)
-      setDuplas(data.duplas)
-    } catch (cause) {
-      setErro(cause instanceof Error ? cause.message : 'Falha ao carregar containers.')
-    } finally {
-      setLoading(false)
-    }
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/containers', { cache: 'no-store', signal: controller.signal })
+      .then(async response => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar containers.')
+        setContainers(data.containers)
+        setDuplas(data.duplas)
+      })
+      .catch(cause => {
+        if (cause instanceof Error && cause.name !== 'AbortError') setErro(cause.message)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+    return () => controller.abort()
   }, [])
 
-  useEffect(() => { void carregar() }, [carregar])
+  const adicionarContainer = useCallback(async (registro: Omit<RegistroContainer, 'id' | 'veiculoId' | 'motoristaId' | 'comissao'>) => {
+    const { duplaId, ...dados } = registro
+    const dupla = duplas.find(item => item.id === duplaId)
+    if (!dupla) {
+      setErro('Selecione um veículo válido.')
+      return false
+    }
 
-  const adicionarContainer = async (registro: Omit<RegistroContainer, 'id' | 'veiculoId' | 'motoristaId' | 'comissao'>) => {
-    const dupla = duplas.find(item => item.id === registro.duplaId)
-    if (!dupla) { setErro('Selecione um veículo válido.'); return false }
-    const { duplaId: _duplaId, ...dados } = registro
-    const response = await fetch('/api/containers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...dados, veiculoId: dupla.veiculoId, motoristaId: dupla.motoristaId }) })
+    const response = await fetch('/api/containers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...dados, veiculoId: dupla.veiculoId, motoristaId: dupla.motoristaId }),
+    })
     const data = await response.json()
-    if (!response.ok) { setErro(data.erro || 'Não foi possível salvar o container.'); return false }
+    if (!response.ok) {
+      setErro(data.erro || 'Não foi possível salvar o container.')
+      return false
+    }
     setErro('')
     setContainers(prev => [data, ...prev])
     return true
-  }
+  }, [duplas])
 
-  const atualizarContainer = async (id: string, dados: Partial<Omit<RegistroContainer, 'comissao'>>) => {
-    const dupla = dados.duplaId ? duplas.find(item => item.id === dados.duplaId) : undefined
-    const { duplaId: _duplaId, ...alteracoes } = dados
-    const response = await fetch(`/api/containers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...alteracoes, ...(dupla ? { veiculoId: dupla.veiculoId, motoristaId: dupla.motoristaId } : {}) }) })
+  const atualizarContainer = useCallback(async (id: string, dados: Partial<Omit<RegistroContainer, 'comissao'>>) => {
+    const { duplaId, ...alteracoes } = dados
+    const dupla = duplaId ? duplas.find(item => item.id === duplaId) : undefined
+    const response = await fetch(`/api/containers/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...alteracoes,
+        ...(dupla ? { veiculoId: dupla.veiculoId, motoristaId: dupla.motoristaId } : {}),
+      }),
+    })
     const data = await response.json()
-    if (!response.ok) { setErro(data.erro || 'Não foi possível atualizar o container.'); return false }
+    if (!response.ok) {
+      setErro(data.erro || 'Não foi possível atualizar o container.')
+      return false
+    }
     setErro('')
     setContainers(prev => prev.map(container => container.id === id ? data : container))
     return true
-  }
+  }, [duplas])
 
-  const removerContainer = async (id: string) => {
+  const removerContainer = useCallback(async (id: string) => {
     const response = await fetch(`/api/containers/${id}`, { method: 'DELETE' })
     const data = await response.json()
-    if (!response.ok) { setErro(data.erro || 'Não foi possível remover o container.'); return false }
+    if (!response.ok) {
+      setErro(data.erro || 'Não foi possível remover o container.')
+      return false
+    }
     setErro('')
     setContainers(prev => prev.filter(container => container.id !== id))
     return true
-  }
+  }, [])
 
-  const hoje = new Date()
-  const containersDoMes = useMemo(() => containers.filter(container => {
-    const data = new Date(`${container.data}T12:00:00`)
-    return data.getMonth() === hoje.getMonth() && data.getFullYear() === hoje.getFullYear()
-  }), [containers, hoje])
+  const containersDoMes = useMemo(() => {
+    const hoje = new Date()
+    return containers.filter(container => {
+      const data = new Date(`${container.data}T12:00:00`)
+      return data.getMonth() === hoje.getMonth() && data.getFullYear() === hoje.getFullYear()
+    })
+  }, [containers])
 
   const value = useMemo(() => ({
-    containers, duplas, loading, erro, adicionarContainer, atualizarContainer, removerContainer,
+    containers,
+    duplas,
+    loading,
+    erro,
+    adicionarContainer,
+    atualizarContainer,
+    removerContainer,
     totalEmTransito: containers.filter(container => container.status === 'EM_TRANSITO').length,
     totalContainersMes: containersDoMes.length,
     totalFreteMes: containersDoMes.reduce((total, container) => total + container.frete, 0),
     totalComissaoMes: containersDoMes.reduce((total, container) => total + container.comissao, 0),
-  }), [containers, duplas, loading, erro, containersDoMes])
+  }), [adicionarContainer, atualizarContainer, containers, containersDoMes, duplas, erro, loading, removerContainer])
 
   return <ContainersContext.Provider value={value}>{children}</ContainersContext.Provider>
 }

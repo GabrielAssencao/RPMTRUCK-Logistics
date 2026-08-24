@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { calcularMensalidade, normalizarModulos } from '@/utils/planos'
+import { exposeEmpresa } from '@/lib/fieldEncryption'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       empresas.map((empresa) => ({
-        ...empresa,
+        ...exposeEmpresa(empresa),
         modulos: normalizarModulos(empresa.modulos),
         mensalidade: calcularMensalidade(
           empresa.plano,

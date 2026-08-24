@@ -1,10 +1,10 @@
 'use client'
 
-import { useRef, useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useLandingStats } from '@/contexts/LandingStatsContext'
 
-// Estado neutro: evita publicar números fictícios quando o banco estiver indisponível.
 const FALLBACK_STATS = [
   { value: 0, suffix: '', label: 'Empresas' },
   { value: 0, suffix: '', label: 'Veículos' },
@@ -40,47 +40,22 @@ function Counter({ target, suffix }: { target: number; suffix: string }) {
   }, [inView, prefersReducedMotion, target])
 
   const displayedCount = inView && prefersReducedMotion ? target : count
-
-  return (
-    <span ref={ref}>
-      {displayedCount}{suffix}
-    </span>
-  )
+  return <span ref={ref}>{displayedCount}{suffix}</span>
 }
 
 export default function Stats() {
   const { primary, isLight } = useTheme()
+  const stats = useLandingStats()
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-50px' })
-  const [statsData, setStatsData] = useState<typeof FALLBACK_STATS>(FALLBACK_STATS)
-
-  // ─── CONEXÃO COM A API / BANCO DE DADOS PRISMA ───
-  useEffect(() => {
-    async function fetchStatsFromDB() {
-      try {
-        const response = await fetch('/api/stats')
-        if (!response.ok) {
-          throw new Error('Falha de resposta na API de estatísticas')
-        }
-        
-        const dbData = await response.json()
-
-        setStatsData([
-          { value: Number(dbData.empresas ?? 0), suffix: '', label: 'Empresas' },
-          { value: Number(dbData.veiculos ?? 0), suffix: '', label: 'Veículos' },
-          { value: Number(dbData.motoristas ?? 0), suffix: '', label: 'Motoristas' },
-          { value: Number(dbData.manutencoes ?? 0), suffix: '', label: 'Manutenções' },
-        ])
-      } catch (error) {
-        console.error('Erro ao buscar dados reais para o Stats, mantendo fallback:', error)
-        setStatsData(FALLBACK_STATS)
-      }
-    }
-
-    fetchStatsFromDB()
-  }, [])
-
-  // Definição da cor de contraste para os números dentro do bloco com a cor primária
+  const statsData = stats
+    ? [
+        { value: stats.empresas, suffix: '', label: 'Empresas' },
+        { value: stats.veiculos, suffix: '', label: 'Veículos' },
+        { value: stats.motoristas, suffix: '', label: 'Motoristas' },
+        { value: stats.manutencoes, suffix: '', label: 'Manutenções' },
+      ]
+    : FALLBACK_STATS
   const textColor = isLight ? '#000000' : '#ffffff'
   const subtextColor = isLight ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.8)'
 
@@ -93,7 +68,6 @@ export default function Stats() {
       className="relative z-10 w-full py-16 overflow-hidden transition-colors duration-300"
       style={{ backgroundColor: primary }}
     >
-      {/* Padrão de fundo industrial estilizado */}
       <div
         className="absolute inset-0 opacity-10 pointer-events-none"
         style={{

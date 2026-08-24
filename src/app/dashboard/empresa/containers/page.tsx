@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import type { LucideIcon } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
-import { useContainers, StatusContainer, TipoContainer } from '@/contexts/ContainersContext'
+import { useContainers, StatusContainer, TipoContainer, type RegistroContainer } from '@/contexts/ContainersContext'
 import { obterAnoMesSemana, MESES } from '@/lib/dataUtils'
 import {
   Container as ContainerIcon,
@@ -34,7 +35,7 @@ import {
 } from 'lucide-react'
 
 // ─── CONFIGURAÇÃO DE STATUS (COR + ÍCONE) ─────────────────────────────────
-const STATUS_CONFIG: Record<StatusContainer, { label: string; cor: string; icone: any }> = {
+const STATUS_CONFIG: Record<StatusContainer, { label: string; cor: string; icone: LucideIcon }> = {
   AGENDADO: { label: 'AGENDADO', cor: '#3b82f6', icone: Clock },
   EM_TRANSITO: { label: 'EM TRÂNSITO', cor: '#eab308', icone: ArrowRightLeft },
   ENTREGUE: { label: 'ENTREGUE', cor: '#22c55e', icone: PackageCheck },
@@ -165,7 +166,7 @@ export default function ContainersPage() {
 
   const activeContainer = containers.find(c => c.id === containerAtivoId)
   const activeDupla = activeContainer ? encontrarDupla(activeContainer.duplaId) : null
-  const activeItens = (activeContainer as any)?.itensConteudo as ItemConteudo[] | undefined
+  const activeItens = activeContainer?.itensConteudo as ItemConteudo[] | undefined
 
   // Resumos
   const totalContainersPeriodo = containersFiltrados.length
@@ -232,7 +233,7 @@ export default function ContainersPage() {
     setModalOpen(true)
   }
 
-  const handleAbrirEditar = (registro: any) => {
+  const handleAbrirEditar = (registro: RegistroContainer) => {
     setContainerEditandoId(registro.id)
     setForm({
       data: registro.data,
@@ -598,7 +599,7 @@ export default function ContainersPage() {
             <div className="flex gap-6 overflow-x-auto pb-6 pt-2 custom-scrollbar" style={{ perspective: '1200px' }}>
               {containersFiltrados.map((container) => {
                 const isSelected = containerAtivoId === container.id
-                const itens = (container as any).itensConteudo as ItemConteudo[] | undefined
+                const itens = container.itensConteudo as ItemConteudo[] | undefined
                 const porcentagemTotal = itens?.reduce((acc, i) => acc + i.porcentagem, 0) ?? 0
 
                 return (
@@ -1175,7 +1176,7 @@ export default function ContainersPage() {
                     </div>
                   ) : (
                     <p className="text-[9px] text-foreground-muted italic">
-                      Se não adicionar itens, o contêiner será exibido com a marcação "CONTEÚDO CONFIDENCIAL".
+                      Se não adicionar itens, o contêiner será exibido com a marcação “CONTEÚDO CONFIDENCIAL”.
                     </p>
                   )}
                 </div>

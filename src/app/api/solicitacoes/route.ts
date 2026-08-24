@@ -8,6 +8,8 @@ import { prisma } from '@/lib/prisma';
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
 import { PLANOS_CONFIG } from '@/utils/planos';
 import { executarComAuditoria } from '@/lib/auditoria';
+import { verifyBotToken } from '@/lib/botProtection';
+import { recordSecurityEvent } from '@/lib/securityEvents';
 
 const solicitacaoSchema = z.object({
   empresa: nomeOperacional(2, 150),
@@ -18,6 +20,7 @@ const solicitacaoSchema = z.object({
   mensagem: textoOperacional(3, 1500).optional().or(z.literal('')),
   contatoPref: z.enum(['email', 'whatsapp']).default('email'),
   veiculos: z.coerce.number().int().min(0).max(100_000).optional(),
+  turnstileToken: z.string().max(2048).optional(),
 }).strict();
 
 // ─── 1. ROTA DO ADMIN: LISTAR SOLICITAÇÕES (GET) ───
@@ -43,10 +46,19 @@ export async function GET(request: NextRequest) {
 // ─── 2. ROTA DO CLIENTE: ENVIAR FORMULÁRIO DA LANDING PAGE (POST) ───
 export async function POST(request: NextRequest) {
   try {
-    const bloqueio = await applyRateLimit(request, `solicitacao:${getClientIp(request)}`, RATE_LIMITS.SIGNUP.limit, RATE_LIMITS.SIGNUP.windowMs);
+    const bloqueio = await applyRateLimit(request, `solicitacao:${getClientIp(request)}`, RATE_LIMITS.PUBLIC_SIGNUP.limit, RATE_LIMITS.PUBLIC_SIGNUP.windowMs);
     if (bloqueio) return bloqueio;
     const parsed = solicitacaoSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ erro: 'Revise os dados da solicitação.' }, { status: 400 });
+    const bot = await verifyBotToken({
+      token: parsed.data.turnstileToken,
+      remoteIp: getClientIp(request),
+      expectedAction: 'access_request',
+    });
+    if (!bot.success) {
+      await recordSecurityEvent({ tipo: 'BOT_REJEITADO', request, email: parsed.data.email, ip: getClientIp(request) });
+      return NextResponse.json({ erro: 'Verificação de segurança recusada.' }, { status: 403 });
+    }
     const { empresa, responsavel, email, whatsapp, plano, mensagem, contatoPref } = parsed.data;
 
     // Bloqueio de duplicidade para e-mails corporativos em análise

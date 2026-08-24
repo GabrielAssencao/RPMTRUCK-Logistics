@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, Key, ShieldCheck, CheckCircle, AlertTriangle } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import dynamic from 'next/dynamic'
+import TurnstileWidget from '@/components/security/TurnstileWidget'
 
 const TruckPanel = dynamic(() => import('@/app/auth/login/TruckPanel'), { ssr: false })
 
@@ -22,6 +23,8 @@ export default function RecuperarSenhaPage() {
   const [token, setToken] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
   const [error, setError] = useState('')
+  const [turnstileToken, setTurnstileToken] = useState('')
+  const [turnstileVersion, setTurnstileVersion] = useState(0)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -33,6 +36,10 @@ export default function RecuperarSenhaPage() {
   // Solicita a redefinição de senha (Cria o registro no banco)
   const handleSolicitarReset = async () => {
     if (!email) return
+    if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError('Conclua a verificação de segurança.')
+      return
+    }
     setLoading(true)
     setError('')
 
@@ -40,8 +47,11 @@ export default function RecuperarSenhaPage() {
       const res = await fetch('/api/auth/reset-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email, turnstileToken: turnstileToken || undefined })
       })
+
+      setTurnstileToken('')
+      setTurnstileVersion((value) => value + 1)
 
       if (!res.ok) {
         const data = await res.json()
@@ -50,8 +60,8 @@ export default function RecuperarSenhaPage() {
 
       // Avança para a etapa onde o usuário aguarda o token enviado pelo administrador
       setStep(1)
-    } catch (err: any) {
-      setError(err.message || 'Erro de conexão com o servidor.')
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : 'Erro de conexão com o servidor.')
     } finally {
       setLoading(false)
     }
@@ -79,7 +89,7 @@ export default function RecuperarSenhaPage() {
       }
 
       setStep(3) // Sucesso total
-    } catch (err) {
+    } catch {
       setError('Erro crítico ao processar redefinição.')
       setStep(1)
     }
@@ -99,6 +109,7 @@ export default function RecuperarSenhaPage() {
 
           <StyledInput icon={<Mail size={14} />} label="E-mail Corporativo" type="email" placeholder="seu@empresa.com" value={email} onChange={setEmail} primary={primary} onEnter={handleSolicitarReset} autoFocus />
           
+          <TurnstileWidget key={turnstileVersion} action="password_reset" onTokenChange={setTurnstileToken} />
           <SubmitBtn onClick={handleSolicitarReset} disabled={!email || loading} loading={loading} primary={primary} label="SOLICITAR CÓDIGO →" />
         </motion.div>
       )}

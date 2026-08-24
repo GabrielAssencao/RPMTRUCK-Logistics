@@ -29,7 +29,7 @@ interface GenericDrawerProps {
   subtitulo?: string
   campos: FieldConfig[]
   initialValues?: Record<string, unknown>
-  onSubmit: (formData: Record<string, any>) => Promise<void>
+  onSubmit: (formData: Record<string, unknown>) => Promise<void>
 }
 
 export default function GenericDrawer({
@@ -42,14 +42,14 @@ export default function GenericDrawer({
   onSubmit
 }: GenericDrawerProps) {
   const { primary, isLight } = useTheme()
-  const [formData, setFormData] = useState<Record<string, any>>({})
+  const [formData, setFormData] = useState<Record<string, unknown>>({})
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (isOpen) setFormData(initialValues)
+    if (isOpen) queueMicrotask(() => setFormData(initialValues))
   }, [isOpen, initialValues])
 
-  const handleChange = (name: string, value: any) => {
+  const handleChange = (name: string, value: unknown) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
@@ -132,7 +132,7 @@ export default function GenericDrawer({
                     {campo.type === 'select' ? (
                       <select
                         required={campo.required}
-                        value={formData[campo.name] || ''}
+                        value={inputValue(formData[campo.name])}
                         onChange={(e) => handleChange(campo.name, e.target.value)}
                         className="w-full px-4 py-3 text-xs border outline-none transition-colors"
                         style={{
@@ -159,7 +159,7 @@ export default function GenericDrawer({
                         step={campo.step}
                         title={campo.title}
                         placeholder={campo.placeholder}
-                        value={formData[campo.name] || ''}
+                        value={inputValue(formData[campo.name])}
                         onChange={(e) => handleChange(campo.name, e.target.value)}
                         className="w-full px-4 py-3 text-xs border outline-none transition-colors"
                         style={{
@@ -207,4 +207,8 @@ export default function GenericDrawer({
       )}
     </AnimatePresence>
   )
+}
+
+function inputValue(value: unknown): string | number {
+  return typeof value === 'string' || typeof value === 'number' ? value : ''
 }

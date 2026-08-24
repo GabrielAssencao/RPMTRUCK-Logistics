@@ -74,13 +74,12 @@ function ManutencaoContent() {
   const [feedback, setFeedback] = useState('')
 
   const [indexSelecionado, setIndexSelecionado] = useState(0)
+  const [historico, setHistorico] = useState<RegistroManutencao[]>([])
 
   useEffect(() => {
-    setMontado(true)
+    queueMicrotask(() => setMontado(true))
     fetch('/api/manutencoes', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setVeiculos(data.veiculos); setHistorico(data.historico); if (placaUrl) { const idx = data.veiculos.findIndex((v: VeiculoSelecao) => v.placa.toUpperCase() === placaUrl.toUpperCase()); if (idx !== -1) setIndexSelecionado(idx) } }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar manutenções.'))
   }, [placaUrl])
-
-  const [historico, setHistorico] = useState<RegistroManutencao[]>([])
 
   if (!montado) return null
   if (veiculos.length === 0) return <div className="border border-dashed p-12 text-center text-sm text-foreground-muted">Nenhum veículo cadastrado para controlar manutenções.{feedback ? ` ${feedback}` : ''}</div>

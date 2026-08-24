@@ -38,6 +38,26 @@ interface MotoristaCard {
   veiculoIdVinculado?: string
 }
 
+interface MotoristaApi {
+  id: string
+  nome: string
+  cpf: string | null
+  cnh: string
+  categoria: string
+  validade: string
+  foto_url: string | null
+  veiculoId: string | null
+}
+
+interface VeiculoApi {
+  id: string
+  modelo: string
+  placa: string
+  tipo: string
+  quilometragem: number
+  motoristas?: Array<{ id: string }>
+}
+
 export default function MotoristasPage() {
   const { primary } = useTheme()
   const { containers } = useContainers()
@@ -57,11 +77,11 @@ export default function MotoristasPage() {
   const [excluindoId, setExcluindoId] = useState<string | null>(null)
 
   useEffect(() => {
-    setMontado(true)
+    queueMicrotask(() => setMontado(true))
     fetch('/api/motoristas', { cache: 'no-store' }).then(async response => {
       const data = await response.json(); if (!response.ok) throw new Error(data.erro)
-      setMotoristas(data.motoristas.map((m: any) => ({ id: m.id, nomeAbreviado: m.nome, cpf: m.cpf || 'Não informado', cnh: m.cnh, categoria: m.categoria, validadeCNH: String(m.validade).slice(0, 10), fotoUrl: m.foto_url || undefined, veiculoIdVinculado: m.veiculoId || undefined })))
-      setVeiculos(data.veiculos.map((v: any) => ({ id: v.id, modelo: v.modelo, placa: v.placa, tipo: v.tipo, kmAtual: v.quilometragem, motoristaVinculadoId: v.motoristas?.[0]?.id })))
+      setMotoristas(data.motoristas.map((m: MotoristaApi) => ({ id: m.id, nomeAbreviado: m.nome, cpf: m.cpf || 'Não informado', cnh: m.cnh, categoria: m.categoria, validadeCNH: String(m.validade).slice(0, 10), fotoUrl: m.foto_url || undefined, veiculoIdVinculado: m.veiculoId || undefined })))
+      setVeiculos(data.veiculos.map((v: VeiculoApi) => ({ id: v.id, modelo: v.modelo, placa: v.placa, tipo: v.tipo, kmAtual: v.quilometragem, motoristaVinculadoId: v.motoristas?.[0]?.id })))
     }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar motoristas.'))
   }, [])
 

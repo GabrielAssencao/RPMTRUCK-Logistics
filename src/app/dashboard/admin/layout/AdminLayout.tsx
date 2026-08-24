@@ -14,7 +14,8 @@ import {
   Menu,
   X,
   Bell,
-  CheckCheck
+  CheckCheck,
+  ShieldCheck,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
@@ -25,13 +26,14 @@ const NAV_ADMIN = [
   { id: 'companies', icon: Building2, label: 'EMPRESAS / CLIENTES' },
   { id: 'requests', icon: ShieldAlert, label: 'SOLICITAÇÕES DE ACESSO' },
   { id: 'resets', icon: ShieldAlert, label: 'REDEFINIÇÕES DE SENHA' },
+  { id: 'security', icon: ShieldCheck, label: 'LOGS / SEGURANÇA' },
 ] as const
 
 const CONFIG_ITEM = { id: 'settings', icon: Settings, label: 'CONFIGURAÇÕES' } as const
 
 const LARGURA_RECOLHIDA = '72px'
 const LARGURA_EXPANDIDA = '16rem'
-export type AdminTab = 'dashboard' | 'companies' | 'requests' | 'resets' | 'settings'
+export type AdminTab = 'dashboard' | 'companies' | 'requests' | 'resets' | 'security' | 'settings'
 
 // Dicionário para traduzir o activeTab no Header
 const TAB_LABELS: Record<AdminTab, string> = {
@@ -39,6 +41,7 @@ const TAB_LABELS: Record<AdminTab, string> = {
   'companies': 'EMPRESAS',
   'requests': 'SOLICITAÇÕES',
   'resets': 'SOLICITAÇÕES',
+  'security': 'SEGURANÇA',
   'settings': 'CONFIGURAÇÕES'
 }
 
@@ -64,7 +67,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
     setMobileOpen(false) 
   }
 
-  const SidebarContent = ({ expandida }: { expandida: boolean }) => {
+  const renderSidebarContent = (expandida: boolean) => {
     return (
       <div className="flex flex-col h-full justify-between p-4 font-mono">
         <div>
@@ -188,7 +191,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
         }}
       >
         <div style={{ width: LARGURA_EXPANDIDA }} className="h-full">
-          <SidebarContent expandida={sidebarExpandida} />
+          {renderSidebarContent(sidebarExpandida)}
         </div>
       </aside>
 
@@ -247,7 +250,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
               >
                 <X size={18} />
               </button>
-              <SidebarContent expandida={true} />
+              {renderSidebarContent(true)}
             </motion.div>
           </>
         )}

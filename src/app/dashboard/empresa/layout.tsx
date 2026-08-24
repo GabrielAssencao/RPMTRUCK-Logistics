@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { obterLogoPorTema } from '@/data/temasELogos'
-import { ContainersProvider, useContainers } from '@/contexts/ContainersContext'
+import { ContainersProvider } from '@/contexts/ContainersContext'
 import { 
   LayoutDashboard, 
   Truck, 
@@ -64,11 +64,15 @@ const LARGURA_RECOLHIDA = '72px'
 const LARGURA_EXPANDIDA = '16rem'
 
 export default function EmpresaLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <ContainersProvider>
-      <EmpresaLayoutInterno>{children}</EmpresaLayoutInterno>
-    </ContainersProvider>
-  )
+  const pathname = usePathname()
+  const usaDadosContainers = [
+    '/dashboard/empresa/containers',
+    '/dashboard/empresa/custos',
+    '/dashboard/empresa/motoristas',
+  ].some(rota => pathname === rota || pathname.startsWith(`${rota}/`))
+
+  const conteudo = <EmpresaLayoutInterno>{children}</EmpresaLayoutInterno>
+  return usaDadosContainers ? <ContainersProvider>{conteudo}</ContainersProvider> : conteudo
 }
 
 function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
@@ -88,8 +92,10 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
     if (userData) {
       const parsed = JSON.parse(userData)
       const empresaLocal = parsed.empresaInfo ?? parsed.empresa
-      if (empresaLocal?.nome) setNomeEmpresa(empresaLocal.nome)
-      setModulosAtivos(normalizarModulos(empresaLocal?.modulos))
+      queueMicrotask(() => {
+        if (empresaLocal?.nome) setNomeEmpresa(empresaLocal.nome)
+        setModulosAtivos(normalizarModulos(empresaLocal?.modulos))
+      })
     }
 
     fetch('/api/empresa/perfil', { cache: 'no-store' })
@@ -151,9 +157,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
   }
 
   // ─── Conteúdo Interno da Sidebar ───────────────────────────────────────────
-  const SidebarContent = ({ expandida }: { expandida: boolean }) => {
-    const { totalEmTransito } = useContainers()
-
+  const renderSidebarContent = (expandida: boolean) => {
     return (
       <div className="flex flex-col h-full justify-between p-4 font-mono">
         <div>
@@ -192,9 +196,8 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
             {NAV_EMPRESA.filter(itemPermitido).map((item) => {
               const active = pathname === item.path
               const Icon = item.icon
-              const mostrarBadgeContainers = item.path === '/dashboard/empresa/containers' && totalEmTransito > 0
               const totalPendencias = pendenciasPorModulo[item.notificacaoModulo] ?? 0
-              const mostrarIndicador = mostrarBadgeContainers || totalPendencias > 0
+              const mostrarIndicador = totalPendencias > 0
 
               return (
                 <Link 
@@ -226,9 +229,9 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
                     <span
                       className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0"
                       style={{ backgroundColor: active ? '#000' : primary, color: active ? primary : '#000' }}
-                      title={`${totalPendencias || totalEmTransito} pendência(s)`}
+                      title={`${totalPendencias} pendência(s)`}
                     >
-                      {totalPendencias || totalEmTransito}
+                      {totalPendencias}
                     </span>
                   )}
                 </Link>
@@ -287,7 +290,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
         }}
       >
         <div style={{ width: LARGURA_EXPANDIDA }} className="h-full">
-          <SidebarContent expandida={sidebarExpandida} />
+          {renderSidebarContent(sidebarExpandida)}
         </div>
       </aside>
 
@@ -350,7 +353,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
               >
                 <X size={18} />
               </button>
-              <SidebarContent expandida={true} />
+              {renderSidebarContent(true)}
             </motion.div>
           </>
         )}

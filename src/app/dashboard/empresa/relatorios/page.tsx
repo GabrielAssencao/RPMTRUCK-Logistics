@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { 
@@ -21,11 +22,17 @@ import {
   ShieldCheck,
   Trash2
 } from 'lucide-react'
-import { 
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend
-} from 'recharts'
 import { exportarPdf } from '@/utils/exportPdf'
 import { PLANOS_CONFIG, type PlanoTipo } from '@/utils/planos'
+
+const RelatorioCustoVeiculoChart = dynamic(
+  () => import('@/components/dashboard/empresa/RelatoriosCharts').then(modulo => modulo.RelatorioCustoVeiculoChart),
+  { loading: () => <div className="h-full w-full animate-pulse bg-foreground/5" /> },
+)
+const RelatorioEficienciaChart = dynamic(
+  () => import('@/components/dashboard/empresa/RelatoriosCharts').then(modulo => modulo.RelatorioEficienciaChart),
+  { loading: () => <div className="h-full w-full animate-pulse bg-foreground/5" /> },
+)
 
 interface RelatorioArquivado {
   id: string
@@ -96,12 +103,12 @@ export default function RelatoriosPage() {
   const [dataFim, setDataFim] = useState(dataHojeStr)
 
   useEffect(() => {
-    setMontado(true)
+    queueMicrotask(() => setMontado(true))
     const userData = localStorage.getItem('@rpmtruck:user')
     if (userData) {
       const parsed = JSON.parse(userData)
       const plano = parsed.empresaInfo?.plano ?? parsed.empresa?.plano
-      if (plano && plano in PLANOS_CONFIG) setPlanoEmpresa(plano)
+      if (plano && plano in PLANOS_CONFIG) queueMicrotask(() => setPlanoEmpresa(plano))
     }
 
     fetch('/api/relatorios/arquivos', { cache: 'no-store' })
@@ -527,23 +534,11 @@ export default function RelatoriosPage() {
           </div>
           
           <div className="h-[350px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={custoVeiculo} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={true} vertical={false} />
-                <XAxis type="number" stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value/1000}k`} />
-                <YAxis dataKey="veiculo" type="category" stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} width={80} />
-                <RechartsTooltip 
-                  cursor={{ fill: 'var(--border)', opacity: 0.4 }}
-                  contentStyle={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)', color: 'var(--foreground)', fontSize: '12px', fontFamily: 'monospace' }}
-                  formatter={(val: number) => [`R$ ${val.toLocaleString('pt-BR')}`, '']}
-                />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace', paddingTop: '10px' }} />
-                {/* 🎨 Combustível usa a Cor Primária do Tema */}
-                <Bar dataKey="combustivel" name="Combustível" stackId="a" fill={primary} radius={[0, 0, 0, 0]} />
-                {/* 🎨 Manutenção usa a Cor Adaptativa (Laranja se o tema for Vermelho) */}
-                <Bar dataKey="manutencao" name="Manutenção" stackId="a" fill={corManutencaoAdaptativa} radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <RelatorioCustoVeiculoChart
+              dados={custoVeiculo}
+              corCombustivel={primary}
+              corManutencao={corManutencaoAdaptativa}
+            />
           </div>
         </motion.div>
 
@@ -563,19 +558,7 @@ export default function RelatoriosPage() {
           </div>
 
           <div className="h-[350px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={eficienciaMes} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="mes" stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value}`} domain={['dataMin - 0.5', 'dataMax + 0.5']} />
-                <RechartsTooltip 
-                  contentStyle={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)', color: 'var(--foreground)', fontSize: '12px', fontFamily: 'monospace' }}
-                  formatter={(val: number) => [`R$ ${val.toFixed(2)} / KM`, 'Custo Média']}
-                />
-                <Legend iconType="plainline" wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace', paddingTop: '10px' }} />
-                <Line type="monotone" dataKey="custoKm" name="Custo Médio / KM (R$)" stroke={primary} strokeWidth={3} dot={{ r: 4, fill: 'var(--background)', stroke: primary, strokeWidth: 2 }} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
+            <RelatorioEficienciaChart dados={eficienciaMes} cor={primary} />
           </div>
         </motion.div>
 

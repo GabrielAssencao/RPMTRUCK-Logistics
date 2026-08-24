@@ -12,6 +12,7 @@ import { notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { executarComAuditoria } from '@/lib/auditoria'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -33,6 +34,13 @@ export async function POST(request: NextRequest) {
   if (!gestorAutorizado(auth.session.role)) {
     return NextResponse.json({ erro: 'Apenas o gestor pode gerar arquivos de auditoria.' }, { status: 403 })
   }
+  const limited = await applyRateLimit(
+    request,
+    `report-generate:${auth.empresaId}:${auth.session.userId}`,
+    RATE_LIMITS.REPORT_GENERATE.limit,
+    RATE_LIMITS.REPORT_GENERATE.windowMs,
+  )
+  if (limited) return limited
 
   const parsed = schema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ erro: 'Período inválido.' }, { status: 400 })

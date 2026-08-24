@@ -7,6 +7,7 @@ import {
   type ModuloCodigo,
   type PlanoTipo,
 } from '@/utils/planos'
+import { exposeEmpresa } from '@/lib/fieldEncryption'
 
 interface EmpresaAuthOptions {
   modulo?: ModuloCodigo
@@ -99,14 +100,16 @@ export async function requireEmpresaAuth(request: NextRequest, options: EmpresaA
   }
 
   const plano = empresa.plano as PlanoTipo
+  const empresaExposta = exposeEmpresa(empresa)
 
   return {
     error: null,
     status: 200,
     session: auth.session,
+    usuario: auth.usuario,
     empresaId: empresa.id,
     empresa: {
-      ...empresa,
+      ...empresaExposta,
       plano,
       modulos,
       permissoes: PLANOS_CONFIG[plano],

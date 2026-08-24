@@ -12,10 +12,6 @@ export default function AdminRequests() {
   const [processando, setProcessando] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { 
-    carregarSolicitacoes(); 
-  }, []);
-
   const carregarSolicitacoes = async () => {
     try {
       setLoading(true);
@@ -30,6 +26,10 @@ export default function AdminRequests() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    queueMicrotask(() => void carregarSolicitacoes());
+  }, []);
 
   const aprovarSolicitacao = async (id) => {
     if (confirm("Confirmar aprovação deste lead? Isso criará a empresa e a conta do gestor automaticamente.")) {
@@ -140,7 +140,7 @@ export default function AdminRequests() {
 
                     {req.mensagem && (
                       <p className="text-xs bg-black/10 p-3 border border-border text-foreground-muted font-sans mt-2 italic">
-                        "{req.mensagem}"
+                        “{req.mensagem}”
                       </p>
                     )}
                   </div>

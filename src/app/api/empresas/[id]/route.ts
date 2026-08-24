@@ -4,6 +4,7 @@ import { requireAdminAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notificarAdmins, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 import { executarComAuditoria } from '@/lib/auditoria'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import {
   calcularMensalidade,
   MODULOS,
@@ -20,7 +21,7 @@ const atualizarEmpresaSchema = z.object({
   modulos: z.array(z.enum(MODULOS)).max(MODULOS.length).optional(),
   usuarios_adicionais: z.coerce.number().int().min(0).max(10_000).optional(),
   veiculos_adicionais: z.coerce.number().int().min(0).max(100_000).optional(),
-})
+}).strict()
 
 export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -28,6 +29,8 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   if (auth.error || !auth.session) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
+  const limited = await applyRateLimit(request, `admin-mutation:${auth.session.userId}`, RATE_LIMITS.ADMIN_MUTATION.limit, RATE_LIMITS.ADMIN_MUTATION.windowMs)
+  if (limited) return limited
 
   const parsed = atualizarEmpresaSchema.safeParse(await request.json())
   if (!parsed.success) {

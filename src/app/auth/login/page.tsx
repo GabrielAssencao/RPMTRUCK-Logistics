@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, Truck, Key, ShieldCheck, CheckCircle, AlertTriangle } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import dynamic from 'next/dynamic'
+import TurnstileWidget from '@/components/security/TurnstileWidget'
 
 const TruckPanel = dynamic(() => import('@/app/auth/login/TruckPanel'), { ssr: false })
 
@@ -24,6 +25,8 @@ export default function LoginPage() {
   const [newPassword, setNewPassword] = useState('') 
   const [forgotEmail, setForgotEmail] = useState('')
   const [error, setError] = useState('') 
+  const [turnstileToken, setTurnstileToken] = useState('')
+  const [turnstileVersion, setTurnstileVersion] = useState(0)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -40,6 +43,10 @@ export default function LoginPage() {
       setStep(1)
     } else if (step === 1) {
       if (!senha) return
+      if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken) {
+        setError('Conclua a verificação de segurança.')
+        return
+      }
       setStep(2)
 
       try {
@@ -47,10 +54,12 @@ export default function LoginPage() {
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, senha })
+          body: JSON.stringify({ email, senha, turnstileToken: turnstileToken || undefined })
         })
 
         const data = await res.json()
+        setTurnstileToken('')
+        setTurnstileVersion((value) => value + 1)
 
         if (!res.ok) {
           setError(data.erro || 'Falha na autenticação.')
@@ -109,6 +118,8 @@ export default function LoginPage() {
       onReset={resetLogin}
       primary={primary}
       isLight={isLight}
+      turnstileVersion={turnstileVersion}
+      onTurnstileToken={setTurnstileToken}
     />
   ) : (
     <ForgotForm
@@ -196,6 +207,7 @@ export default function LoginPage() {
 function LoginForm({
   step, email, setEmail, senha, setSenha, newPassword, setNewPassword, showPass, setShowPass,
   loading, error, onNext, onBack, onForgot, onReset, primary, isLight,
+  turnstileVersion, onTurnstileToken,
 }: {
   step: number
   email: string; setEmail: (v: string) => void
@@ -210,6 +222,8 @@ function LoginForm({
   onReset: () => void
   primary: string
   isLight: boolean
+  turnstileVersion: number
+  onTurnstileToken: (token: string) => void
 }) {
   const VISUAL_STEPS = step === 3 ? ['Identificação', 'Segurança', 'Acesso'] : ['E-mail', 'Senha', 'Acesso']
   const visualStepIndex = step === 3 ? 1 : step === 2 ? 2 : step
@@ -288,6 +302,7 @@ function LoginForm({
             <div className="flex justify-end">
               <button onClick={onForgot} className="text-[11px] transition-opacity hover:opacity-70" style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}>Esqueci minha senha →</button>
             </div>
+            <TurnstileWidget key={turnstileVersion} action="login" onTokenChange={onTurnstileToken} />
             <SubmitBtn onClick={onNext} disabled={!senha} loading={false} primary={primary} label="ENTRAR →" />
           </motion.div>
         )}

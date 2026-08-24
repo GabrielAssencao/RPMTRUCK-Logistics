@@ -38,6 +38,11 @@ interface VeiculoCompleto {
   localizacaoId?: string
 }
 
+interface VeiculoApi extends Omit<VeiculoCompleto, 'localizacao' | 'motoristaAtual' | 'localizacaoId'> {
+  localizacao?: { id: string; nome: string } | null
+  motoristas?: Array<{ nome: string }>
+}
+
 export default function FrotaPage() {
   const { primary, isLight } = useTheme()
   const [montado, setMontado] = useState(false)
@@ -64,7 +69,7 @@ export default function FrotaPage() {
   const [veiculos, setVeiculos] = useState<VeiculoCompleto[]>([])
   const [feedback, setFeedback] = useState('')
 
-  const normalizarVeiculo = (veiculo: any): VeiculoCompleto => ({
+  const normalizarVeiculo = (veiculo: VeiculoApi): VeiculoCompleto => ({
     id: veiculo.id, modelo: veiculo.modelo, placa: veiculo.placa, tipo: veiculo.tipo,
     ano: veiculo.ano ?? new Date().getFullYear(), quilometragem: veiculo.quilometragem,
     status: veiculo.status, localizacao: veiculo.localizacao?.nome ?? 'Sem localização',
@@ -72,7 +77,7 @@ export default function FrotaPage() {
   })
 
   useEffect(() => {
-    setMontado(true)
+    queueMicrotask(() => setMontado(true))
     Promise.all([
       fetch('/api/veiculos', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); return data }),
       fetch('/api/localizacoes', { cache: 'no-store' }).then(async response => response.ok ? response.json() : []),
@@ -163,8 +168,13 @@ export default function FrotaPage() {
   // 🎯 ALTERAR STATUS EM LOTE
   const handleAlterarStatusEmLote = async (novoStatus: StatusVeiculo) => {
     const ids = Array.from(selecionados)
-    const responses = await Promise.all(ids.map(id => fetch(`/api/veiculos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: novoStatus }) })))
-    if (responses.some(response => !response.ok)) return setFeedback('Parte da atualização em lote não pôde ser concluída.')
+    const response = await fetch('/api/veiculos/lote', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, status: novoStatus }),
+    })
+    const data = await response.json()
+    if (!response.ok) return setFeedback(data.erro || 'A atualização em lote não pôde ser concluída.')
     setVeiculos(prev => prev.map(v => selecionados.has(v.id) ? { ...v, status: novoStatus } : v))
     setSelecionados(new Set())
     setNovoStatusEmLote(null)
@@ -173,10 +183,19 @@ export default function FrotaPage() {
   // 🗑️ EXCLUIR EM LOTE
   const handleExcluirEmLote = async () => {
     const ids = Array.from(selecionados)
-    const responses = await Promise.all(ids.map(id => fetch(`/api/veiculos/${id}`, { method: 'DELETE' })))
-    const removidos = ids.filter((_, indice) => responses[indice].ok)
+    const response = await fetch('/api/veiculos/lote', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    })
+    const data = await response.json()
+    if (!response.ok) {
+      setFeedback(data.erro || 'A exclusão em lote não pôde ser concluída.')
+      return
+    }
+    const removidos = Array.isArray(data.removidos) ? data.removidos as string[] : []
     setVeiculos(prev => prev.filter(v => !removidos.includes(v.id)))
-    if (removidos.length !== ids.length) setFeedback('Alguns veículos possuem histórico e não puderam ser removidos.')
+    if (data.falhas?.length) setFeedback('Alguns veículos possuem histórico e não puderam ser removidos.')
     setSelecionados(new Set())
     setConfirmandoExclusaoEmLote(false)
   }
@@ -195,7 +214,7 @@ export default function FrotaPage() {
   }
 
   // 💾 SALVAR
-  const handleSalvarVeiculo = async (formData: Record<string, any>) => {
+  const handleSalvarVeiculo = async (formData: Record<string, unknown>) => {
     const response = await fetch(veiculoParaEditar ? `/api/veiculos/${veiculoParaEditar.id}` : '/api/veiculos', {
       method: veiculoParaEditar ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...formData, ano: Number(formData.ano), quilometragem: Number(formData.quilometragem), localizacaoId: formData.localizacao || null }),

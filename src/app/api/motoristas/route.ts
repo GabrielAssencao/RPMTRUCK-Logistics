@@ -12,6 +12,7 @@ import { criarNotificacao } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
 import { dataIsoSchema, nomePessoa } from '@/lib/domainValidation'
 import { executarComAuditoria } from '@/lib/auditoria'
+import { encryptionConfigured, exposeMotorista, protectMotorista } from '@/lib/fieldEncryption'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
   const urls = await criarUrlsAssinadasFotos(motoristas.map((motorista) => motorista.foto_url))
   return NextResponse.json({
     motoristas: motoristas.map((motorista) => ({
-      ...motorista,
+      ...exposeMotorista(motorista),
       foto_url: motorista.foto_url?.startsWith('http')
         ? motorista.foto_url
         : urls.get(motorista.foto_url ?? '') ?? null,
@@ -123,9 +124,24 @@ export async function POST(request: NextRequest) {
   let caminhoFoto: string | null = null
 
   try {
+    if (encryptionConfigured()) {
+      const existentes = await prisma.motorista.findMany({
+        where: { empresaId },
+        select: { empresaId: true, cpf: true, rg: true, cnh: true },
+      })
+      const cpfNovo = parsed.data.cpf?.replace(/\D/g, '') || null
+      const cnhNova = parsed.data.cnh.replace(/\D/g, '')
+      const duplicado = existentes.some((item) => {
+        const exposto = exposeMotorista(item)
+        return (cpfNovo && exposto.cpf?.replace(/\D/g, '') === cpfNovo)
+          || exposto.cnh.replace(/\D/g, '') === cnhNova
+      })
+      if (duplicado) return NextResponse.json({ erro: 'CPF ou CNH já cadastrado para esta empresa.' }, { status: 409 })
+    }
+
     motorista = await executarComAuditoria({ usuarioId }, (tx) => tx.motorista.create({
       data: {
-        ...parsed.data,
+        ...protectMotorista(parsed.data, empresaId),
         validade,
         foto_url: null,
         empresaId,
@@ -150,7 +166,7 @@ export async function POST(request: NextRequest) {
       usuarioId,
     }).catch((error) => console.error('Falha ao notificar cadastro de motorista:', error))
 
-    return NextResponse.json(motorista, { status: 201 })
+    return NextResponse.json(exposeMotorista(motorista), { status: 201 })
   } catch (error) {
     if (caminhoFoto) {
       await removerFotoMotorista(caminhoFoto).catch((cause) => console.error('Falha ao compensar upload de foto:', cause))

@@ -10,8 +10,8 @@ import {
   Building2,
   Users,
   AlertCircle,
-  CheckCircle,
-  Clock
+  Clock,
+  type LucideIcon,
 } from 'lucide-react'
 
 interface DashboardStats {
@@ -39,8 +39,52 @@ interface DashboardStats {
   }
 }
 
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  color,
+  trend,
+}: {
+  title: string
+  value: string | number
+  icon: LucideIcon
+  color: string
+  trend?: string
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="p-6 border rounded-lg"
+      style={{
+        borderColor: 'var(--border)',
+        backgroundColor: 'var(--background-secondary)',
+      }}
+    >
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted mb-1">
+            {title}
+          </p>
+          <p
+            className="text-3xl font-black"
+            style={{ color, fontFamily: 'Rajdhani, sans-serif' }}
+          >
+            {value}
+          </p>
+          {trend && <p className="text-xs text-foreground-muted mt-1">{trend}</p>}
+        </div>
+        <div className="p-3 rounded-lg" style={{ backgroundColor: `${color}15` }}>
+          <Icon size={24} style={{ color }} />
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
 export default function AdminDashboard() {
-  const { primary, isLight } = useTheme()
+  const { primary } = useTheme()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -76,53 +120,6 @@ export default function AdminDashboard() {
   if (!stats) {
     return <div>Erro ao carregar estatísticas</div>
   }
-
-  const StatCard = ({
-    title,
-    value,
-    icon: Icon,
-    color,
-    trend
-  }: {
-    title: string
-    value: string | number
-    icon: any
-    color: string
-    trend?: string
-  }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="p-6 border rounded-lg"
-      style={{
-        borderColor: 'var(--border)',
-        backgroundColor: 'var(--background-secondary)'
-      }}
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted mb-1">
-            {title}
-          </p>
-          <p
-            className="text-3xl font-black"
-            style={{ color, fontFamily: 'Rajdhani, sans-serif' }}
-          >
-            {value}
-          </p>
-          {trend && (
-            <p className="text-xs text-foreground-muted mt-1">{trend}</p>
-          )}
-        </div>
-        <div
-          className="p-3 rounded-lg"
-          style={{ backgroundColor: `${color}15` }}
-        >
-          <Icon size={24} style={{ color }} />
-        </div>
-      </div>
-    </motion.div>
-  )
 
   return (
     <div className="space-y-8">
@@ -242,7 +239,7 @@ export default function AdminDashboard() {
 
           <div className="space-y-2">
             <AnimatePresence>
-              {stats.atividades.ultimasSolicitacoes.map((sol, idx) => (
+              {stats.atividades.ultimasSolicitacoes.map(sol => (
                 <motion.div
                   key={sol.id}
                   initial={{ opacity: 0 }}

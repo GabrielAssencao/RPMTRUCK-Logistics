@@ -8,6 +8,7 @@ import {
 } from '@/lib/motoristaFotos'
 import { prisma } from '@/lib/prisma'
 import { executarComAuditoria } from '@/lib/auditoria'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,6 +26,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
   if (!podeGerenciarMotoristas(auth.session.role)) {
     return NextResponse.json({ erro: 'Seu perfil não pode alterar fotos de motoristas.' }, { status: 403 })
   }
+  const limited = await applyRateLimit(request, `upload:${auth.session.userId}`, RATE_LIMITS.FILE_UPLOAD.limit, RATE_LIMITS.FILE_UPLOAD.windowMs)
+  if (limited) return limited
 
   const motorista = await prisma.motorista.findFirst({
     where: { id: params.id, empresaId: auth.session.empresaId },

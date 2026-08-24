@@ -11,6 +11,7 @@ import CompaniesModule from '@/app/dashboard/admin/modules/companies/CompaniesMo
 import PasswordResetsModule from '@/app/dashboard/admin/modules/password-resets/AdminPasswordResets'
 import AdminRequests from '@/app/dashboard/admin/modules/requests/AdminRequests'
 import SettingsModule from '@/app/dashboard/admin/modules/settings/SettingsModule'
+import SecurityModule from '@/app/dashboard/admin/modules/security/SecurityModule'
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard')
@@ -28,6 +29,8 @@ export default function AdminPage() {
         return <AdminRequests key="requests" />
       case 'settings':
         return <SettingsModule key="settings" />
+      case 'security':
+        return <SecurityModule key="security" />
       default:
         return <DashboardModule key="dashboard" />
     }

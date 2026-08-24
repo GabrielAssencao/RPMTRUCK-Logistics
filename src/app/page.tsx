@@ -10,6 +10,7 @@ import Stats     from '@/components/landing/Stats'
 import Plans     from '@/components/landing/Plans'
 import CTA       from '@/components/landing/CTA'
 import Footer    from '@/components/landing/Footer'
+import { LandingStatsProvider } from '@/contexts/LandingStatsContext'
 
 export default function LandingPage() {
   return (
@@ -19,12 +20,14 @@ export default function LandingPage() {
 
       
       <Hero>
-        <Ticker />
-        <Features />
-        <Stats />
-        <Plans />
-        <CTA />
-        <Footer />
+        <LandingStatsProvider>
+          <Ticker />
+          <Features />
+          <Stats />
+          <Plans />
+          <CTA />
+          <Footer />
+        </LandingStatsProvider>
       </Hero>
     </>
   )

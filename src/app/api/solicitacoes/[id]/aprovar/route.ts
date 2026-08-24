@@ -1,17 +1,20 @@
 import { NextResponse } from 'next/server';
 import { Role, StatusEmpresa, StatusSolicitacao, StatusFatura } from '@prisma/client';
-import bcrypt from 'bcrypt'; // Lembre-se de rodar 'npm i bcrypt' e 'npm i --save-dev @types/bcrypt'
+import { hashPassword } from '@/lib/password';
 import { requireAdminAuth } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PLANOS_CONFIG as PLANOS_PADRONIZADOS } from '@/utils/planos';
 import { randomBytes } from 'crypto';
 import { executarComAuditoria } from '@/lib/auditoria';
+import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const auth = await requireAdminAuth(request);
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status });
+  const limited = await applyRateLimit(request, `admin-mutation:${auth.session.userId}`, RATE_LIMITS.ADMIN_MUTATION.limit, RATE_LIMITS.ADMIN_MUTATION.windowMs);
+  if (limited) return limited;
   const { id } = params;
 
   try {
@@ -36,8 +39,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
     // Gerando uma senha padrão temporária inicial forte para o cliente
     const senhaProvisoria = `RPM@${randomBytes(6).toString('base64url')}`;
-    const salt = await bcrypt.genSalt(10);
-    const senhaHash = await bcrypt.hash(senhaProvisoria, salt);
+    const senhaHash = await hashPassword(senhaProvisoria);
 
     // 2. Executa a TRANSACTION (Garante que se um passo falhar, nenhum dado corrompido é gravado)
     const resultado = await executarComAuditoria({ usuarioId: auth.session.userId, origem: 'SUPERADMIN' }, async (tx) => {

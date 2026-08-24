@@ -71,7 +71,7 @@ export default function TarefasPage() {
     }
   }, [])
 
-  useEffect(() => { void carregar() }, [carregar])
+  useEffect(() => { queueMicrotask(() => void carregar()) }, [carregar])
 
   const eGestor = perfil === 'GESTOR_EMPRESA' || perfil === 'GESTOR'
   const podeAtualizarStatus = eGestor || perfil === 'OPERADOR'

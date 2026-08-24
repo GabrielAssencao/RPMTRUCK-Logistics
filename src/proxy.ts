@@ -27,6 +27,28 @@ const PROTECTED_ROUTES = [
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  if (pathname.startsWith('/api/')) {
+    const mutatingMethod = !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
+    if (mutatingMethod) {
+      const origin = request.headers.get('origin')
+      const fetchSite = request.headers.get('sec-fetch-site')
+      const allowedOrigins = new Set([
+        request.nextUrl.origin,
+        process.env.NEXT_PUBLIC_SITE_URL,
+        ...(process.env.APP_ALLOWED_ORIGINS || '').split(','),
+      ].filter((value): value is string => Boolean(value)).map((value) => value.trim().replace(/\/$/, '')))
+      if ((origin && !allowedOrigins.has(origin.replace(/\/$/, ''))) || fetchSite === 'cross-site') {
+        return NextResponse.json({ erro: 'Origem da requisição não permitida.' }, { status: 403 })
+      }
+
+      const contentLength = Number(request.headers.get('content-length') || 0)
+      const maxBodyBytes = pathname.includes('/foto') ? 8 * 1024 * 1024 : 2 * 1024 * 1024
+      if (Number.isFinite(contentLength) && contentLength > maxBodyBytes) {
+        return NextResponse.json({ erro: 'Corpo da requisição excede o limite permitido.' }, { status: 413 })
+      }
+    }
+  }
+
   if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
     return NextResponse.next()
   }

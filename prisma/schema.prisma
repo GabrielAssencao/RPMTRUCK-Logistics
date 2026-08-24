@@ -47,6 +47,15 @@ enum StatusReset {
   REJEITADO
 }
 
+enum EventoSegurancaTipo {
+  LOGIN_SUCESSO
+  LOGIN_FALHA
+  LOGOUT
+  RATE_LIMIT
+  BOT_REJEITADO
+  SESSAO_REVOGADA
+}
+
 enum StatusFatura {
   PENDENTE
   PAGO
@@ -106,6 +115,7 @@ model SolicitacaoAcesso {
   criado_em     DateTime          @default(now())
   atualizado_em DateTime          @updatedAt
 
+  @@index([status, criado_em])
   @@map("solicitacoes_acesso")
 }
 
@@ -129,6 +139,7 @@ model Empresa {
   id                   String        @id @default(uuid())
   nome                 String
   cnpj                 String?       @unique
+  cnpjHash             String?       @unique @map("cnpj_hash")
   email                String        @unique
   nome_contato         String?
   telefone             String?
@@ -165,6 +176,8 @@ model Empresa {
   containers              Container[]
   tarefas                 Tarefa[]
   leituras_quilometragem  LeituraQuilometragem[]
+  sessoes                 SessaoUsuario[]
+  eventos_seguranca       EventoSeguranca[]
 
   @@map("empresas")
 }
@@ -189,10 +202,13 @@ model Usuario {
   notificacoes              Notificacao[]      @relation("NotificacoesUsuario")
   tarefas_criadas           Tarefa[]           @relation("TarefasCriadas")
   tarefas_atribuidas        Tarefa[]           @relation("TarefasResponsavel")
+  sessoes                   SessaoUsuario[]
+  eventos_seguranca         EventoSeguranca[]
 
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
 
+  @@index([empresaId, role])
   @@map("usuarios")
 }
 
@@ -210,6 +226,7 @@ model Localizacao {
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
 
+  @@index([empresaId, nome])
   @@map("localizacoes")
 }
 
@@ -242,6 +259,7 @@ model Veiculo {
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
 
+  @@index([empresaId, status])
   @@map("veiculos")
 }
 
@@ -254,6 +272,8 @@ model Motorista {
   status    String   @default("DISPONIVEL") // DISPONIVEL, EM_ROTA, ALERTA, FERIAS
   cpf       String?
   rg        String?
+  cpfHash   String?  @map("cpf_hash")
+  cnhHash   String?  @map("cnh_hash")
   foto_url  String?
 
   // Relação com a Empresa
@@ -272,6 +292,9 @@ model Motorista {
 
   @@unique([empresaId, cpf])
   @@unique([empresaId, cnh])
+  @@unique([empresaId, cpfHash])
+  @@unique([empresaId, cnhHash])
+  @@index([empresaId, validade])
   @@map("motoristas")
 }
 
@@ -298,6 +321,9 @@ model HistoricoVeiculo {
 
   criado_em DateTime @default(now())
 
+  @@index([empresaId, status, data_agendada])
+  @@index([empresaId, data_agendada])
+  @@index([veiculoId, data_agendada])
   @@index([relatorioArquivoId])
   @@map("historicos_veiculo")
 }
@@ -348,6 +374,8 @@ model Custo {
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
 
+  @@index([empresaId, data])
+  @@index([veiculoId, data])
   @@index([relatorioArquivoId])
   @@map("custos")
 }
@@ -485,6 +513,8 @@ model Fatura {
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
 
+  @@index([empresaId, criado_em])
+  @@index([status, criado_em])
   @@map("faturas")
 }
 
@@ -558,4 +588,45 @@ model AuditoriaLog {
   @@index([tabela, registroId, criadoEm])
   @@index([usuarioId, criadoEm])
   @@map("auditoria_logs")
+}
+
+model SessaoUsuario {
+  id              String    @id @default(uuid())
+  usuarioId       String    @map("usuario_id")
+  empresaId       String?   @map("empresa_id")
+  ipHash          String?   @map("ip_hash")
+  userAgent       String?   @map("user_agent")
+  criadoEm        DateTime  @default(now()) @map("criado_em")
+  ultimaAtividade DateTime  @default(now()) @map("ultima_atividade")
+  expiraEm        DateTime  @map("expira_em")
+  revogadaEm      DateTime? @map("revogada_em")
+
+  usuario Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  empresa Empresa? @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+
+  @@index([usuarioId, expiraEm])
+  @@index([empresaId, ultimaAtividade])
+  @@index([ultimaAtividade, revogadaEm])
+  @@map("sessoes_usuario")
+}
+
+model EventoSeguranca {
+  id        String              @id @default(uuid())
+  tipo      EventoSegurancaTipo
+  usuarioId String?             @map("usuario_id")
+  empresaId String?             @map("empresa_id")
+  emailHash String?             @map("email_hash")
+  ipHash    String?             @map("ip_hash")
+  userAgent String?             @map("user_agent")
+  contexto  Json?
+  criadoEm  DateTime            @default(now()) @map("criado_em")
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  empresa Empresa? @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+
+  @@index([tipo, criadoEm])
+  @@index([usuarioId, criadoEm])
+  @@index([empresaId, criadoEm])
+  @@index([ipHash, criadoEm])
+  @@map("eventos_seguranca")
 }

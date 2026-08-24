@@ -22,7 +22,7 @@ export function useAdminData() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { queueMicrotask(() => void fetchAll()); }, []);
 
   return { ...data, refresh: fetchAll };
 }

@@ -20,9 +20,10 @@ export {
 } from '@/lib/sessionToken'
 
 type SessionInput = Omit<SessionPayload, 'iat' | 'exp'>
+const SESSION_DURATION_MS = 24 * 60 * 60 * 1000
+const activityWrites = new Map<string, number>()
 
-export async function createSession(payload: SessionInput) {
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+export async function createSession(payload: SessionInput, expiresAt = new Date(Date.now() + SESSION_DURATION_MS)) {
   const token = await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setIssuedAt()
@@ -34,7 +35,9 @@ export async function createSession(payload: SessionInput) {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
+    priority: 'high',
     maxAge: 24 * 60 * 60,
+    expires: expiresAt,
     path: '/',
   })
 
@@ -45,6 +48,15 @@ export interface AuthResult {
   error: string | null
   status: number
   session: SessionPayload | null
+  usuario?: {
+    id: string
+    nome: string
+    email: string
+    role: AppRole
+    empresaId: string | null
+    acessoDashboardGeral: boolean
+    sessaoVersao: number
+  }
 }
 
 const requestAuthCache = new WeakMap<NextRequest, Promise<AuthResult>>()
@@ -55,16 +67,26 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
     return { error: 'Não autenticado', status: 401, session: null }
   }
 
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: tokenSession.userId },
-    select: {
-      id: true,
-      email: true,
-      role: true,
-      empresaId: true,
-      sessaoVersao: true,
-    },
-  })
+  const usuarioSelect = {
+    id: true,
+    nome: true,
+    email: true,
+    role: true,
+    empresaId: true,
+    acessoDashboardGeral: true,
+    sessaoVersao: true,
+  } as const
+  const usuario = tokenSession.sessionId
+    ? (await prisma.sessaoUsuario.findFirst({
+        where: {
+          id: tokenSession.sessionId,
+          usuarioId: tokenSession.userId,
+          revogadaEm: null,
+          expiraEm: { gt: new Date() },
+        },
+        select: { usuario: { select: usuarioSelect } },
+      }))?.usuario
+    : await prisma.usuario.findUnique({ where: { id: tokenSession.userId }, select: usuarioSelect })
 
   if (
     !usuario ||
@@ -76,6 +98,23 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
     return { error: 'Sessão expirada ou revogada', status: 401, session: null }
   }
 
+  if (tokenSession.sessionId) {
+    const agora = Date.now()
+    const ultimaEscrita = activityWrites.get(tokenSession.sessionId) || 0
+    if (agora - ultimaEscrita >= 5 * 60 * 1000) {
+      await prisma.sessaoUsuario.updateMany({
+        where: {
+          id: tokenSession.sessionId,
+          ultimaAtividade: { lt: new Date(agora - 5 * 60 * 1000) },
+          revogadaEm: null,
+        },
+        data: { ultimaAtividade: new Date(agora) },
+      })
+      if (activityWrites.size > 5_000) activityWrites.clear()
+      activityWrites.set(tokenSession.sessionId, agora)
+    }
+  }
+
   return {
     error: null,
     status: 200,
@@ -85,6 +124,10 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
       role: usuario.role as AppRole,
       empresaId: usuario.empresaId ?? undefined,
       sessionVersion: usuario.sessaoVersao,
+    },
+    usuario: {
+      ...usuario,
+      role: usuario.role as AppRole,
     },
   }
 }
@@ -117,7 +160,16 @@ export async function requireAdminAuth(request: NextRequest): Promise<AuthResult
   return auth
 }
 
-export async function clearSession() {
+export async function clearSession(request?: NextRequest) {
+  if (request) {
+    const session = await verifySession(request)
+    if (session?.sessionId) {
+      await prisma.sessaoUsuario.updateMany({
+        where: { id: session.sessionId, usuarioId: session.userId, revogadaEm: null },
+        data: { revogadaEm: new Date() },
+      })
+    }
+  }
   const cookieStore = await cookies()
   cookieStore.delete(SESSION_COOKIE_NAME)
 }

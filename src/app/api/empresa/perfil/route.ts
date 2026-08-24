@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
-import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { nomeOperacional } from '@/lib/domainValidation'
 import { executarComAuditoria } from '@/lib/auditoria'
+import { encryptionConfigured, exposeEmpresa, protectEmpresa } from '@/lib/fieldEncryption'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,10 +14,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
 
-  const usuario = await prisma.usuario.findFirst({
-    where: { id: auth.session.userId, empresaId: auth.empresa.id },
-    select: { id: true, email: true, role: true, acessoDashboardGeral: true },
-  })
+  const usuario = auth.usuario
   if (!usuario) {
     return NextResponse.json({ erro: 'Usuário não pertence mais a esta empresa.' }, { status: 403 })
   }
@@ -49,8 +47,22 @@ export async function PATCH(request: NextRequest) {
   const parsed = atualizarPerfilSchema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ erro: 'Dados da empresa inválidos.' }, { status: 400 })
   try {
-    const empresa = await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.empresa.update({ where: { id: auth.session!.empresaId! }, data: parsed.data }))
-    return NextResponse.json({ empresa })
+    const empresaId = auth.session.empresaId
+    if (parsed.data.cnpj && encryptionConfigured()) {
+      const empresas = await prisma.empresa.findMany({
+        where: { id: { not: empresaId } },
+        select: { id: true, cnpj: true, telefone: true },
+      })
+      const cnpjNovo = parsed.data.cnpj.replace(/\D/g, '')
+      if (empresas.some((item) => exposeEmpresa(item).cnpj?.replace(/\D/g, '') === cnpjNovo)) {
+        return NextResponse.json({ erro: 'CNPJ já utilizado por outra empresa.' }, { status: 409 })
+      }
+    }
+    const empresa = await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.empresa.update({
+      where: { id: empresaId },
+      data: protectEmpresa(parsed.data, empresaId),
+    }))
+    return NextResponse.json({ empresa: exposeEmpresa(empresa) })
   } catch {
     return NextResponse.json({ erro: 'CNPJ ou e-mail já utilizado por outra empresa.' }, { status: 409 })
   }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -19,6 +19,7 @@ import {
   PlusCircle
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import TurnstileWidget from '@/components/security/TurnstileWidget'
 
 // ─── Planos disponíveis ─────────────────────────────────────────────
 const PLANS = [
@@ -108,15 +109,21 @@ export default function SolicitarAcesso() {
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [turnstileToken, setTurnstileToken] = useState('')
+  const [turnstileVersion, setTurnstileVersion] = useState(0)
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      const planoParam = params.get('plano')?.toUpperCase() || ''
-      if (PLANS.some(p => p.id === planoParam)) {
-        handlePlanSelect(planoParam)
-      }
-    }
+    const value = new URLSearchParams(window.location.search).get('plano')?.toUpperCase() || ''
+    const plan = PLANS.find((item) => item.id === value)
+    if (!plan) return
+    queueMicrotask(() => {
+      setSelectedPlan(value)
+      setForm((current) => ({
+        ...current,
+        plano: value,
+        veiculos: plan.vehicles !== 'Ilimitado' ? String(plan.vehicles) : '0',
+      }))
+    })
   }, [])
 
   // 🎯 NAVEGAÇÃO SEGURA DE VOLTA PARA A LANDING PAGE
@@ -144,6 +151,10 @@ export default function SolicitarAcesso() {
 
   const handleSubmit = async () => {
     if (!form.empresa || !form.responsavel || !form.email || !form.plano) return
+    if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken) {
+      setErrorMessage('Conclua a verificação de segurança.')
+      return
+    }
     setLoading(true)
     setErrorMessage('')
 
@@ -151,13 +162,15 @@ export default function SolicitarAcesso() {
       const res = await fetch('/api/solicitacoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify({ ...form, turnstileToken: turnstileToken || undefined })
       })
       const data = await res.json()
+      setTurnstileToken('')
+      setTurnstileVersion((value) => value + 1)
       if (!res.ok) throw new Error(data.erro || 'Erro ao processar solicitação.')
       setSubmitted(true)
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Falha de comunicação com o servidor.')
+    } catch (cause: unknown) {
+      setErrorMessage(cause instanceof Error ? cause.message : 'Falha de comunicação com o servidor.')
     } finally {
       setLoading(false)
     }
@@ -291,6 +304,8 @@ export default function SolicitarAcesso() {
             </FormSection>
 
             {errorMessage && <div className="p-4 border text-xs font-bold uppercase tracking-wider bg-red-500/10 border-red-500/30 text-red-500 font-mono">⚠ {errorMessage}</div>}
+
+            <TurnstileWidget key={turnstileVersion} action="access_request" onTokenChange={setTurnstileToken} />
 
             <motion.button onClick={handleSubmit} disabled={loading || !form.empresa || !form.responsavel || !form.email || !form.plano} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} className="w-full py-5 font-black text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed font-rajdhani cursor-pointer" style={{ backgroundColor: primary, color: '#000', clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))' }}>
               {loading ? (<><span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> ENVIANDO...</>) : (<><Send size={16} /> ENVIAR SOLICITAÇÃO →</>)}

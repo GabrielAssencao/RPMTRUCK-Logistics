@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { 
@@ -84,19 +84,13 @@ export default function UsuariosPage() {
   
   const [perfilLogado, setPerfilLogado] = useState<'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'>('VISUALIZADOR')
 
-  // Carrega os usuários salvos no Supabase ao carregar a página
-  useEffect(() => {
-    setMontado(true)
-    fetch('/api/empresa/perfil', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (response.ok) { setPerfilLogado(data.usuario.role); setUsuarioLogadoId(data.usuario.id); if (data.usuario.role === 'GESTOR_EMPRESA' || data.usuario.role === 'GESTOR') void carregarUsuarios() } else setLoading(false) }).catch(() => setLoading(false))
-  }, [])
-
-  const carregarUsuarios = async () => {
+  const carregarUsuarios = useCallback(async () => {
     try {
       setLoading(true)
       const res = await fetch('/api/empresa/usuarios')
       if (res.ok) {
         const data = await res.json()
-        const formatados = data.map((u: any) => ({
+        const formatados = data.map((u: UsuarioApi) => ({
           id: u.id,
           nome: u.nome,
           email: u.email,
@@ -112,7 +106,19 @@ export default function UsuariosPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    queueMicrotask(() => setMontado(true))
+    fetch('/api/empresa/perfil', { cache: 'no-store' }).then(async response => {
+      const data = await response.json()
+      if (response.ok) {
+        setPerfilLogado(data.usuario.role)
+        setUsuarioLogadoId(data.usuario.id)
+        if (data.usuario.role === 'GESTOR_EMPRESA' || data.usuario.role === 'GESTOR') await carregarUsuarios()
+      } else setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [carregarUsuarios])
 
   if (!montado) return null
 
@@ -141,7 +147,7 @@ export default function UsuariosPage() {
   )
 
   // Envia os dados do Drawer diretamente para a API Backend
-  const handleCriarUsuario = async (formData: Record<string, any>) => {
+  const handleCriarUsuario = async (formData: Record<string, unknown>) => {
     try {
       const res = await fetch('/api/empresa/usuarios', {
         method: 'POST',
@@ -423,4 +429,13 @@ function BadgeRole({ role, primary }: { role: string, primary: string }) {
       <Eye size={12} /> VISUALIZADOR
     </span>
   )
+}
+
+interface UsuarioApi {
+  id: string
+  nome: string
+  email: string
+  role: UsuarioLocal['role']
+  acessoDashboardGeral: boolean
+  criado_em: string
 }

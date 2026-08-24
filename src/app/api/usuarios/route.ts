@@ -1,7 +1,7 @@
 // src/app/api/usuarios/route.ts
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcrypt';
+import { hashPassword } from '@/lib/password';
 import { requireEmpresaAuth } from '@/lib/empresaAuth';
 import { criarUsuarioSchema, validateInput } from '@/lib/validation';
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
@@ -56,8 +56,8 @@ export async function POST(request: NextRequest) {
     const rateLimitResult = await applyRateLimit(
       request,
       `signup:${clientIp}`,
-      RATE_LIMITS.SIGNUP.limit,
-      RATE_LIMITS.SIGNUP.windowMs
+      RATE_LIMITS.PUBLIC_SIGNUP.limit,
+      RATE_LIMITS.PUBLIC_SIGNUP.windowMs
     );
 
     if (rateLimitResult) {
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Hash da senha com bcrypt
-    const senhaCriptografada = await bcrypt.hash(senha, 10);
+    const senhaCriptografada = await hashPassword(senha);
 
     // 7. Cria o usuário
     const novoUsuario = await criarUsuarioEmpresaComLimite({

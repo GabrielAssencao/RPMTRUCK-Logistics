@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { 
@@ -21,11 +22,16 @@ import {
   Sparkles,
   ArrowRight
 } from 'lucide-react'
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
-} from 'recharts'
 import type { PlanoTipo } from '@/utils/planos'
+
+const DashboardCostAreaChart = dynamic(
+  () => import('@/components/dashboard/empresa/EmpresaDashboardCharts').then(modulo => modulo.DashboardCostAreaChart),
+  { loading: () => <div className="h-full w-full animate-pulse bg-foreground/5" /> },
+)
+const DashboardDistributionPieChart = dynamic(
+  () => import('@/components/dashboard/empresa/EmpresaDashboardCharts').then(modulo => modulo.DashboardDistributionPieChart),
+  { loading: () => <div className="h-full w-full animate-pulse bg-foreground/5" /> },
+)
 
 type Urgencia = 'ALTA' | 'MEDIA' | 'BAIXA'
 
@@ -71,7 +77,7 @@ export default function PainelEmpresa() {
   const [instrucaoDelegacao, setInstrucaoDelegacao] = useState('')
 
   useEffect(() => {
-    setMontado(true)
+    queueMicrotask(() => setMontado(true))
     fetch('/api/dashboard/empresa', { cache: 'no-store' })
       .then(async response => {
         const data = await response.json()
@@ -187,17 +193,12 @@ export default function PainelEmpresa() {
             </div>
           </div>
           <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dadosGraficos[recorteDias] ?? []} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="dia" stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v/1000}k`} />
-                <RechartsTooltip contentStyle={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)', color: 'var(--foreground)', fontSize: '12px' }} formatter={(val: number) => [`R$ ${val.toLocaleString('pt-BR')}`, '']} />
-                <Area type="monotone" dataKey="combustivel" stroke={corCombustivel} strokeWidth={2} fillOpacity={0.2} fill={corCombustivel} name="Combustível" />
-                <Area type="monotone" dataKey="manutencao" stroke={corManutencao} strokeWidth={2} fillOpacity={0.2} fill={corManutencao} name="Manutenção" />
-                <Area type="monotone" dataKey="pedagio" stroke={corPedagio} strokeWidth={2} fillOpacity={0.2} fill={corPedagio} name="Pedágio" />
-              </AreaChart>
-            </ResponsiveContainer>
+            <DashboardCostAreaChart
+              dados={dadosGraficos[recorteDias] ?? []}
+              corCombustivel={corCombustivel}
+              corManutencao={corManutencao}
+              corPedagio={corPedagio}
+            />
           </div>
         </motion.div>
 
@@ -215,40 +216,10 @@ export default function PainelEmpresa() {
           </div>
 
           <div className="flex-1 min-h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={dadosDistribuicaoCustos}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={88}
-                  paddingAngle={4}
-                  dataKey="value"
-                  stroke="var(--background-secondary)"
-                  strokeWidth={3}
-                  startAngle={90}
-                  endAngle={-270}
-                >
-                  {dadosDistribuicaoCustos.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={index === 0 ? corCombustivel : index === 1 ? corManutencao : index === 2 ? corPedagio : 'var(--border)'}
-                    />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--background)',
-                    borderColor: 'var(--border)',
-                    color: 'var(--foreground)',
-                    fontSize: '12px',
-                    borderRadius: '12px',
-                  }}
-                  formatter={(val: number) => [`${val}%`, 'Proporção']}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            <DashboardDistributionPieChart
+              dados={dadosDistribuicaoCustos}
+              cores={[corCombustivel, corManutencao, corPedagio, 'var(--border)']}
+            />
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] uppercase tracking-[0.15em]">

@@ -1,4 +1,4 @@
-import bcrypt from 'bcrypt'
+import { hashPassword } from '@/lib/password'
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -22,8 +22,8 @@ export async function POST(request: NextRequest) {
   const bloqueio = await applyRateLimit(
     request,
     `reset-confirm:${getClientIp(request)}`,
-    RATE_LIMITS.PASSWORD_RESET.limit,
-    RATE_LIMITS.PASSWORD_RESET.windowMs,
+    RATE_LIMITS.PASSWORD_RESET_IP.limit,
+    RATE_LIMITS.PASSWORD_RESET_IP.windowMs,
   )
   if (bloqueio) return bloqueio
 
@@ -38,8 +38,8 @@ export async function POST(request: NextRequest) {
   const bloqueioConta = await applyRateLimit(
     request,
     `reset-confirm-account:${parsed.data.email}`,
-    RATE_LIMITS.PASSWORD_RESET.limit,
-    RATE_LIMITS.PASSWORD_RESET.windowMs,
+    RATE_LIMITS.PASSWORD_RESET_ACCOUNT.limit,
+    RATE_LIMITS.PASSWORD_RESET_ACCOUNT.windowMs,
   )
   if (bloqueioConta) return bloqueioConta
 
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ erro: 'Código inválido, expirado ou já utilizado.' }, { status: 400 })
   }
 
-  const senhaHash = await bcrypt.hash(parsed.data.novaSenha, 12)
+  const senhaHash = await hashPassword(parsed.data.novaSenha)
   const usuario = await prisma.usuario.findUnique({
     where: { email: parsed.data.email },
     select: { id: true },

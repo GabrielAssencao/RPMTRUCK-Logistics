@@ -33,7 +33,7 @@ Cada empresa opera em seu próprio contexto, enquanto o administrador global con
 
 | Camada | Tecnologias |
 | --- | --- |
-| Aplicação | Next.js 16, React 18, TypeScript |
+| Aplicação | Next.js 16, React 19, TypeScript |
 | Interface | Tailwind CSS, Lucide React, Framer Motion, GSAP |
 | 3D | Three.js, React Three Fiber, Drei |
 | Formulários e validação | React Hook Form, Zod |
@@ -109,8 +109,8 @@ devem manter essa fronteira ou receber uma política RLS explicitamente revisada
 
 A integração privilegiada com o Storage usa `SUPABASE_SECRET_KEY` no servidor. Essa
 variável recebe a chave moderna `sb_secret_...` e nunca deve possuir o prefixo
-`NEXT_PUBLIC_`. `SUPABASE_SERVICE_ROLE_KEY` é aceito apenas como fallback temporário
-para migração da chave JWT legada. Com a Data API desativada, a migração
+`NEXT_PUBLIC_`. O código não aceita mais a variável legada `SUPABASE_SERVICE_ROLE_KEY`.
+Com a Data API desativada, a migração
 `20260820070000_data_api_desativada` mantém um schema vazio no PostgREST para evitar
 o erro recorrente `3F000`; antes de reativar a Data API, essa configuração precisa
 ser revertida e os schemas expostos devem ser revisados.
@@ -218,3 +218,52 @@ Este projeto procura ir além de uma interface visual: as decisões consideram i
 Desenvolvido por **Gabriel Assencao** como um produto de gestão logística e projeto de portfólio full-stack.
 
 O repositório permanece privado durante a fase de desenvolvimento. Uma demonstração pública e documentação visual poderão ser adicionadas quando os fluxos principais estiverem estabilizados.
+## Segurança operacional
+
+As credenciais privilegiadas do Supabase devem existir somente no servidor. Use
+`SUPABASE_SECRET_KEY=sb_secret_...`; nunca crie uma variável `NEXT_PUBLIC_` para essa chave.
+
+Depois de atualizar o projeto:
+
+1. Execute as migrations Prisma para ativar os índices, a redação da auditoria, RLS fechado,
+   sessões e eventos de segurança.
+2. Gere duas chaves independentes de 32 bytes em Base64 para
+   `DATA_ENCRYPTION_MASTER_KEY` e `DATA_BLIND_INDEX_KEY` e armazene-as no cofre da hospedagem.
+3. Faça backup do banco e simule a migração com `npm run security:encrypt-data`.
+4. Aplique a criptografia existente com `npm run security:encrypt-data -- --apply`.
+5. Configure Cloudflare Turnstile e somente então altere `TURNSTILE_REQUIRED=true`.
+
+Se a chave mestra de dados for perdida, CPF, CNPJ, CNH, RG e telefones criptografados não
+poderão ser recuperados. Mantenha uma cópia offline protegida e teste a recuperação.
+
+### Rotação das chaves de dados
+
+Nunca substitua diretamente uma chave que já protege registros `enc:v1`. Para migrar para
+`enc:v2`, interrompa as escritas, faça um backup restaurável e preserve as chaves antigas em
+um cofre offline. Gere duas chaves novas e configure temporariamente:
+
+```env
+DATA_ENCRYPTION_ACTIVE_VERSION="v2"
+DATA_ENCRYPTION_MASTER_KEY="NOVA_CHAVE_MESTRA"
+DATA_BLIND_INDEX_KEY="NOVA_CHAVE_DE_INDICE"
+DATA_ENCRYPTION_PREVIOUS_VERSION="v1"
+DATA_ENCRYPTION_PREVIOUS_MASTER_KEY="CHAVE_MESTRA_V1"
+DATA_BLIND_INDEX_PREVIOUS_KEY="CHAVE_DE_INDICE_V1"
+```
+
+Com a aplicação parada, execute primeiro a simulação, que descriptografa e valida os registros
+sem alterá-los:
+
+```bash
+npm run security:rotate-data
+```
+
+Depois do backup e da simulação bem-sucedida, aplique a transação atômica:
+
+```bash
+npm run security:rotate-data -- --apply --confirm=ROTATE_TO_V2
+```
+
+Execute novamente a simulação e confirme que todos os campos estão em `v2`. Teste a leitura e
+a edição de empresas e motoristas. Só então remova da hospedagem as três variáveis `PREVIOUS_*`;
+as chaves v1 devem continuar guardadas offline pelo período definido para recuperação de backup.

@@ -12,6 +12,7 @@ export type AppRole =
   | 'GESTOR'
 
 export interface SessionPayload {
+  sessionId?: string
   userId: string
   email: string
   role: AppRole
@@ -78,6 +79,7 @@ export async function verifySession(request: NextRequest): Promise<SessionPayloa
     }
 
     return {
+      sessionId: typeof payload.sessionId === 'string' ? payload.sessionId : undefined,
       userId: payload.userId,
       email: payload.email,
       role,

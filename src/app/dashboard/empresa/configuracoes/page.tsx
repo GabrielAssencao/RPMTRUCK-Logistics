@@ -35,7 +35,7 @@ export default function ConfiguracoesPage() {
   const [feedback, setFeedback] = useState('')
 
   useEffect(() => {
-    setMontado(true)
+    queueMicrotask(() => setMontado(true))
     fetch('/api/empresa/perfil', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setForm({ nome: data.empresa.nome || '', cnpj: data.empresa.cnpj || '', email: data.empresa.email || '', telefone: data.empresa.telefone || '' }) }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar perfil.'))
   }, [])
 

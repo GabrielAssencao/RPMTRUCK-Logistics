@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAdminAuth } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '@/lib/password';
 import { criarNotificacao } from '@/lib/notificacoes';
 import { Prisma } from '@prisma/client';
 import { criarUsuarioEmpresaComLimite, EmpresaNaoEncontradaError, LimiteUsuariosError } from '@/lib/usuariosEmpresa';
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       empresaId: params.id,
       nome: parsed.data.nome,
       email: parsed.data.email,
-      senhaHash: await bcrypt.hash(parsed.data.senha, 10),
+      senhaHash: await hashPassword(parsed.data.senha),
       role: parsed.data.role,
       criadoPorId: auth.session.userId,
     });
