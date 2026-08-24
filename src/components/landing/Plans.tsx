@@ -86,6 +86,11 @@ export default function Plans() {
     }
     .plan-card {
       border-color: var(--border);
+      transition: border-color 240ms ease, box-shadow 240ms ease;
+    }
+    .plan-card:hover {
+      border-color: color-mix(in srgb, ${primary} 58%, var(--border));
+      box-shadow: 0 28px 72px color-mix(in srgb, ${primary} 9%, transparent);
     }
     .plan-card-featured {
       border-color: ${primary};
@@ -112,19 +117,34 @@ export default function Plans() {
           </h2>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {PLANS.map((plan, i) => (
             <motion.div
               key={plan.name}
-              initial={{ opacity: 0, y: 30 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: i * 0.1 }}
-              className={`plan-card relative flex flex-col justify-between border bg-card p-8 transition-all duration-300 ${plan.featured ? 'plan-card-featured mt-4' : ''}`}
+              initial={{ opacity: 0, y: 48, scale: 0.96, rotateX: 5 }}
+              animate={inView ? { opacity: 1, y: 0, scale: 1, rotateX: 0 } : {}}
+              whileHover={plan.restricted ? undefined : { y: -8, transition: { duration: 0.22, delay: 0 } }}
+              transition={{ duration: 0.62, delay: 0.1 + i * 0.08, ease: [0.16, 1, 0.3, 1] }}
+              className={`plan-card group relative flex min-h-[42rem] flex-col justify-between overflow-hidden border bg-card p-8 ${plan.featured ? 'plan-card-featured xl:-mt-3 xl:mb-3' : ''}`}
+              style={{
+                clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))',
+                transformPerspective: 900,
+              }}
             >
+              <div
+                className="absolute inset-x-0 top-0 h-[2px] origin-left scale-x-0 transition-transform duration-500 group-hover:scale-x-100"
+                style={{ backgroundColor: primary }}
+              />
+              <span
+                className="absolute right-5 top-5 text-5xl font-black leading-none opacity-[0.06]"
+                style={{ color: primary, fontFamily: 'Rajdhani, sans-serif' }}
+              >
+                {String(i + 1).padStart(2, '0')}
+              </span>
               <div>
                 {/* Badge */}
                 {plan.featured && plan.tag && (
-                  <div className="absolute left-1/2 -translate-x-1/2" style={{ top: '-14px' }}>
+                  <div className="absolute left-1/2 top-0 -translate-x-1/2">
                     <span
                       className="inline-flex items-center px-3 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em] whitespace-nowrap border font-mono"
                       style={{ backgroundColor: 'var(--card)', borderColor: primary, color: primary }}
@@ -133,6 +153,13 @@ export default function Plans() {
                     </span>
                   </div>
                 )}
+
+                <div
+                  className="mb-6 text-[9px] font-bold uppercase tracking-[0.28em]"
+                  style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}
+                >
+                  Nível operacional {String(i + 1).padStart(2, '0')}
+                </div>
 
                 <Star className="w-6 h-6 mb-4" style={{ color: plan.featured ? primary : 'var(--muted)' }} fill="none" />
 

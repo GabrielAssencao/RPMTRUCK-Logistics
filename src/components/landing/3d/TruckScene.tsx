@@ -31,6 +31,13 @@ interface AnimState {
   pointLightIntensity: number
 }
 
+const JOURNEY_STEPS = [
+  { number: '01', label: 'Controle' },
+  { number: '02', label: 'Manutenção' },
+  { number: '03', label: 'Rotas' },
+  { number: '04', label: 'Performance' },
+] as const
+
 function AutoTruck({ animStateRef }: { animStateRef: React.MutableRefObject<AnimState> }) {
   const groupRef = useRef<THREE.Group>(null)
 
@@ -415,6 +422,66 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
     ? `radial-gradient(circle at 50% 32%, ${primary}20 0%, rgba(255,255,255,0.68) 18%, rgba(255,255,255,0.42) 32%, rgba(255,255,255,0.12) 52%, rgba(255,255,255,0.04) 72%, transparent 100%), linear-gradient(90deg, rgba(255,255,255,0.06) 0%, ${primary}08 22%, rgba(255,255,255,0.04) 52%, ${primary}08 100%)`
     : `radial-gradient(circle at 50% 32%, ${primary}18 0%, rgba(10,10,10,0.68) 18%, rgba(10,10,10,0.5) 32%, rgba(10,10,10,0.16) 52%, rgba(10,10,10,0.03) 74%, transparent 100%), linear-gradient(90deg, rgba(255,255,255,0.01) 0%, ${primary}08 22%, rgba(10,10,10,0.08) 52%, ${primary}08 100%)`
 
+  useEffect(() => {
+    const previousScrollRestoration = window.history.scrollRestoration
+    window.history.scrollRestoration = 'manual'
+    const frame = requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior })
+    })
+
+    return () => {
+      cancelAnimationFrame(frame)
+      window.history.scrollRestoration = previousScrollRestoration
+    }
+  }, [])
+
+  useGSAP(() => {
+    if (!containerRef.current) return
+
+    const heroElements = ['#hero-eyebrow', '#hero-title-main', '#hero-subtitle', '.hero-button', '#scroll-cue']
+    if (prefersReducedMotion) {
+      gsap.set('#landing-intro', { display: 'none' })
+      gsap.set(heroElements, { autoAlpha: 1, y: 0, scale: 1 })
+      return
+    }
+
+    gsap.set(heroElements, { autoAlpha: 0 })
+    gsap.set('.intro-progress-fill', { scaleX: 0, transformOrigin: 'left center' })
+    gsap.set('.intro-word', { yPercent: 120 })
+    gsap.set('.intro-meta-item', { autoAlpha: 0, y: 8 })
+
+    const intro = gsap.timeline({ defaults: { ease: 'power3.out' } })
+    intro
+      .fromTo('.intro-kicker', { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 0.28 })
+      .to('.intro-word', { yPercent: 0, duration: 0.55, stagger: 0.06, ease: 'power4.out' }, 0.08)
+      .to('.intro-progress-fill', { scaleX: 1, duration: 0.72, ease: 'power2.inOut' }, 0.12)
+      .to('.intro-meta-item', { autoAlpha: 1, y: 0, duration: 0.3, stagger: 0.08 }, 0.38)
+      .fromTo('.intro-scan-line', { yPercent: -100 }, { yPercent: 2800, duration: 0.9, ease: 'none' }, 0)
+      .to('.intro-center', { autoAlpha: 0, scale: 1.035, duration: 0.2, ease: 'power2.in' }, 0.88)
+      .to('.intro-shutter-top', { yPercent: -102, duration: 0.58, ease: 'power4.inOut' }, 0.92)
+      .to('.intro-shutter-bottom', { yPercent: 102, duration: 0.58, ease: 'power4.inOut' }, 0.92)
+      .to('#landing-intro', { autoAlpha: 0, duration: 0.01 }, 1.5)
+      .fromTo(
+        animStateRef.current,
+        { truckX: 4.4, truckZ: -0.6, truckRotY: 0.82, truckScale: 0.88 },
+        {
+          truckX: 2,
+          truckZ: 0,
+          truckRotY: 0.5,
+          truckScale: 1,
+          duration: 1.05,
+          ease: 'power3.out',
+          immediateRender: false,
+        },
+        0.72,
+      )
+      .fromTo('#hero-eyebrow', { autoAlpha: 0, x: -24 }, { autoAlpha: 1, x: 0, duration: 0.45 }, 1.16)
+      .fromTo('#hero-title-main', { autoAlpha: 0, y: 54 }, { autoAlpha: 1, y: 0, duration: 0.8, ease: 'power4.out' }, 1.2)
+      .fromTo('#hero-subtitle', { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: 0.55 }, 1.46)
+      .fromTo('.hero-button', { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.45, stagger: 0.1 }, 1.58)
+      .fromTo('#scroll-cue', { autoAlpha: 0, y: -8 }, { autoAlpha: 1, y: 0, duration: 0.4 }, 1.78)
+  }, { scope: containerRef, dependencies: [prefersReducedMotion] })
+
   useGSAP(() => {
     if (!containerRef.current) return
 
@@ -426,6 +493,7 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
         '#card-wrapper-1',
         '#card-wrapper-2',
         '#card-wrapper-3',
+        '#tech-banner-kicker',
         '#tech-banner-text',
         '#main-content-start',
       ], {
@@ -437,22 +505,18 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
         opacity: 1,
         width: 'min(70vw, 760px)',
       })
+      gsap.set('#journey-rail', { display: 'none' })
 
       return
     }
 
-    gsap.fromTo('#hero-title-main',
-      { opacity: 0, y: 50 },
-      { opacity: 1, y: 0, duration: 1.2, ease: 'power4.out', delay: 0.3 }
-    )
-    gsap.fromTo('#hero-subtitle',
-      { opacity: 0, y: 30 },
-      { opacity: 1, y: 0, duration: 1, ease: 'power3.out', delay: 0.6 }
-    )
-    gsap.fromTo('.hero-button',
-      { opacity: 0, scale: 0.9 },
-      { opacity: 1, scale: 1, duration: 0.8, stagger: 0.15, ease: 'back.out(1.2)', delay: 0.9 }
-    )
+    gsap.set('#card-wrapper-1', { autoAlpha: 0, x: 72, y: 52, rotateY: -8, clipPath: 'inset(0 0 100% 0)' })
+    gsap.set('#card-wrapper-2', { autoAlpha: 0, x: -72, y: 52, rotateY: 8, clipPath: 'inset(0 0 100% 0)' })
+    gsap.set('#card-wrapper-3', { autoAlpha: 0, x: 72, y: 52, rotateY: -8, clipPath: 'inset(0 0 100% 0)' })
+    gsap.set('.stage-card-progress', { scaleX: 0, transformOrigin: 'left center' })
+    gsap.set('.journey-step-dot', { scale: 0.7, backgroundColor: 'transparent' })
+    gsap.set('#journey-progress-fill', { scaleY: 0, transformOrigin: 'top center' })
+    gsap.set('#journey-rail', { autoAlpha: 0, x: 16 })
 
     const transitionSection = containerRef.current.querySelector<HTMLElement>('#trigger-transition')
     if (!transitionSection) return
@@ -463,7 +527,7 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
         start: 'top top',
         endTrigger: transitionSection,
         end: 'bottom bottom',
-        scrub: 0.35,
+        scrub: 0.45,
         invalidateOnRefresh: true,
         onEnter: () => setIsSceneAnimating(true),
         onEnterBack: () => setIsSceneAnimating(true),
@@ -471,6 +535,16 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
         onLeaveBack: () => setIsSceneAnimating(true),
       }
     })
+
+    tl.to('#hero-copy', { autoAlpha: 0, y: -48, duration: 0.34, ease: 'power2.in' }, 0.03)
+    tl.to('#scroll-cue', { autoAlpha: 0, duration: 0.16 }, 0.02)
+    tl.to('#journey-rail', { autoAlpha: 1, x: 0, duration: 0.3 }, 0.12)
+    tl.to('#journey-progress-fill', { scaleY: 0.25, duration: 0.75, ease: 'none' }, 0.14)
+    tl.to('#journey-step-1 .journey-step-dot', {
+      scale: 1,
+      backgroundColor: primary,
+      duration: 0.2,
+    }, 0.14)
 
     // Sequential animation beats on scroll with a softer cinematic pace
     tl.to(animStateRef.current, {
@@ -483,17 +557,35 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
     }, 0)
 
     tl.to('#card-wrapper-1', {
-      opacity: 1,
+      autoAlpha: 1,
+      x: 0,
       y: 0,
+      rotateY: 0,
+      clipPath: 'inset(0 0 0% 0)',
       duration: 0.5,
-      ease: 'power2.out'
+      ease: 'power3.out'
     }, 0.2)
+    tl.to('#card-wrapper-1 .stage-card-progress', {
+      scaleX: 1,
+      duration: 1.1,
+      ease: 'none',
+    }, 0.38)
     tl.to('#card-wrapper-1', {
-      opacity: 0,
-      y: -40,
-      duration: 0.6,
+      autoAlpha: 0,
+      x: 36,
+      y: -24,
+      scale: 0.96,
+      duration: 0.38,
       ease: 'power2.in'
-    }, 1.8)
+    }, 1.35)
+
+    tl.to('#journey-progress-fill', { scaleY: 0.5, duration: 0.7, ease: 'none' }, 1.42)
+    tl.to('#journey-step-1', { opacity: 0.55, duration: 0.2 }, 1.42)
+    tl.to('#journey-step-2 .journey-step-dot', {
+      scale: 1,
+      backgroundColor: primary,
+      duration: 0.2,
+    }, 1.44)
 
     tl.to(animStateRef.current, {
       truckX: -2.2,
@@ -504,17 +596,35 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
     }, 1.45)
 
     tl.to('#card-wrapper-2', {
-      opacity: 1,
+      autoAlpha: 1,
+      x: 0,
       y: 0,
+      rotateY: 0,
+      clipPath: 'inset(0 0 0% 0)',
       duration: 0.5,
-      ease: 'power2.out'
+      ease: 'power3.out'
     }, 1.5)
+    tl.to('#card-wrapper-2 .stage-card-progress', {
+      scaleX: 1,
+      duration: 1.1,
+      ease: 'none',
+    }, 1.68)
     tl.to('#card-wrapper-2', {
-      opacity: 0,
-      y: -40,
-      duration: 0.6,
+      autoAlpha: 0,
+      x: -36,
+      y: -24,
+      scale: 0.96,
+      duration: 0.38,
       ease: 'power2.in'
-    }, 3.1)
+    }, 2.72)
+
+    tl.to('#journey-progress-fill', { scaleY: 0.75, duration: 0.7, ease: 'none' }, 2.76)
+    tl.to('#journey-step-2', { opacity: 0.55, duration: 0.2 }, 2.76)
+    tl.to('#journey-step-3 .journey-step-dot', {
+      scale: 1,
+      backgroundColor: primary,
+      duration: 0.2,
+    }, 2.78)
 
     tl.to(animStateRef.current, {
       truckX: 0,
@@ -526,17 +636,35 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
     }, 2.7)
 
     tl.to('#card-wrapper-3', {
-      opacity: 1,
+      autoAlpha: 1,
+      x: 0,
       y: 0,
+      rotateY: 0,
+      clipPath: 'inset(0 0 0% 0)',
       duration: 0.5,
-      ease: 'power2.out'
+      ease: 'power3.out'
     }, 2.8)
+    tl.to('#card-wrapper-3 .stage-card-progress', {
+      scaleX: 1,
+      duration: 1.1,
+      ease: 'none',
+    }, 2.98)
     tl.to('#card-wrapper-3', {
-      opacity: 0,
-      y: -40,
-      duration: 0.6,
+      autoAlpha: 0,
+      x: 36,
+      y: -24,
+      scale: 0.96,
+      duration: 0.38,
       ease: 'power2.in'
-    }, 4.45)
+    }, 4.04)
+
+    tl.to('#journey-progress-fill', { scaleY: 1, duration: 0.62, ease: 'none' }, 4.08)
+    tl.to('#journey-step-3', { opacity: 0.55, duration: 0.2 }, 4.08)
+    tl.to('#journey-step-4 .journey-step-dot', {
+      scale: 1,
+      backgroundColor: primary,
+      duration: 0.2,
+    }, 4.1)
 
     // Alinha o caminhão à estrada antes da arrancada final.
     tl.to(animStateRef.current, {
@@ -597,6 +725,11 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
       ease: 'power2.in'
     }, 4.8)
 
+    tl.fromTo('#tech-banner-kicker',
+      { autoAlpha: 0, y: 14 },
+      { autoAlpha: 1, y: 0, duration: 0.3, ease: 'power2.out' },
+      4.2
+    )
     tl.to('#tech-banner-text', {
       opacity: 1,
       scale: 1,
@@ -609,7 +742,7 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
       { opacity: 0.75, width: 'min(70vw, 760px)', duration: 0.45, ease: 'power3.out' },
       4.25
     )
-    tl.to('#tech-banner-text', {
+    tl.to(['#tech-banner-kicker', '#tech-banner-text'], {
       opacity: 0,
       y: -60,
       duration: 0.3,
@@ -620,6 +753,12 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
       duration: 0.25,
       ease: 'power2.in'
     }, 5.1)
+    tl.to('#journey-rail', {
+      autoAlpha: 0,
+      x: 16,
+      duration: 0.25,
+      ease: 'power2.in',
+    }, 4.72)
 
     tl.fromTo('#main-content-start',
       { opacity: 0, y: 40 },
@@ -631,6 +770,9 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
       duration: 0.35,
       ease: 'power2.inOut'
     }, 5.05)
+
+    const refreshFrame = requestAnimationFrame(() => ScrollTrigger.refresh())
+    return () => cancelAnimationFrame(refreshFrame)
   }, { scope: containerRef, dependencies: [primary, isLight, prefersReducedMotion] })
 
   return (
@@ -638,6 +780,94 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
       ref={containerRef}
       className="relative w-full overflow-x-hidden"
     >
+      <div
+        id="landing-intro"
+        aria-hidden="true"
+        className="fixed inset-0 z-[70] overflow-hidden pointer-events-none"
+      >
+        <div
+          className="intro-shutter-top absolute inset-x-0 top-0 h-1/2"
+          style={{ backgroundColor: isLight ? '#f4f4f5' : '#080808' }}
+        />
+        <div
+          className="intro-shutter-bottom absolute inset-x-0 bottom-0 h-1/2"
+          style={{ backgroundColor: isLight ? '#f4f4f5' : '#080808' }}
+        />
+        <div
+          className="absolute inset-0 z-[1] opacity-30"
+          style={{
+            backgroundImage: `linear-gradient(${primary}18 1px, transparent 1px), linear-gradient(90deg, ${primary}18 1px, transparent 1px)`,
+            backgroundSize: '56px 56px',
+          }}
+        />
+        <div
+          className="intro-scan-line absolute inset-x-0 top-0 z-[2] h-px"
+          style={{ backgroundColor: primary, boxShadow: `0 0 28px 6px ${primary}55` }}
+        />
+        <div className="intro-center absolute inset-0 z-[3] flex items-center justify-center px-6">
+          <div className="w-full max-w-xl">
+            <div
+              className="intro-kicker mb-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.34em]"
+              style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}
+            >
+              <span>Inicializando operação</span>
+              <span>00—04</span>
+            </div>
+            <div className="overflow-hidden">
+              <div
+                className="intro-word text-[clamp(3.5rem,11vw,8rem)] font-black leading-[0.8] tracking-[-0.06em]"
+                style={{ color: 'var(--foreground)', fontFamily: 'Rajdhani, sans-serif' }}
+              >
+                RPM<span style={{ color: primary }}>TRUCK</span>
+              </div>
+            </div>
+            <div className="mt-7 h-px overflow-hidden" style={{ backgroundColor: 'var(--border-strong)' }}>
+              <div className="intro-progress-fill h-full w-full" style={{ backgroundColor: primary }} />
+            </div>
+            <div
+              className="mt-3 flex items-center justify-between text-[10px] uppercase tracking-[0.24em] text-foreground-muted"
+              style={{ fontFamily: 'JetBrains Mono, monospace' }}
+            >
+              <span className="intro-meta-item">Frota conectada</span>
+              <span className="intro-meta-item">Sistema pronto</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        id="journey-rail"
+        aria-hidden="true"
+        className="fixed right-7 top-1/2 z-20 hidden -translate-y-1/2 flex-col xl:flex"
+      >
+        <div className="relative flex flex-col gap-8 py-2">
+          <div
+            className="absolute bottom-3 left-[5px] top-3 w-px"
+            style={{ backgroundColor: 'var(--border-strong)' }}
+          >
+            <div id="journey-progress-fill" className="h-full w-full" style={{ backgroundColor: primary }} />
+          </div>
+          {JOURNEY_STEPS.map((step, index) => (
+            <div
+              id={`journey-step-${index + 1}`}
+              key={step.number}
+              className="relative flex items-center gap-3"
+            >
+              <span
+                className="journey-step-dot relative z-10 h-[11px] w-[11px] border"
+                style={{ borderColor: primary, boxShadow: `0 0 12px ${primary}44` }}
+              />
+              <span
+                className="text-[9px] font-bold uppercase tracking-[0.22em] text-foreground-muted"
+                style={{ fontFamily: 'JetBrains Mono, monospace' }}
+              >
+                {step.number} / {step.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* 3D Canvas fixed in background */}
       <div
         id="truck-scene-layer"
@@ -695,7 +925,15 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
           id="hero-section"
           className="w-full h-screen flex flex-col justify-center px-6 md:px-20 relative select-none"
         >
-          <div className="max-w-[42rem] z-10">
+          <div id="hero-copy" className="max-w-[42rem] z-10">
+            <div
+              id="hero-eyebrow"
+              className="mb-5 flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.3em]"
+              style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}
+            >
+              <span className="h-2 w-2" style={{ backgroundColor: primary, boxShadow: `0 0 14px ${primary}` }} />
+              Operação em movimento
+            </div>
             <h1
               id="hero-title-main"
               className="font-black text-5xl md:text-8xl leading-none mb-6 text-foreground"
@@ -758,10 +996,11 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
 
           {/* Scroll Indicator */}
           <div
+            id="scroll-cue"
             className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none"
           >
             <span style={{
-              color: 'rgba(255,255,255,0.2)',
+              color: 'var(--foreground-muted)',
               fontSize: 10,
               letterSpacing: '0.3em',
               textTransform: 'uppercase',
@@ -770,7 +1009,7 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
             <div style={{
               width: 1,
               height: 48,
-              background: 'linear-gradient(to bottom, rgba(255,255,255,0.3), transparent)',
+              background: `linear-gradient(to bottom, ${primary}, transparent)`,
               animation: 'pulse 2s infinite',
             }} />
           </div>
@@ -779,38 +1018,72 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
         {/* Section 1: FloatCard 1 */}
         <section
           id="trigger-card-1"
-          className="w-full min-h-[62vh] flex items-center justify-end px-6 md:px-20 relative pointer-events-none"
+          className="w-full min-h-[78vh] flex items-center justify-end px-6 md:px-20 relative pointer-events-none"
         >
-          <div id="card-wrapper-1" className="opacity-0 translate-y-[50px] pointer-events-auto">
-            <FloatCard title="Gestão Precisa" desc="Controle cada gota de combustível e quilômetro rodado da frota." side="right" primary={primary} isLight={isLight} />
+          <div id="card-wrapper-1" className="pointer-events-none [perspective:900px]">
+            <FloatCard
+              step="01"
+              eyebrow="Custos em tempo real"
+              title="Gestão Precisa"
+              desc="Conecte combustível, quilometragem e despesas a cada veículo para decidir com dados reais."
+              metric="Visão operacional unificada"
+              side="right"
+              primary={primary}
+              isLight={isLight}
+            />
           </div>
         </section>
 
         {/* Section 2: FloatCard 2 */}
         <section
           id="trigger-card-2"
-          className="w-full min-h-[62vh] flex items-center justify-start px-6 md:px-20 relative pointer-events-none"
+          className="w-full min-h-[78vh] flex items-center justify-start px-6 md:px-20 relative pointer-events-none"
         >
-          <div id="card-wrapper-2" className="opacity-0 translate-y-[50px] pointer-events-auto">
-            <FloatCard title="Manutenção Inteligente" desc="Evite falhas no meio da estrada com histórico e alertas de revisão." side="left" primary={primary} isLight={isLight} />
+          <div id="card-wrapper-2" className="pointer-events-none [perspective:900px]">
+            <FloatCard
+              step="02"
+              eyebrow="Manutenção preventiva"
+              title="Manutenção Inteligente"
+              desc="Organize revisões, custos e prazos para agir antes que a operação precise parar."
+              metric="Alertas antes da indisponibilidade"
+              side="left"
+              primary={primary}
+              isLight={isLight}
+            />
           </div>
         </section>
 
         {/* Section 3: FloatCard 3 */}
         <section
           id="trigger-card-3"
-          className="w-full min-h-[62vh] flex items-center justify-end px-6 md:px-20 relative pointer-events-none"
+          className="w-full min-h-[78vh] flex items-center justify-end px-6 md:px-20 relative pointer-events-none"
         >
-          <div id="card-wrapper-3" className="opacity-0 translate-y-[50px] pointer-events-auto">
-            <FloatCard title="Rotas Otimizadas" desc="Integração com pedágios para reduzir custos em até 30% por viagem." side="right" primary={primary} isLight={isLight} />
+          <div id="card-wrapper-3" className="pointer-events-none [perspective:900px]">
+            <FloatCard
+              step="03"
+              eyebrow="Operação rastreável"
+              title="Rotas Organizadas"
+              desc="Preserve código do container, origem, destino e data da operação em um histórico confiável."
+              metric="Rastreabilidade de ponta a ponta"
+              side="right"
+              primary={primary}
+              isLight={isLight}
+            />
           </div>
         </section>
 
         {/* Section 4: Zoom/Transition Spacer */}
         <section
           id="trigger-transition"
-          className="w-full min-h-[46vh] relative flex flex-col items-center justify-center pointer-events-none"
+          className="w-full min-h-[58vh] relative flex flex-col items-center justify-center pointer-events-none"
         >
+          <div
+            id="tech-banner-kicker"
+            className="mb-5 text-[10px] font-bold uppercase tracking-[0.34em] opacity-0"
+            style={{ color: 'var(--foreground-muted)', fontFamily: 'JetBrains Mono, monospace' }}
+          >
+            Etapa 04 concluída
+          </div>
           <h2
             id="tech-banner-text"
             className="opacity-0 scale-50 font-black text-5xl md:text-8xl text-center select-none tracking-normal"
@@ -854,41 +1127,100 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
 }
 
 function FloatCard({
+  step,
+  eyebrow,
   title,
   desc,
+  metric,
   side,
   primary,
   isLight,
 }: {
+  step: string
+  eyebrow: string
   title: string
   desc: string
+  metric: string
   side: 'left' | 'right'
   primary: string
   isLight: boolean
 }) {
   return (
     <div
-      className="max-w-xs p-6 backdrop-blur-md shadow-2xl"
+      className="stage-card relative w-[min(25rem,calc(100vw-3rem))] overflow-hidden border p-7 backdrop-blur-xl"
       style={{
-        borderLeft:  side === 'right' ? `4px solid ${primary}` : undefined,
-        borderRight: side === 'left'  ? `4px solid ${primary}` : undefined,
-        borderRadius: side === 'right' ? '0 16px 16px 0' : '16px 0 0 16px',
-        backgroundColor: isLight ? 'rgba(255,255,255,0.9)' : 'rgba(10,10,10,0.9)',
-        pointerEvents: 'auto',
+        borderColor: `color-mix(in srgb, ${primary} 42%, var(--border))`,
+        backgroundColor: isLight ? 'rgba(255,255,255,0.88)' : 'rgba(8,8,8,0.86)',
+        boxShadow: isLight
+          ? '0 28px 80px rgba(0,0,0,0.16)'
+          : `0 28px 90px rgba(0,0,0,0.58), 0 0 42px color-mix(in srgb, ${primary} 10%, transparent)`,
+        clipPath: side === 'right'
+          ? 'polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%)'
+          : 'polygon(18px 0, 100% 0, 100% 100%, 0 100%, 0 18px)',
+        willChange: 'transform, opacity, clip-path',
       }}
     >
+      <div
+        className="absolute inset-y-0 w-1"
+        style={{ [side === 'right' ? 'left' : 'right']: 0, backgroundColor: primary }}
+      />
+      <div
+        className="absolute inset-0 opacity-60"
+        style={{
+          background: `radial-gradient(circle at ${side === 'right' ? '0%' : '100%'} 0%, color-mix(in srgb, ${primary} 16%, transparent), transparent 52%)`,
+        }}
+      />
+      <div className="relative">
+        <div className="mb-8 flex items-start justify-between gap-6">
+          <div>
+            <div
+              className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em]"
+              style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}
+            >
+              {eyebrow}
+            </div>
+            <div
+              className="text-[10px] uppercase tracking-[0.2em] text-foreground-muted"
+              style={{ fontFamily: 'JetBrains Mono, monospace' }}
+            >
+              RPM / Etapa operacional
+            </div>
+          </div>
+          <span
+            className="text-4xl font-black leading-none"
+            style={{ color: `color-mix(in srgb, ${primary} 74%, var(--foreground))`, fontFamily: 'Rajdhani, sans-serif' }}
+          >
+            {step}
+          </span>
+        </div>
+
       <h3
-        className="font-bold text-2xl mb-2"
-        style={{ color: primary, fontFamily: 'Rajdhani, sans-serif' }}
+          className="mb-3 text-3xl font-black uppercase leading-none text-foreground"
+          style={{ fontFamily: 'Rajdhani, sans-serif' }}
       >
         {title}
       </h3>
       <p
-        className="text-sm font-medium"
-        style={{ color: isLight ? '#555' : '#aaa', fontFamily: 'Outfit, sans-serif' }}
+          className="text-sm leading-relaxed text-foreground-muted"
+          style={{ fontFamily: 'Outfit, sans-serif' }}
       >
         {desc}
       </p>
+
+        <div className="mt-7 flex items-center gap-3 border-t border-border pt-4">
+          <span className="h-1.5 w-1.5 shrink-0" style={{ backgroundColor: primary }} />
+          <span
+            className="text-[10px] font-bold uppercase tracking-[0.18em] text-foreground"
+            style={{ fontFamily: 'JetBrains Mono, monospace' }}
+          >
+            {metric}
+          </span>
+        </div>
+      </div>
+
+      <div className="absolute inset-x-0 bottom-0 h-[2px] bg-border">
+        <div className="stage-card-progress h-full w-full" style={{ backgroundColor: primary }} />
+      </div>
     </div>
   )
 }

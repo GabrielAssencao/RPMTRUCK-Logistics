@@ -43,7 +43,7 @@ export default function Ticker() {
       }}
     >
       <div
-        className="flex whitespace-nowrap"
+        className="landing-ticker-track flex whitespace-nowrap"
         style={{ animation: 'ticker 35s linear infinite' }}
       >
         {repeated.map((item, index) => (
@@ -70,6 +70,12 @@ export default function Ticker() {
         @keyframes ticker {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .landing-ticker-track {
+            animation: none !important;
+            transform: none !important;
+          }
         }
       `}</style>
     </motion.div>

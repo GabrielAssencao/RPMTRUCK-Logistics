@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useLandingStats } from '@/contexts/LandingStatsContext'
@@ -13,13 +13,17 @@ const FALLBACK_STATS = [
 ]
 
 function Counter({ target, suffix }: { target: number; suffix: string }) {
-  const [count, setCount] = useState(0)
   const ref = useRef<HTMLSpanElement>(null)
   const inView = useInView(ref, { once: true, margin: '-40px' })
   const prefersReducedMotion = useReducedMotion()
 
   useEffect(() => {
-    if (!inView || target <= 0 || prefersReducedMotion) return
+    if (!inView || !ref.current) return
+
+    if (target <= 0 || prefersReducedMotion) {
+      ref.current.textContent = `${Math.max(0, target)}${suffix}`
+      return
+    }
 
     const duration = 1500
     const startedAt = performance.now()
@@ -28,7 +32,9 @@ function Counter({ target, suffix }: { target: number; suffix: string }) {
     const updateCount = (now: number) => {
       const progress = Math.min((now - startedAt) / duration, 1)
       const easedProgress = 1 - Math.pow(1 - progress, 3)
-      setCount(Math.round(target * easedProgress))
+      if (ref.current) {
+        ref.current.textContent = `${Math.round(target * easedProgress)}${suffix}`
+      }
 
       if (progress < 1) {
         animationFrame = requestAnimationFrame(updateCount)
@@ -37,10 +43,9 @@ function Counter({ target, suffix }: { target: number; suffix: string }) {
 
     animationFrame = requestAnimationFrame(updateCount)
     return () => cancelAnimationFrame(animationFrame)
-  }, [inView, prefersReducedMotion, target])
+  }, [inView, prefersReducedMotion, suffix, target])
 
-  const displayedCount = inView && prefersReducedMotion ? target : count
-  return <span ref={ref}>{displayedCount}{suffix}</span>
+  return <span ref={ref}>0{suffix}</span>
 }
 
 export default function Stats() {

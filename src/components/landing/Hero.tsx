@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic'
 import { ReactNode, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
-import { MotionConfig } from 'framer-motion'
+import { motion, MotionConfig } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 
 const MOBILE_MEDIA_QUERY = '(max-width: 767px)'
@@ -94,9 +94,20 @@ export default function Hero({ children }: { children?: ReactNode }) {
           className="relative w-full pt-32 text-foreground transition-colors duration-300"
           style={{ backgroundColor: 'var(--background)' }}
         >
-        <div className="px-6 py-12 text-center max-w-lg mx-auto">
+        <div className="relative px-6 py-12 text-center max-w-lg mx-auto overflow-hidden">
+          <motion.div
+            aria-hidden="true"
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute left-6 right-6 top-3 h-px origin-left"
+            style={{ backgroundColor: primary }}
+          />
           {/* Badge */}
-          <div
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.08 }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full border mb-6"
             style={{
               borderColor: `color-mix(in srgb, ${primary} 30%, transparent)`,
@@ -113,27 +124,38 @@ export default function Hero({ children }: { children?: ReactNode }) {
             >
               RPMTruck Plataforma
             </span>
-          </div>
+          </motion.div>
 
           {/* Título */}
-          <h1
+          <motion.h1
+            initial={{ opacity: 0, y: 42 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.72, delay: 0.16, ease: [0.16, 1, 0.3, 1] }}
             className="text-5xl font-black mb-4 leading-tight"
             style={{ fontFamily: 'Rajdhani, sans-serif', color: 'var(--foreground)' }}
           >
             POTÊNCIA &amp;<br />
             <span style={{ color: primary }}>CONTROLE</span><br />
             <span style={{ fontSize: '2.2rem' }}>NA SUA FROTA</span>
-          </h1>
+          </motion.h1>
 
-          <p
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.34 }}
             className="mb-10 text-lg font-light"
             style={{ color: 'var(--foreground-muted)', fontFamily: 'Outfit, sans-serif' }}
           >
             Gerenciamento completo da sua frota de caminhões, na palma da mão.
-          </p>
+          </motion.p>
 
           {/* Botões */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.46 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12"
+          >
             <button
               type="button"
               onClick={() => router.push('/auth/solicitar-acesso')}
@@ -162,7 +184,7 @@ export default function Hero({ children }: { children?: ReactNode }) {
             >
               Fazer Login
             </button>
-          </div>
+          </motion.div>
         </div>
 
         {/* Conteúdo estático (Ticker, Features, etc.) */}
