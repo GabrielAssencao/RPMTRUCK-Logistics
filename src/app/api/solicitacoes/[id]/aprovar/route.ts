@@ -5,6 +5,7 @@ import { requireAdminAuth } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PLANOS_CONFIG as PLANOS_PADRONIZADOS } from '@/utils/planos';
+import { obterPlanoComercial } from '@/lib/planosComerciais';
 import { randomBytes } from 'crypto';
 import { executarComAuditoria } from '@/lib/auditoria';
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
@@ -43,6 +44,10 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
     // 2. Executa a TRANSACTION (Garante que se um passo falhar, nenhum dado corrompido é gravado)
     const resultado = await executarComAuditoria({ usuarioId: auth.session.userId, origem: 'SUPERADMIN' }, async (tx) => {
+      const planoComercial = await obterPlanoComercial(solicitacao.plano, tx);
+      if (!planoComercial?.ativo) {
+        throw new Error('O plano comercial solicitado não está disponível.');
+      }
       
       // Passo A: Atualizar o status do Lead de entrada
       await tx.solicitacaoAcesso.update({
@@ -86,13 +91,13 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       });
 
       // Passo D: Gerar Fatura de Implementação (Setup) - se houver custo
-      if (configPlano.taxaImplantacao > 0) {
+      if (planoComercial.taxaImplantacao > 0) {
         await tx.fatura.create({
           data: {
             mes: mesReferencia,
             ano: anoReferencia,
             tipo: 'IMPLEMENTACAO',
-            valor: configPlano.taxaImplantacao,
+            valor: planoComercial.taxaImplantacao,
             status: StatusFatura.PENDENTE,
             empresaId: novaEmpresa.id
           }
@@ -100,13 +105,13 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       }
 
       // Passo E: Gerar primeira Fatura de Mensalidade recorrente em aberto
-      if (configPlano.precoBase > 0) {
+      if (planoComercial.precoBase > 0) {
         await tx.fatura.create({
           data: {
             mes: mesReferencia,
             ano: anoReferencia,
             tipo: 'MENSALIDADE',
-            valor: configPlano.precoBase,
+            valor: planoComercial.precoBase,
             status: StatusFatura.PENDENTE,
             empresaId: novaEmpresa.id
           }

@@ -6,24 +6,17 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
-
-const COLORS = [
-  { value: '#22c55e', label: 'Verde',    logoName: 'logoRPMTRUCK_verde.png'    },
-  { value: '#ef4444', label: 'Vermelho', logoName: 'logoRPMTRUCK_vermelho.png' },
-  { value: '#3b82f6', label: 'Azul',     logoName: 'logoRPMTRUCK_azul.png'     },
-  { value: '#f59e0b', label: 'Âmbar',    logoName: 'logoRPMTRUCK_amarelo.png'  },
-  { value: '#5e17eb', label: 'Roxo',     logoName: 'logoRPMTRUCK_roxo.png'     }
-]
+import { CORES_E_LOGOS, obterLogoPorTema } from '@/data/temasELogos'
 
 export default function Navbar() {
-  const { isLight, setIsLight, primary, setPrimary } = useTheme()
+  const { isLight, setIsLight, primary, setPrimary, themeReady } = useTheme()
   const [mobileOpen, setMobile] = useState(false)
   const router = useRouter()
 
   const { scrollY } = useScroll()
   const navChromeOpacity = useTransform(scrollY, [0, 80], [0, 1])
 
-  const currentLogo = COLORS.find(c => c.value === primary)?.logoName || 'logoRPMTRUCK_verde.png'
+  const currentLogo = obterLogoPorTema(primary)
 
   return (
     <>
@@ -33,7 +26,7 @@ export default function Navbar() {
           style={{ opacity: navChromeOpacity }}
           className="absolute inset-0 border-b border-border bg-background pointer-events-none"
         />
-        <div className="relative max-w-7xl mx-auto px-6 flex items-center justify-between py-4">
+        <div className="relative flex w-full items-center justify-between px-6 py-4 md:px-20">
 
           {/* LOGO */}
           <Link href="/" className="flex items-center gap-2 select-none">
@@ -42,7 +35,7 @@ export default function Navbar() {
               alt="RPM Truck Logo"
               width={32}
               height={32}
-              className="h-8 w-8 object-contain transition-all duration-300"
+              className={`h-8 w-8 object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
               priority
             />
             <span 
@@ -58,7 +51,7 @@ export default function Navbar() {
             
             {/* SELETOR DE CORES (Desktop) */}
             <div className="hidden sm:flex items-center gap-1.5">
-              {COLORS.map((c) => (
+              {CORES_E_LOGOS.map((c) => (
                 <button 
                   key={c.value} 
                   onClick={() => setPrimary(c.value)} 
@@ -145,7 +138,7 @@ export default function Navbar() {
               Tema
             </span>
             <div className="flex items-center gap-2">
-              {COLORS.map((c) => (
+              {CORES_E_LOGOS.map((c) => (
                 <button 
                   key={c.value} 
                   onClick={() => setPrimary(c.value)} 

@@ -48,6 +48,7 @@ interface RegistroCusto {
   valor: number
   formaPagamento: string
   status: 'PAGO' | 'PENDENTE'
+  arquivado: boolean
 }
 
 // Linha "achatada" usada só pra renderizar a tabela — une lançamentos
@@ -66,6 +67,7 @@ interface LinhaExibicao {
   valor: number
   status: 'PAGO' | 'PENDENTE'
   origem: 'MANUAL' | 'CONTAINER_AUTO'
+  arquivado: boolean
 }
 
 export default function CustosPage() {
@@ -204,7 +206,8 @@ export default function CustosPage() {
     formaPagamento: c.formaPagamento,
     valor: c.valor,
     status: c.status,
-    origem: 'MANUAL'
+    origem: 'MANUAL',
+    arquivado: c.arquivado,
   }))
 
   const mostrarComissoesContainer = filtroCategoria === 'TODOS' || filtroCategoria === 'COMISSAO_TRANSPORTE'
@@ -232,7 +235,8 @@ export default function CustosPage() {
           formaPagamento: 'AUTOMÁTICO',
           valor: c.comissao,
           status: c.status === 'ENTREGUE' ? 'PAGO' : 'PENDENTE',
-          origem: 'CONTAINER_AUTO' as const
+          origem: 'CONTAINER_AUTO' as const,
+          arquivado: false,
         }))
     : []
 
@@ -265,6 +269,7 @@ export default function CustosPage() {
         valor: custo.valor,
         status: custo.status,
         origem: 'MANUAL' as const,
+        arquivado: custo.arquivado,
       }
     })
 
@@ -289,6 +294,7 @@ export default function CustosPage() {
             valor: container.comissao,
             status: container.status === 'ENTREGUE' ? 'PAGO' as const : 'PENDENTE' as const,
             origem: 'CONTAINER_AUTO' as const,
+            arquivado: false,
           }
         })
     : []
@@ -301,10 +307,18 @@ export default function CustosPage() {
 
   // 🔄 ALTERAÇÃO RÁPIDA DE STATUS DO LANÇAMENTO (só afeta lançamentos manuais)
   const handleAlterarStatusRapido = async (id: string, novoStatus: 'PAGO' | 'PENDENTE') => {
+    const custoAtual = custos.find((custo) => custo.id === id)
+    if (custoAtual?.arquivado) {
+      setErroFormulario('Este custo faz parte de um relatório de auditoria e permanece somente para consulta.')
+      return
+    }
+    setErroFormulario('')
     const response = await fetch(`/api/custos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: novoStatus }) })
     const data = await response.json()
     if (!response.ok) return setErroFormulario(data.erro || 'Falha ao atualizar custo.')
     setCustos(prev => prev.map(c => c.id === id ? data : c))
+    setMensagemSucesso('Status do custo atualizado com sucesso.')
+    window.setTimeout(() => setMensagemSucesso(''), 3500)
   }
 
   const resetarFormulario = () => {
@@ -375,6 +389,13 @@ export default function CustosPage() {
   }
 
   const handleConfirmarExclusao = async (id: string) => {
+    const custoAtual = custos.find((custo) => custo.id === id)
+    if (custoAtual?.arquivado) {
+      setExcluindoId(null)
+      setErroFormulario('Este custo faz parte de um relatório de auditoria e não pode ser excluído.')
+      return
+    }
+    setErroFormulario('')
     const response = await fetch(`/api/custos/${id}`, { method: 'DELETE' })
     const data = await response.json()
     if (!response.ok) return setErroFormulario(data.erro || 'Não foi possível excluir o custo.')
@@ -419,6 +440,16 @@ export default function CustosPage() {
       {mensagemSucesso && (
         <div className="border px-4 py-3 text-xs font-bold flex items-center gap-2" role="status" style={{ borderColor: '#22c55e55', backgroundColor: '#22c55e0d', color: '#22c55e' }}>
           <CheckCircle size={15} /> {mensagemSucesso}
+        </div>
+      )}
+
+      {erroFormulario && !modalRegistroOpen && (
+        <div className="flex items-start gap-2 border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-500" role="alert">
+          <Info size={15} className="mt-0.5 shrink-0" />
+          <span>{erroFormulario}</span>
+          <button type="button" onClick={() => setErroFormulario('')} className="ml-auto p-0.5" aria-label="Fechar aviso">
+            <X size={14} />
+          </button>
         </div>
       )}
 
@@ -764,6 +795,11 @@ export default function CustosPage() {
                               AUTOMÁTICO
                             </span>
                           )}
+                          {linha.arquivado && (
+                            <span className="inline-flex shrink-0 items-center gap-1 border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-black text-amber-500" title="Registro preservado em relatório de auditoria">
+                              <Lock size={9} /> ARQUIVADO
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-xs text-foreground-muted">{linha.formaPagamento}</td>
@@ -773,7 +809,7 @@ export default function CustosPage() {
 
                       {/* STATUS: EDITÁVEL PRA MANUAL, SÓ LEITURA PRA COMISSÃO DE CONTAINER */}
                       <td className="px-6 py-4 text-center">
-                        {linha.origem === 'MANUAL' ? (
+                        {linha.origem === 'MANUAL' && !linha.arquivado ? (
                           <select
                             value={linha.status}
                             onChange={(e) => handleAlterarStatusRapido(linha.id, e.target.value as 'PAGO' | 'PENDENTE')}
@@ -793,7 +829,7 @@ export default function CustosPage() {
                               borderColor: linha.status === 'PAGO' ? '#22c55e' : '#eab308',
                               color: linha.status === 'PAGO' ? '#22c55e' : '#eab308'
                             }}
-                            title="Editado no módulo Containers, mudando o status da movimentação"
+                            title={linha.arquivado ? 'Custo arquivado: disponível somente para consulta' : 'Editado no módulo Containers, mudando o status da movimentação'}
                           >
                             {linha.status}
                           </span>
@@ -802,32 +838,36 @@ export default function CustosPage() {
 
                       <td className="px-6 py-4 text-right">
                         {linha.origem === 'MANUAL' ? (
-                          excluindoId === linha.id ? (
-                            <div className="inline-flex items-center gap-2 p-1 border bg-red-500/10 text-red-400 border-red-500/30 font-bold text-[10px]">
-                              <span>Excluir?</span>
-                              <button onClick={() => handleConfirmarExclusao(linha.id)} className="px-2 py-0.5 bg-red-500 text-black font-extrabold uppercase">Sim</button>
-                              <button onClick={() => setExcluindoId(null)} className="px-2 py-0.5 border border-white/20 text-white">Não</button>
-                            </div>
-                          ) : (
-                            <div className="inline-flex items-center gap-1">
-                              <button
-                                onClick={() => handleRepetirDespesa(linha.id)}
-                                className="p-2 text-foreground-muted hover:text-foreground transition-colors"
-                                title="Repetir lançamento com os mesmos dados"
-                                aria-label="Repetir lançamento"
-                              >
-                                <Copy size={14} />
-                              </button>
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={() => handleRepetirDespesa(linha.id)}
+                              className="p-2 text-foreground-muted hover:text-foreground transition-colors"
+                              title="Criar um novo lançamento com os mesmos dados"
+                              aria-label="Repetir lançamento"
+                            >
+                              <Copy size={14} />
+                            </button>
+                            {linha.arquivado ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 text-[9px] font-bold uppercase text-amber-500" title="Registros arquivados não podem ser alterados ou excluídos">
+                                <Lock size={12} /> Somente leitura
+                              </span>
+                            ) : excluindoId === linha.id ? (
+                              <span className="inline-flex items-center gap-2 border border-red-500/30 bg-red-500/10 p-1 text-[10px] font-bold text-red-400">
+                                <span>Excluir?</span>
+                                <button onClick={() => handleConfirmarExclusao(linha.id)} className="bg-red-500 px-2 py-0.5 font-extrabold uppercase text-black">Sim</button>
+                                <button onClick={() => setExcluindoId(null)} className="border border-white/20 px-2 py-0.5 text-white">Não</button>
+                              </span>
+                            ) : (
                               <button
                                 onClick={() => setExcluindoId(linha.id)}
-                                className="p-2 text-red-400 hover:text-red-500 transition-colors"
+                                className="p-2 text-red-400 transition-colors hover:text-red-500"
                                 title="Excluir lançamento"
                                 aria-label="Excluir lançamento"
                               >
                                 <Trash2 size={14} />
                               </button>
-                            </div>
-                          )
+                            )}
+                          </div>
                         ) : (
                           <Link
                             href="/dashboard/empresa/containers"

@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   ])
   return NextResponse.json({
     veiculos: veiculos.map(v => ({ id: v.id, modelo: v.modelo, placa: v.placa, tipo: v.tipo, kmAtual: v.quilometragem, diasAntecedenciaNotificacao: v.diasAntecedenciaNotif })),
-    historico: historico.map(h => ({ id: h.id, veiculoPlaca: h.veiculo.placa, veiculoModelo: h.veiculo.modelo, dataAgendada: h.data_agendada.toISOString().slice(0, 10), tipo: h.tipo, pecas: h.pecas_substituidas || h.descricao || '', custo: h.custo, kmAtual: h.km_atual, status: h.status, origem: h.origem })),
+    historico: historico.map(h => ({ id: h.id, veiculoPlaca: h.veiculo.placa, veiculoModelo: h.veiculo.modelo, dataAgendada: h.data_agendada.toISOString().slice(0, 10), tipo: h.tipo, pecas: h.pecas_substituidas || h.descricao || '', custo: h.custo, kmAtual: h.km_atual, status: h.status, origem: h.origem, arquivado: Boolean(h.relatorioArquivoId) })),
   })
 }
 
@@ -43,5 +43,5 @@ export async function POST(request: NextRequest) {
     return historico
   })
   await notificarUsuariosDaEmpresa(auth.session.empresaId, { titulo: status === 'PENDENTE' ? 'Manutenção agendada' : 'Manutenção registrada', mensagem: `${veiculo.modelo} (${veiculo.placa}) — ${parsed.data.pecas}.`, modulo: 'FROTA', veiculoId: veiculo.id }, ['GESTOR_EMPRESA'])
-  return NextResponse.json({ id: registro.id, veiculoPlaca: veiculo.placa, veiculoModelo: veiculo.modelo, dataAgendada: registro.data_agendada.toISOString().slice(0, 10), tipo: registro.tipo, pecas: registro.pecas_substituidas || '', custo: registro.custo, kmAtual: registro.km_atual, status: registro.status, origem: registro.origem }, { status: 201 })
+  return NextResponse.json({ id: registro.id, veiculoPlaca: veiculo.placa, veiculoModelo: veiculo.modelo, dataAgendada: registro.data_agendada.toISOString().slice(0, 10), tipo: registro.tipo, pecas: registro.pecas_substituidas || '', custo: registro.custo, kmAtual: registro.km_atual, status: registro.status, origem: registro.origem, arquivado: false }, { status: 201 })
 }

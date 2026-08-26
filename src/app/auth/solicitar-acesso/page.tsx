@@ -20,65 +20,9 @@ import {
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import TurnstileWidget from '@/components/security/TurnstileWidget'
+import { usePlanosPublicos, type PlanoPublico } from '@/hooks/usePlanosPublicos'
 
-// ─── Planos disponíveis ─────────────────────────────────────────────
-const PLANS = [
-  { 
-    id: 'ESSENCIAL', 
-    name: 'ESSENCIAL', 
-    desc: 'Gestão completa e controle operacional para frotas em crescimento', 
-    price: 450, setup: 300, users: 4, vehicles: 10,
-    modules: [
-      'Gestão completa do catálogo de veículos e motoristas',
-      'Até 1 ano (365 dias) de histórico e auditoria',
-      'Dashboard analítica de custos e combustível (R$)',
-      'Controle básico de manutenção preventiva e corretiva',
-      'Até 4 usuários administradores e 10 veículos'
-    ], 
-    restricted: false 
-  },
-  { 
-    id: 'AVANCADO', 
-    name: 'AVANÇADO', 
-    desc: 'Precisão operacional e gestão multi-bases/pátios', 
-    price: 650, setup: 500, users: 10, vehicles: 25,
-    modules: [
-      'Tudo do plano Essencial',
-      'Até 2 anos (730 dias) de histórico analítico',
-      'Delegação direta de tarefas e alertas entre operadores',
-      'Vincular custos por Veículo + Condutor específico',
-      'Gestão de Bases, Pátios e Unidades Operacionais',
-      'Até 10 usuários e 25 veículos inclusos'
-    ], 
-    featured: true, restricted: false 
-  },
-  { 
-    id: 'ENTERPRISE', 
-    name: 'ENTERPRISE', 
-    desc: 'Inteligência de frota de alta escala com delegação e APIs', 
-    price: 1250, setup: 1000, users: 25, vehicles: 80,
-    modules: [
-      'Tudo do plano Avançado',
-      'Até 3 anos (1.095 dias) de histórico de dados',
-      'Relatórios e Filtros de Data 100% Personalizados',
-      'Notificações e delegações avançadas prioritárias',
-      'Até 25 usuários, 80 veículos e Gerente Dedicado'
-    ], 
-    restricted: false 
-  },
-  { 
-    id: 'PREVIEW', 
-    name: 'PREVIEW', 
-    desc: 'Acesso de teste — somente via Admin', 
-    price: 0, setup: 0, users: 'Ilimitado', vehicles: 'Ilimitado',
-    modules: [
-      'Ambiente Sandbox de homologação',
-      'Acesso antecipado a módulos beta',
-      'Testes de novas rotinas operacionais'
-    ], 
-    restricted: true 
-  },
-]
+const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 
 const STEPS = [
   'Envie a solicitação',
@@ -111,20 +55,21 @@ export default function SolicitarAcesso() {
   const [errorMessage, setErrorMessage] = useState('')
   const [turnstileToken, setTurnstileToken] = useState('')
   const [turnstileVersion, setTurnstileVersion] = useState(0)
+  const { planos, carregando: carregandoPlanos, erro: erroPlanos, recarregar } = usePlanosPublicos()
 
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get('plano')?.toUpperCase() || ''
-    const plan = PLANS.find((item) => item.id === value)
+    const plan = planos.find((item) => item.id === value)
     if (!plan) return
     queueMicrotask(() => {
       setSelectedPlan(value)
       setForm((current) => ({
         ...current,
         plano: value,
-        veiculos: plan.vehicles !== 'Ilimitado' ? String(plan.vehicles) : '0',
+        veiculos: String(plan.vehicles),
       }))
     })
-  }, [])
+  }, [planos])
 
   // 🎯 NAVEGAÇÃO SEGURA DE VOLTA PARA A LANDING PAGE
   const handleVoltarLanding = () => {
@@ -140,12 +85,12 @@ export default function SolicitarAcesso() {
   }
 
   const handlePlanSelect = (planId: string) => {
-    const plan = PLANS.find(p => p.id === planId)
+    const plan = planos.find(p => p.id === planId)
     setSelectedPlan(planId)
     setForm(f => ({ 
       ...f, 
       plano: planId,
-      veiculos: plan && plan.vehicles !== 'Ilimitado' ? String(plan.vehicles) : '0'
+      veiculos: plan ? String(plan.vehicles) : '0'
     }))
   }
 
@@ -177,7 +122,7 @@ export default function SolicitarAcesso() {
   }
 
   if (submitted) {
-    return <SuccessScreen primary={primary} isLight={isLight} form={form} onVoltar={handleVoltarLanding} />
+    return <SuccessScreen primary={primary} isLight={isLight} form={form} planos={planos} onVoltar={handleVoltarLanding} />
   }
 
   return (
@@ -230,7 +175,10 @@ export default function SolicitarAcesso() {
             {/* 01 — PLANOS */}
             <FormSection label="01 — Estrutura e Plano" primary={primary}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
-                {PLANS.map(plan => (
+                {carregandoPlanos && Array.from({ length: 3 }, (_, index) => (
+                  <div key={index} className="h-40 animate-pulse border border-border bg-background-secondary" />
+                ))}
+                {planos.map(plan => (
                   <div key={plan.id} className="relative flex">
                     {plan.featured && (
                       <span className="absolute -top-3 left-4 z-10 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 border font-mono" style={{ color: primary, borderColor: primary, backgroundColor: 'var(--card)' }}>Popular</span>
@@ -246,7 +194,7 @@ export default function SolicitarAcesso() {
                           
                           {!plan.restricted && (
                             <div className="flex flex-col gap-1 mt-2 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
-                              <span className="text-xs font-mono font-bold">R$ {plan.price},00 <span className="opacity-50 font-normal">/mês</span></span>
+                              <span className="text-xs font-mono font-bold">{moeda.format(plan.price)} <span className="opacity-50 font-normal">/mês</span></span>
                               <span className="text-[10px] font-mono opacity-70 uppercase tracking-widest">Base: {plan.vehicles} Veículos • {plan.users} Acessos</span>
                             </div>
                           )}
@@ -303,11 +251,16 @@ export default function SolicitarAcesso() {
               <textarea name="mensagem" maxLength={1500} placeholder="Precisa de mais veículos ou usuários do que o plano oferece? Descreva suas necessidades aqui..." value={form.mensagem} onChange={handleChange} rows={4} className="w-full resize-none text-sm outline-none transition-all duration-200 p-4 border font-sans" style={{ backgroundColor: 'var(--background-secondary)', border: `1px solid var(--border)`, color: 'var(--foreground)', borderRadius: '0' }} onFocus={e => e.target.style.borderColor = primary} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
             </FormSection>
 
-            {errorMessage && <div className="p-4 border text-xs font-bold uppercase tracking-wider bg-red-500/10 border-red-500/30 text-red-500 font-mono">⚠ {errorMessage}</div>}
+            {(errorMessage || erroPlanos) && (
+              <div className="p-4 border text-xs font-bold uppercase tracking-wider bg-red-500/10 border-red-500/30 text-red-500 font-mono">
+                ⚠ {errorMessage || erroPlanos}{' '}
+                {erroPlanos && <button type="button" onClick={() => void recarregar()} className="underline">Tentar novamente</button>}
+              </div>
+            )}
 
             <TurnstileWidget key={turnstileVersion} action="access_request" onTokenChange={setTurnstileToken} />
 
-            <motion.button onClick={handleSubmit} disabled={loading || !form.empresa || !form.responsavel || !form.email || !form.plano} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} className="w-full py-5 font-black text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed font-rajdhani cursor-pointer" style={{ backgroundColor: primary, color: '#000', clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))' }}>
+            <motion.button onClick={handleSubmit} disabled={loading || carregandoPlanos || !form.empresa || !form.responsavel || !form.email || !form.plano} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} className="w-full py-5 font-black text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed font-rajdhani cursor-pointer" style={{ backgroundColor: primary, color: '#000', clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))' }}>
               {loading ? (<><span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> ENVIANDO...</>) : (<><Send size={16} /> ENVIAR SOLICITAÇÃO →</>)}
             </motion.button>
           </motion.div>
@@ -319,7 +272,7 @@ export default function SolicitarAcesso() {
                 <motion.div key={selectedPlan} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="border p-6" style={{ borderColor: primary, backgroundColor: 'var(--card)' }}>
                   <div className="text-xs uppercase tracking-widest mb-3 font-bold font-mono" style={{ color: primary }}>Resumo do Investimento</div>
                   {(() => {
-                    const plan = PLANS.find(p => p.id === selectedPlan)
+                    const plan = planos.find(p => p.id === selectedPlan)
                     if (!plan) return null
                     return (
                       <>
@@ -329,11 +282,11 @@ export default function SolicitarAcesso() {
                         <div className="bg-background-secondary border p-4 mb-4" style={{ borderColor: 'var(--border)' }}>
                            <div className="flex justify-between items-end mb-2">
                              <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Mensalidade</span>
-                             <span className="font-mono font-black">R$ {plan.price},00</span>
+                             <span className="font-mono font-black">{moeda.format(plan.price)}</span>
                            </div>
                            <div className="flex justify-between items-end">
                              <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Taxa de Setup*</span>
-                             <span className="font-mono font-black">R$ {plan.setup},00</span>
+                             <span className="font-mono font-black">{moeda.format(plan.setup)}</span>
                            </div>
                         </div>
 
@@ -355,7 +308,7 @@ export default function SolicitarAcesso() {
                           <div className="flex gap-2">
                              <PlusCircle size={14} className="shrink-0 mt-0.5" style={{ color: primary }} />
                              <p className="text-[10px] leading-relaxed opacity-70 font-mono">
-                                <strong className="text-foreground">Expansão sob demanda:</strong> Adicione mais capacidade a qualquer momento. Usuários extras: R$ 25/mês. Veículos extras: R$ 30/mês.
+                                <strong className="text-foreground">Expansão sob demanda:</strong> Adicione mais capacidade a qualquer momento. Usuários extras: {moeda.format(plan.userExtraPrice)}/mês. Veículos extras: {moeda.format(plan.vehicleExtraPrice)}/mês.
                              </p>
                           </div>
                         </div>
@@ -429,8 +382,8 @@ function InputField({ icon, label, name, placeholder, value, onChange, primary, 
   )
 }
 
-function SuccessScreen({ primary, form, onVoltar }: { primary: string; isLight: boolean; form: FormData; onVoltar: () => void }) {
-  const planName = PLANS.find(p => p.id === form.plano)?.name || form.plano
+function SuccessScreen({ primary, form, planos, onVoltar }: { primary: string; isLight: boolean; form: FormData; planos: PlanoPublico[]; onVoltar: () => void }) {
+  const planName = planos.find(p => p.id === form.plano)?.name || form.plano
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center text-center px-6 transition-colors duration-300 font-mono" style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>

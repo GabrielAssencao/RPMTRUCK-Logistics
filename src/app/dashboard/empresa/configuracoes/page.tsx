@@ -4,15 +4,16 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { CORES_E_LOGOS } from '@/data/temasELogos'
+import SubscriptionManagement from './SubscriptionManagement'
 import { 
-  Settings, 
   Building2, 
   Palette, 
   ShieldCheck, 
   Save, 
   Moon, 
   Sun,
-  Check
+  Check,
+  CreditCard,
 } from 'lucide-react'
 
 // As opções de cor vêm de src/data/temasELogos.ts — a MESMA fonte usada pela
@@ -26,7 +27,7 @@ import {
 export default function ConfiguracoesPage() {
   const { primary, setPrimary, isLight, setIsLight } = useTheme()
   const [montado, setMontado] = useState(false)
-  const [tabAtiva, setTabAtiva] = useState<'PERFIL' | 'APARENCIA' | 'SEGURANCA'>('APARENCIA')
+  const [tabAtiva, setTabAtiva] = useState<'PERFIL' | 'APARENCIA' | 'SEGURANCA' | 'ASSINATURA'>('APARENCIA')
 
   const [form, setForm] = useState({
     nome: '', cnpj: '', email: '', telefone: ''
@@ -58,7 +59,7 @@ export default function ConfiguracoesPage() {
           Configurações <span style={{ color: primary }}>do Sistema</span>
         </h1>
         <p className="text-sm font-mono mt-1" style={{ color: 'var(--foreground-muted)' }}>
-          Preferências de interface, dados da transportadora e segurança.
+          Preferências de interface, dados da transportadora, segurança e assinatura.
         </p>
       </div>
 
@@ -76,7 +77,11 @@ export default function ConfiguracoesPage() {
           />
           <TabButton 
             ativa={tabAtiva === 'SEGURANCA'} onClick={() => setTabAtiva('SEGURANCA')} 
-            icone={<ShieldCheck size={16} />} label="SEGURANÇA & PLANO" primary={primary} 
+            icone={<ShieldCheck size={16} />} label="SEGURANÇA" primary={primary}
+          />
+          <TabButton
+            ativa={tabAtiva === 'ASSINATURA'} onClick={() => setTabAtiva('ASSINATURA')}
+            icone={<CreditCard size={16} />} label="GESTÃO DO PLANO" primary={primary}
           />
         </div>
 
@@ -197,20 +202,12 @@ export default function ConfiguracoesPage() {
                   </button>
                 </div>
 
-                <div className="p-6 border border-dashed" style={{ backgroundColor: 'transparent', borderColor: 'var(--border)' }}>
-                  <h3 className="text-xs font-bold font-mono uppercase tracking-widest mb-2" style={{ color: 'var(--foreground)' }}>
-                    Plano Atual RPMTruck
-                  </h3>
-                  <div className="flex items-center justify-between mt-4">
-                    <div>
-                      <div className="text-xl font-black font-rajdhani" style={{ color: primary }}>PLANO ENTERPRISE LOGISTICS</div>
-                      <div className="text-xs font-mono mt-1" style={{ color: 'var(--foreground-muted)' }}>Limite: 50 Veículos • Ilimitados Motoristas</div>
-                    </div>
-                    <button className="px-4 py-2 bg-white/5 border text-xs font-mono font-bold uppercase tracking-widest opacity-50 cursor-not-allowed" style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
-                      Contactar Admin
-                    </button>
-                  </div>
-                </div>
+              </motion.div>
+            )}
+
+            {tabAtiva === 'ASSINATURA' && (
+              <motion.div key="assinatura" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <SubscriptionManagement />
               </motion.div>
             )}
 

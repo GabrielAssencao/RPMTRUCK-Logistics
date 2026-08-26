@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useSearchParams } from 'next/navigation'
 import { 
-  Wrench, 
   Plus, 
   Bell, 
   DollarSign, 
@@ -20,7 +19,8 @@ import {
   Activity,
   Crosshair,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -48,6 +48,7 @@ interface RegistroManutencao {
   kmAtual: number
   status: StatusManutencao
   origem: 'FUTURA' | 'ADMINISTRATIVA'
+  arquivado: boolean
 }
 
 function ManutencaoContent() {
@@ -86,6 +87,8 @@ function ManutencaoContent() {
 
   const veiculoAtivo = veiculos[indexSelecionado] || veiculos[0]
   const manutencoesDoVeiculo = historico.filter(h => h.veiculoPlaca === veiculoAtivo.placa)
+  const manutencoesOperacionaisDoVeiculo = manutencoesDoVeiculo.filter(h => !h.arquivado)
+  const totalManutencoesArquivadas = manutencoesDoVeiculo.length - manutencoesOperacionaisDoVeiculo.length
   const custoTotalVeiculo = manutencoesDoVeiculo.filter(m => m.status === 'CONCLUIDA').reduce((acc, item) => acc + item.custo, 0)
   const isTemaVermelho = primary === '#ef4444' || primary === '#ff0000'
 
@@ -109,12 +112,25 @@ function ManutencaoContent() {
   }
 
   const handleAlterarStatus = async (id: string, novoStatus: StatusManutencao) => {
+    const manutencaoAtual = historico.find((item) => item.id === id)
+    if (manutencaoAtual?.arquivado) {
+      setFeedback('Esta manutenção faz parte de um relatório de auditoria e permanece somente para consulta.')
+      return
+    }
+    setFeedback('')
     const response = await fetch(`/api/manutencoes/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: novoStatus }) })
     const data = await response.json()
     if (!response.ok) return setFeedback(data.erro || 'Não foi possível atualizar a manutenção.')
     setHistorico(prev => prev.map(item => item.id === id ? data : item))
   }
   const handleConfirmarExclusao = async (id: string) => {
+    const manutencaoAtual = historico.find((item) => item.id === id)
+    if (manutencaoAtual?.arquivado) {
+      setExcluindoId(null)
+      setFeedback('Esta manutenção faz parte de um relatório de auditoria e não pode ser excluída.')
+      return
+    }
+    setFeedback('')
     const response = await fetch(`/api/manutencoes/${id}`, { method: 'DELETE' })
     const data = await response.json()
     if (!response.ok) return setFeedback(data.erro || 'Não foi possível excluir a manutenção.')
@@ -147,7 +163,7 @@ function ManutencaoContent() {
   }
 
   const obterStatusPeca = (sistema: SistemaDiagnostico): StatusDiagnostico => {
-    const registrosPeca = manutencoesDoVeiculo.filter(m => registroAfetaSistema(m, sistema))
+    const registrosPeca = manutencoesOperacionaisDoVeiculo.filter(m => registroAfetaSistema(m, sistema))
     if (registrosPeca.length === 0) return 'PASSIVO'
 
     const pendentes = registrosPeca.filter(m => m.status === 'PENDENTE')
@@ -361,7 +377,14 @@ function ManutencaoContent() {
                       <motion.tr key={h.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="hover:bg-white/5 transition-colors font-mono">
                         <td className="px-4 py-3 text-xs font-bold">{h.dataAgendada}</td>
                         <td className="px-4 py-3">
-                          <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: primary }}>{h.tipo}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: primary }}>{h.tipo}</div>
+                            {h.arquivado && (
+                              <span className="inline-flex items-center gap-1 border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-black text-amber-500" title="Registro preservado em relatório de auditoria">
+                                <Lock size={9} /> ARQUIVADO
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-foreground-muted truncate max-w-[200px]">{h.pecas}</div>
                         </td>
                         <td className="px-4 py-3 text-xs">{h.kmAtual.toLocaleString('pt-BR')} km</td>
@@ -369,22 +392,39 @@ function ManutencaoContent() {
                           - {h.custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </td>
                         <td className="px-4 py-3">
-                          <select
-                            value={h.status}
-                            onChange={(e) => handleAlterarStatus(h.id, e.target.value as StatusManutencao)}
-                            className="px-2 py-1 text-[9px] font-bold uppercase border bg-transparent outline-none cursor-pointer"
-                            style={{
-                              borderColor: h.status === 'CONCLUIDA' ? '#22c55e' : h.status === 'PENDENTE' ? '#eab308' : '#ef4444',
-                              color: h.status === 'CONCLUIDA' ? '#22c55e' : h.status === 'PENDENTE' ? '#eab308' : '#ef4444'
-                            }}
-                          >
-                            <option value="PENDENTE" style={{ background: 'var(--background)', color: '#eab308' }}>PENDENTE</option>
-                            <option value="CONCLUIDA" style={{ background: 'var(--background)', color: '#22c55e' }}>CONCLUÍDA</option>
-                            <option value="CANCELADA" style={{ background: 'var(--background)', color: '#ef4444' }}>CANCELADA</option>
-                          </select>
+                          {h.arquivado ? (
+                            <span
+                              className="inline-flex items-center gap-1 border px-2 py-1 text-[9px] font-bold uppercase"
+                              style={{
+                                borderColor: h.status === 'CONCLUIDA' ? '#22c55e' : h.status === 'PENDENTE' ? '#eab308' : '#ef4444',
+                                color: h.status === 'CONCLUIDA' ? '#22c55e' : h.status === 'PENDENTE' ? '#eab308' : '#ef4444',
+                              }}
+                              title="Manutenção arquivada: disponível somente para consulta"
+                            >
+                              <Lock size={10} /> {h.status}
+                            </span>
+                          ) : (
+                            <select
+                              value={h.status}
+                              onChange={(e) => handleAlterarStatus(h.id, e.target.value as StatusManutencao)}
+                              className="px-2 py-1 text-[9px] font-bold uppercase border bg-transparent outline-none cursor-pointer"
+                              style={{
+                                borderColor: h.status === 'CONCLUIDA' ? '#22c55e' : h.status === 'PENDENTE' ? '#eab308' : '#ef4444',
+                                color: h.status === 'CONCLUIDA' ? '#22c55e' : h.status === 'PENDENTE' ? '#eab308' : '#ef4444'
+                              }}
+                            >
+                              <option value="PENDENTE" style={{ background: 'var(--background)', color: '#eab308' }}>PENDENTE</option>
+                              <option value="CONCLUIDA" style={{ background: 'var(--background)', color: '#22c55e' }}>CONCLUÍDA</option>
+                              <option value="CANCELADA" style={{ background: 'var(--background)', color: '#ef4444' }}>CANCELADA</option>
+                            </select>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {excluindoId === h.id ? (
+                          {h.arquivado ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 text-[9px] font-bold uppercase text-amber-500" title="Registros arquivados não podem ser alterados ou excluídos">
+                              <Lock size={12} /> Somente leitura
+                            </span>
+                          ) : excluindoId === h.id ? (
                             <div className="inline-flex items-center gap-2 font-bold text-[10px] text-red-500 bg-red-500/10 px-2 py-1 rounded">
                               <span>Excluir?</span>
                               <button onClick={() => handleConfirmarExclusao(h.id)} className="hover:underline text-red-400">Sim</button>
@@ -755,8 +795,13 @@ function ManutencaoContent() {
                 <Bell size={14} style={{ color: primary }} />
                 <span className="text-[11px] uppercase font-bold tracking-[0.18em]">Ocorrências diagnosticadas</span>
                 <span className="px-1.5 py-0.5 text-[9px] font-bold border" style={{ color: primary, borderColor: `${primary}55`, backgroundColor: `${primary}0d` }}>
-                  {manutencoesDoVeiculo.filter(item => item.status === 'PENDENTE').length} ATIVAS
+                  {manutencoesOperacionaisDoVeiculo.filter(item => item.status === 'PENDENTE').length} ATIVAS
                 </span>
+                {totalManutencoesArquivadas > 0 && (
+                  <span className="text-[9px] uppercase tracking-wider text-foreground-muted">
+                    {totalManutencoesArquivadas} arquivada(s) fora do diagnóstico
+                  </span>
+                )}
               </div>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] uppercase tracking-wider text-foreground-muted">
                 <span className="flex items-center gap-1"><i className="w-1.5 h-1.5 rounded-full bg-red-500" /> Crítico</span>
@@ -766,7 +811,7 @@ function ManutencaoContent() {
             </div>
 
             <div className="p-3 grid gap-2 max-h-44 overflow-y-auto custom-scrollbar">
-              {manutencoesDoVeiculo.filter(item => item.status === 'PENDENTE').length === 0 ? (
+              {manutencoesOperacionaisDoVeiculo.filter(item => item.status === 'PENDENTE').length === 0 ? (
                 <div className="flex items-center gap-3 p-3 border border-green-500/20 bg-green-500/5 text-green-500">
                   <CheckCircle2 size={18} />
                   <div>
@@ -775,7 +820,7 @@ function ManutencaoContent() {
                   </div>
                 </div>
               ) : (
-                manutencoesDoVeiculo
+                manutencoesOperacionaisDoVeiculo
                   .filter(item => item.status === 'PENDENTE')
                   .sort((a, b) => a.dataAgendada.localeCompare(b.dataAgendada))
                   .map(item => {
@@ -860,7 +905,7 @@ function ManutencaoContent() {
               </div>
               <div className="pt-4 flex justify-end gap-2 border-t" style={{ borderColor: 'var(--border)' }}>
                 <button type="button" onClick={() => setModalInclusaoOpen(false)} className="px-4 py-2 border text-xs uppercase font-bold hover:bg-white/5 transition-colors" style={{ borderColor: 'var(--border)' }}>Cancelar</button>
-                <button type="submit" className="px-6 py-2 text-xs uppercase font-bold text-black font-extrabold hover:opacity-90 transition-opacity shadow-[0_0_15px_currentColor]" style={{ backgroundColor: primary, color: primary }}>Injetar Dados</button>
+                <button type="submit" className="px-6 py-2 text-xs uppercase font-extrabold text-black hover:opacity-90 transition-opacity" style={{ backgroundColor: primary, color: '#000' }}>Salvar manutenção</button>
               </div>
             </form>
           </motion.div>

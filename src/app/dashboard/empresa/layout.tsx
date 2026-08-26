@@ -76,7 +76,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
 }
 
 function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
-  const { primary, isLight } = useTheme()
+  const { primary, isLight, themeReady } = useTheme()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarExpandida, setSidebarExpandida] = useState(false)
@@ -169,7 +169,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
                   <img
                     src={`/logos/${obterLogoPorTema(primary)}`}
                     alt="RPMTRUCK"
-                    className="h-7 w-auto object-contain transition-all duration-300"
+                    className={`h-7 w-auto object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
                   />
                   <span className="font-black text-xl tracking-tight whitespace-nowrap" style={{ color: 'var(--foreground)' }}>
                     RPM<span style={{ color: primary }}>TRUCK</span>
@@ -185,7 +185,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
                 <img
                   src={`/logos/${obterLogoPorTema(primary)}`}
                   alt="RPMTRUCK"
-                  className="h-full w-full object-contain transition-all duration-300"
+                  className={`h-full w-full object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
                 />
               </div>
             )}

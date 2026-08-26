@@ -18,7 +18,7 @@ const schema = z.object({
   status: z.enum(['PAGO', 'PENDENTE']),
 }).strict()
 
-type CustoSerializavel = Pick<Custo, 'id' | 'veiculoId' | 'motoristaId' | 'data' | 'ano' | 'mesIndex' | 'semanaIndex' | 'categoria' | 'descricao' | 'valor' | 'formaPagamento' | 'status'>
+type CustoSerializavel = Pick<Custo, 'id' | 'veiculoId' | 'motoristaId' | 'data' | 'ano' | 'mesIndex' | 'semanaIndex' | 'categoria' | 'descricao' | 'valor' | 'formaPagamento' | 'status' | 'relatorioArquivoId'>
 
 const serializar = (custo: CustoSerializavel) => ({
   id: custo.id,
@@ -34,6 +34,7 @@ const serializar = (custo: CustoSerializavel) => ({
   valor: custo.valor,
   formaPagamento: custo.formaPagamento,
   status: custo.status,
+  arquivado: Boolean(custo.relatorioArquivoId),
 })
 
 export async function GET(request: NextRequest) {
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
       valor: true,
       formaPagamento: true,
       status: true,
+      relatorioArquivoId: true,
     },
     orderBy: { data: 'desc' },
     take: 5000,

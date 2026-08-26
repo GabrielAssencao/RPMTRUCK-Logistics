@@ -19,8 +19,28 @@ export const CORES_E_LOGOS: TemaCor[] = [
   { value: '#5e17eb', label: 'Roxo',     logoName: 'logoRPMTRUCK_roxo.png'     },
 ]
 
-export const LOGO_PADRAO = 'logoRPMTRUCK_verde.png'
+export const COR_TEMA_PADRAO = CORES_E_LOGOS[0].value
+export const LOGO_PADRAO = CORES_E_LOGOS[0].logoName
+
+const CORES_LEGADAS: Record<string, string> = {
+  '#10b981': '#22c55e',
+  '#8b5cf6': '#5e17eb',
+  '#7c3aed': '#5e17eb',
+  '#eab308': '#f59e0b',
+  '#ff0000': '#ef4444',
+}
+
+export function normalizarCorTema(cor: string | null | undefined): string {
+  const normalizada = cor?.trim().toLowerCase()
+  if (!normalizada) return COR_TEMA_PADRAO
+
+  const migrada = CORES_LEGADAS[normalizada] ?? normalizada
+  return CORES_E_LOGOS.some((tema) => tema.value === migrada)
+    ? migrada
+    : COR_TEMA_PADRAO
+}
 
 export function obterLogoPorTema(primary: string): string {
-  return CORES_E_LOGOS.find(c => c.value === primary)?.logoName || LOGO_PADRAO
+  const cor = normalizarCorTema(primary)
+  return CORES_E_LOGOS.find(c => c.value === cor)?.logoName || LOGO_PADRAO
 }

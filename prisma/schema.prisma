@@ -61,6 +61,18 @@ enum StatusFatura {
   PAGO
 }
 
+enum TipoSolicitacaoAssinatura {
+  ALTERAR_PLANO
+  ALTERAR_COTAS
+  NEGOCIAR_PAGAMENTO
+}
+
+enum StatusSolicitacaoAssinatura {
+  PENDENTE
+  APROVADA
+  REJEITADA
+}
+
 enum StatusManutencao {
   PENDENTE
   CONCLUIDA
@@ -178,6 +190,7 @@ model Empresa {
   leituras_quilometragem  LeituraQuilometragem[]
   sessoes                 SessaoUsuario[]
   eventos_seguranca       EventoSeguranca[]
+  solicitacoes_assinatura SolicitacaoAssinatura[]
 
   @@map("empresas")
 }
@@ -195,15 +208,17 @@ model Usuario {
   empresaId String?
   empresa   Empresa? @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
-  empresas_status_alterados Empresa[]          @relation("EmpresaStatusAlteradoPor")
-  relatorios_criados        RelatorioArquivo[] @relation("RelatoriosCriados")
-  relatorios_baixados       RelatorioArquivo[] @relation("RelatoriosBaixados")
-  relatorios_confirmados    RelatorioArquivo[] @relation("RelatoriosConfirmados")
-  notificacoes              Notificacao[]      @relation("NotificacoesUsuario")
-  tarefas_criadas           Tarefa[]           @relation("TarefasCriadas")
-  tarefas_atribuidas        Tarefa[]           @relation("TarefasResponsavel")
-  sessoes                   SessaoUsuario[]
-  eventos_seguranca         EventoSeguranca[]
+  empresas_status_alterados         Empresa[]               @relation("EmpresaStatusAlteradoPor")
+  relatorios_criados                RelatorioArquivo[]      @relation("RelatoriosCriados")
+  relatorios_baixados               RelatorioArquivo[]      @relation("RelatoriosBaixados")
+  relatorios_confirmados            RelatorioArquivo[]      @relation("RelatoriosConfirmados")
+  notificacoes                      Notificacao[]           @relation("NotificacoesUsuario")
+  tarefas_criadas                   Tarefa[]                @relation("TarefasCriadas")
+  tarefas_atribuidas                Tarefa[]                @relation("TarefasResponsavel")
+  sessoes                           SessaoUsuario[]
+  eventos_seguranca                 EventoSeguranca[]
+  solicitacoes_assinatura_criadas   SolicitacaoAssinatura[] @relation("SolicitacaoAssinaturaCriadaPor")
+  solicitacoes_assinatura_decididas SolicitacaoAssinatura[] @relation("SolicitacaoAssinaturaDecididaPor")
 
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
@@ -507,8 +522,9 @@ model Fatura {
   status         StatusFatura @default(PENDENTE)
   comprovanteUrl String? // Bucket Privado Supabase Storage
 
-  empresaId String
-  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresaId               String
+  empresa                 Empresa                 @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  solicitacoes_negociacao SolicitacaoAssinatura[]
 
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
@@ -516,6 +532,61 @@ model Fatura {
   @@index([empresaId, criado_em])
   @@index([status, criado_em])
   @@map("faturas")
+}
+
+model PlanoComercial {
+  plano                 PlanoTipo @id
+  precoBase             Decimal   @map("preco_base") @db.Decimal(12, 2)
+  taxaImplantacao       Decimal   @map("taxa_implantacao") @db.Decimal(12, 2)
+  precoUsuarioAdicional Decimal   @map("preco_usuario_adicional") @db.Decimal(12, 2)
+  precoVeiculoAdicional Decimal   @map("preco_veiculo_adicional") @db.Decimal(12, 2)
+  ativo                 Boolean   @default(true)
+  visivelLanding        Boolean   @default(true) @map("visivel_landing")
+  versao                Int       @default(1)
+  criado_em             DateTime  @default(now())
+  atualizado_em         DateTime  @updatedAt
+
+  @@map("planos_comerciais")
+}
+
+model SolicitacaoAssinatura {
+  id                            String                      @id @default(uuid())
+  tipo                          TipoSolicitacaoAssinatura
+  status                        StatusSolicitacaoAssinatura @default(PENDENTE)
+  planoAtual                    PlanoTipo                   @map("plano_atual")
+  planoSolicitado               PlanoTipo?                  @map("plano_solicitado")
+  usuariosAdicionaisAtuais      Int                         @map("usuarios_adicionais_atuais")
+  usuariosAdicionaisSolicitados Int                         @map("usuarios_adicionais_solicitados")
+  veiculosAdicionaisAtuais      Int                         @map("veiculos_adicionais_atuais")
+  veiculosAdicionaisSolicitados Int                         @map("veiculos_adicionais_solicitados")
+  mensalidadeAtual              Decimal                     @map("mensalidade_atual") @db.Decimal(12, 2)
+  mensalidadeProposta           Decimal                     @map("mensalidade_proposta") @db.Decimal(12, 2)
+  catalogoVersao                Int                         @map("catalogo_versao")
+  impacto                       Json?
+  mensagem                      String?
+  respostaAdmin                 String?                     @map("resposta_admin")
+  criadoPorNome                 String                      @map("criado_por_nome")
+  decididoPorNome               String?                     @map("decidido_por_nome")
+  criado_em                     DateTime                    @default(now())
+  atualizado_em                 DateTime                    @updatedAt
+  decidido_em                   DateTime?
+
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  criadoPorId String?  @map("criado_por_id")
+  criadoPor   Usuario? @relation("SolicitacaoAssinaturaCriadaPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  decididoPorId String?  @map("decidido_por_id")
+  decididoPor   Usuario? @relation("SolicitacaoAssinaturaDecididaPor", fields: [decididoPorId], references: [id], onDelete: SetNull)
+
+  faturaId String? @map("fatura_id")
+  fatura   Fatura? @relation(fields: [faturaId], references: [id], onDelete: Restrict)
+
+  @@index([empresaId, criado_em])
+  @@index([status, criado_em])
+  @@index([faturaId])
+  @@map("solicitacoes_assinatura")
 }
 
 model RelatorioArquivo {

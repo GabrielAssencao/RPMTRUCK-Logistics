@@ -14,8 +14,8 @@ export type ModoNotificacoes = 'RESUMIDA_SIDEBAR' | 'SIDEBAR' | 'CENTRAL_HEADER'
 
 export interface PlanoConfig {
   nome: string
-  precoBase: number
-  taxaImplantacao: number
+  descricao: string
+  beneficios: readonly string[]
   usuariosBase: number
   veiculosBase: number
   historicoAnos: number
@@ -54,14 +54,20 @@ const MODULOS_COM_TAREFAS: readonly ModuloCodigo[] = [...MODULOS_OPERACIONAIS, '
 const TODOS_OS_MODULOS: readonly ModuloCodigo[] = [...MODULOS_COM_TAREFAS, 'RELATORIOS']
 
 /**
- * Fonte única das regras comerciais do produto.
+ * Fonte única das permissões e capacidades técnicas de cada plano.
+ * Os valores comerciais são persistidos em `PlanoComercial`.
  * `Empresa.modulos` guarda a seleção efetiva e pode ser personalizada pelo SuperAdmin.
  */
 export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
   ESSENCIAL: {
     nome: 'Essencial',
-    precoBase: 450,
-    taxaImplantacao: 300,
+    descricao: 'Gestão completa e controle operacional para frotas em crescimento.',
+    beneficios: [
+      'Gestão do catálogo de veículos e motoristas',
+      '1 ano de histórico e auditoria operacional',
+      'Dashboard de custos, combustível e manutenção',
+      'Até 4 usuários e 10 veículos na franquia base',
+    ],
     usuariosBase: 4,
     veiculosBase: 10,
     historicoAnos: 1,
@@ -73,8 +79,13 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
   },
   AVANCADO: {
     nome: 'Avançado',
-    precoBase: 650,
-    taxaImplantacao: 500,
+    descricao: 'Precisão operacional, delegação de tarefas e gestão multi-bases.',
+    beneficios: [
+      'Tudo do plano Essencial',
+      '2 anos de histórico analítico',
+      'Delegação direta de tarefas e alertas',
+      'Até 10 usuários e 25 veículos na franquia base',
+    ],
     usuariosBase: 10,
     veiculosBase: 25,
     historicoAnos: 2,
@@ -86,8 +97,13 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
   },
   ENTERPRISE: {
     nome: 'Enterprise',
-    precoBase: 1250,
-    taxaImplantacao: 1000,
+    descricao: 'Inteligência de frota em escala, relatórios personalizados e prioridade.',
+    beneficios: [
+      'Tudo do plano Avançado',
+      '3 anos de histórico operacional',
+      'Relatórios e filtros personalizados',
+      'Até 25 usuários e 80 veículos na franquia base',
+    ],
     usuariosBase: 25,
     veiculosBase: 80,
     historicoAnos: 3,
@@ -99,8 +115,12 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
   },
   PREVIEW: {
     nome: 'Preview',
-    precoBase: 0,
-    taxaImplantacao: 0,
+    descricao: 'Ambiente sandbox completo, liberado exclusivamente pelo SuperAdmin.',
+    beneficios: [
+      'Todos os módulos disponíveis para homologação',
+      'Acesso antecipado a recursos beta',
+      'Liberação e remoção de módulos pelo SuperAdmin',
+    ],
     usuariosBase: 999,
     veiculosBase: 999,
     historicoAnos: 3,
@@ -155,15 +175,6 @@ export function normalizarModulos(values: readonly string[] | null | undefined):
 
 export function obterModulosPadrao(plano: PlanoTipo): ModuloCodigo[] {
   return [...PLANOS_CONFIG[plano].modulosPadrao]
-}
-
-export function calcularMensalidade(
-  plano: PlanoTipo,
-  usuariosAdicionais: number,
-  veiculosAdicionais: number,
-): number {
-  const config = PLANOS_CONFIG[plano]
-  return config.precoBase + usuariosAdicionais * 25 + veiculosAdicionais * 30
 }
 
 export function possuiModulo(modulos: readonly string[], modulo: ModuloCodigo): boolean {

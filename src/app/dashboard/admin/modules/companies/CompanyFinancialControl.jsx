@@ -9,7 +9,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { motion } from 'framer-motion';
 import CompanyUsersManager from './CompanyUsersManager'; 
 import CompanyVehiclesManager from './CompanyVehiclesManager'; 
-import { calcularMensalidade, MODULOS, MODULOS_CONFIG, obterModulosPadrao, PLANOS, PLANOS_CONFIG } from '@/utils/planos';
+import { MODULOS, MODULOS_CONFIG, obterModulosPadrao, PLANOS, PLANOS_CONFIG } from '@/utils/planos';
 
 // ─── CONSTANTES DE PRECIFICAÇÃO E LIMITES ────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────
@@ -26,14 +26,22 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
   const [modulosAtivos, setModulosAtivos] = useState(empresa.modulos || []);
   const [salvando, setSalvando] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [catalogoComercial, setCatalogoComercial] = useState([]);
 
   const config = PLANOS_CONFIG[plano];
-  const mensalidadeCalculada = calcularMensalidade(plano, uExtra, vExtra);
+  const comercial = catalogoComercial.find(item => item.id === plano);
+  const precoUsuarioAdicional = comercial?.precoUsuarioAdicional ?? 25;
+  const precoVeiculoAdicional = comercial?.precoVeiculoAdicional ?? 30;
+  const taxaImplantacao = comercial?.taxaImplantacao ?? 0;
+  const mensalidadeCalculada = comercial
+    ? comercial.precoBase + uExtra * precoUsuarioAdicional + vExtra * precoVeiculoAdicional
+    : Number(empresa.mensalidade ?? 0);
 
   const [faturas, setFaturas] = useState([]);
 
   useEffect(() => {
     fetch(`/api/empresas/${empresa.id}/faturas`, { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setFaturas(data.map(fatura => ({ ...fatura, status: fatura.status.toLowerCase() }))); }).catch(error => setFeedback(error.message || 'Falha ao carregar faturas.'));
+    fetch('/api/admin/planos', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setCatalogoComercial(Array.isArray(data.planos) ? data.planos : []); }).catch(error => setFeedback(error.message || 'Falha ao carregar catálogo comercial.'));
   }, [empresa.id]);
 
   // 1. Sincroniza módulos quando o plano muda
@@ -48,7 +56,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
       prevFaturas.map(fatura => {
         if (fatura.status === 'pendente') {
           if (fatura.tipo === 'IMPLEMENTACAO') {
-            return { ...fatura, valor: config.taxaImplantacao };
+            return { ...fatura, valor: taxaImplantacao };
           }
           if (fatura.tipo === 'MENSALIDADE') {
             return { ...fatura, valor: mensalidadeCalculada };
@@ -57,7 +65,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
         return fatura;
       })
     ));
-  }, [plano, uExtra, vExtra, mensalidadeCalculada, config.taxaImplantacao]);
+  }, [plano, uExtra, vExtra, mensalidadeCalculada, taxaImplantacao]);
 
   const toggleModulo = (mod) => {
     setModulosAtivos(prev => prev.includes(mod) ? prev.filter(m => m !== mod) : [...prev, mod]);
@@ -201,8 +209,8 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
         {tabAtiva === 'usuarios' && (
           <div className="space-y-6">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <CounterCard label="LICENÇAS EXTRAS" desc={`Custo: R$ 25,00/cada`} val={uExtra} setVal={setUExtra} primary={primary} />
-                <CounterCard label="VEÍCULOS EXTRAS" desc={`Custo: R$ 30,00/cada`} val={vExtra} setVal={setVExtra} primary={primary} />
+                <CounterCard label="LICENÇAS EXTRAS" desc={`Custo: R$ ${Number(precoUsuarioAdicional).toFixed(2)}/cada`} val={uExtra} setVal={setUExtra} primary={primary} />
+                <CounterCard label="VEÍCULOS EXTRAS" desc={`Custo: R$ ${Number(precoVeiculoAdicional).toFixed(2)}/cada`} val={vExtra} setVal={setVExtra} primary={primary} />
              </div>
              <CompanyUsersManager empresa={empresa} limiteTotal={config.usuariosBase + uExtra} primary={primary} />
           </div>

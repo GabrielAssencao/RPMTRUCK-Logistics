@@ -12,6 +12,7 @@ import PasswordResetsModule from '@/app/dashboard/admin/modules/password-resets/
 import AdminRequests from '@/app/dashboard/admin/modules/requests/AdminRequests'
 import SettingsModule from '@/app/dashboard/admin/modules/settings/SettingsModule'
 import SecurityModule from '@/app/dashboard/admin/modules/security/SecurityModule'
+import SubscriptionsModule from '@/app/dashboard/admin/modules/subscriptions/SubscriptionsModule'
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard')
@@ -31,6 +32,8 @@ export default function AdminPage() {
         return <SettingsModule key="settings" />
       case 'security':
         return <SecurityModule key="security" />
+      case 'subscriptions':
+        return <SubscriptionsModule key="subscriptions" />
       default:
         return <DashboardModule key="dashboard" />
     }

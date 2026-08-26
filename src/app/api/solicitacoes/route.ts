@@ -10,6 +10,7 @@ import { PLANOS_CONFIG } from '@/utils/planos';
 import { executarComAuditoria } from '@/lib/auditoria';
 import { verifyBotToken } from '@/lib/botProtection';
 import { recordSecurityEvent } from '@/lib/securityEvents';
+import { obterPlanoComercial } from '@/lib/planosComerciais';
 
 const solicitacaoSchema = z.object({
   empresa: nomeOperacional(2, 150),
@@ -60,6 +61,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ erro: 'Verificação de segurança recusada.' }, { status: 403 });
     }
     const { empresa, responsavel, email, whatsapp, plano, mensagem, contatoPref } = parsed.data;
+    const planoComercial = await obterPlanoComercial(plano);
+    if (!planoComercial?.ativo || !planoComercial.visivelLanding) {
+      return NextResponse.json({ erro: 'O plano selecionado não está disponível para novas solicitações.' }, { status: 400 });
+    }
 
     // Bloqueio de duplicidade para e-mails corporativos em análise
     const leadExistente = await prisma.solicitacaoAcesso.findUnique({

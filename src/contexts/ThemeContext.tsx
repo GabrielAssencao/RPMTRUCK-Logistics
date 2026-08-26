@@ -3,36 +3,67 @@
 // src/contexts/ThemeContext.tsx
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { CORES_E_LOGOS, COR_TEMA_PADRAO, normalizarCorTema } from '@/data/temasELogos'
 
 interface ThemeContextType {
   primary:    string
   setPrimary: (c: string) => void
   isLight:    boolean
   setIsLight: (v: boolean) => void
+  themeReady: boolean
 }
 
 export const ThemeContext = createContext<ThemeContextType>({
-  primary:    '#22c55e',
+  primary:    COR_TEMA_PADRAO,
   setPrimary: () => {},
   isLight:    false,
   setIsLight: () => {},
+  themeReady: false,
 })
+
+function lerPreferencia(chave: string) {
+  try {
+    return localStorage.getItem(chave)
+  } catch {
+    return null
+  }
+}
+
+function salvarPreferencia(chave: string, valor: string) {
+  try {
+    localStorage.setItem(chave, valor)
+  } catch {
+    // O tema continua funcionando na sessão quando o navegador bloqueia o storage.
+  }
+}
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   
-  const [primary, setPrimaryState] = useState('#22c55e')
+  const [primary, setPrimaryState] = useState(COR_TEMA_PADRAO)
   const [isLight, setIsLightState] = useState(false)
   const [ready, setReady]          = useState(false)
 
   // Lê as preferências salvas APÓS o mount (client-only)
   useEffect(() => {
-    const savedColor = localStorage.getItem('rpm-primary')
-    const savedTheme = localStorage.getItem('rpm-light')
-    queueMicrotask(() => {
-      if (savedColor) setPrimaryState(savedColor)
-      if (savedTheme) setIsLightState(savedTheme === 'true')
+    const aplicarPreferenciasSalvas = () => {
+      const savedColor = lerPreferencia('rpm-primary')
+      const savedTheme = lerPreferencia('rpm-light')
+      const corNormalizada = normalizarCorTema(savedColor)
+
+      setPrimaryState(corNormalizada)
+      setIsLightState(savedTheme === 'true')
+      if (savedColor !== corNormalizada) salvarPreferencia('rpm-primary', corNormalizada)
       setReady(true)
-    })
+    }
+
+    const sincronizarAbas = (event: StorageEvent) => {
+      if (event.key === 'rpm-primary') setPrimaryState(normalizarCorTema(event.newValue))
+      if (event.key === 'rpm-light') setIsLightState(event.newValue === 'true')
+    }
+
+    queueMicrotask(aplicarPreferenciasSalvas)
+    window.addEventListener('storage', sincronizarAbas)
+    return () => window.removeEventListener('storage', sincronizarAbas)
   }, [])
 
   // Aplica as variáveis CSS globais sempre que mudar
@@ -43,17 +74,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [primary, isLight, ready])
 
   const setPrimary = (c: string) => {
-    setPrimaryState(c)
-    localStorage.setItem('rpm-primary', c)
+    const corNormalizada = normalizarCorTema(c)
+    setPrimaryState(corNormalizada)
+    salvarPreferencia('rpm-primary', corNormalizada)
   }
 
   const setIsLight = (v: boolean) => {
     setIsLightState(v)
-    localStorage.setItem('rpm-light', String(v))
+    salvarPreferencia('rpm-light', String(v))
   }
 
   return (
-    <ThemeContext.Provider value={{ primary, setPrimary, isLight, setIsLight }}>
+    <ThemeContext.Provider value={{ primary, setPrimary, isLight, setIsLight, themeReady: ready }}>
       {children}
     </ThemeContext.Provider>
   )
@@ -65,9 +97,5 @@ export function useTheme() {
 
 // Cores disponíveis (usadas na Navbar, Admin e Dashboard)
 export const THEME_COLORS: Record<string, string> = {
-  Verde:    '#22c55e',
-  Vermelho: '#ef4444',
-  Azul:     '#3b82f6',
-  Âmbar:    '#f59e0b',
-  Roxo:     '#5e17eb',
+  ...Object.fromEntries(CORES_E_LOGOS.map((tema) => [tema.label, tema.value])),
 }

@@ -16,6 +16,7 @@ import {
   Bell,
   CheckCheck,
   ShieldCheck,
+  CreditCard,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
@@ -25,6 +26,7 @@ const NAV_ADMIN = [
   { id: 'dashboard', icon: LayoutDashboard, label: 'PAINEL MASTER' },
   { id: 'companies', icon: Building2, label: 'EMPRESAS / CLIENTES' },
   { id: 'requests', icon: ShieldAlert, label: 'SOLICITAÇÕES DE ACESSO' },
+  { id: 'subscriptions', icon: CreditCard, label: 'PLANOS / ASSINATURAS' },
   { id: 'resets', icon: ShieldAlert, label: 'REDEFINIÇÕES DE SENHA' },
   { id: 'security', icon: ShieldCheck, label: 'LOGS / SEGURANÇA' },
 ] as const
@@ -33,13 +35,14 @@ const CONFIG_ITEM = { id: 'settings', icon: Settings, label: 'CONFIGURAÇÕES' }
 
 const LARGURA_RECOLHIDA = '72px'
 const LARGURA_EXPANDIDA = '16rem'
-export type AdminTab = 'dashboard' | 'companies' | 'requests' | 'resets' | 'security' | 'settings'
+export type AdminTab = 'dashboard' | 'companies' | 'requests' | 'subscriptions' | 'resets' | 'security' | 'settings'
 
 // Dicionário para traduzir o activeTab no Header
 const TAB_LABELS: Record<AdminTab, string> = {
   'dashboard': 'PAINEL',
   'companies': 'EMPRESAS',
   'requests': 'SOLICITAÇÕES',
+  'subscriptions': 'PLANOS / ASSINATURAS',
   'resets': 'SOLICITAÇÕES',
   'security': 'SEGURANÇA',
   'settings': 'CONFIGURAÇÕES'
@@ -52,7 +55,7 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children, activeTab, setActiveTab }: AdminLayoutProps) {
-  const { primary, isLight } = useTheme()
+  const { primary, isLight, themeReady } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarExpandida, setSidebarExpandida] = useState(false)
   const [pendenciasPorModulo, setPendenciasPorModulo] = useState<Record<string, number>>({})
@@ -78,7 +81,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
                   <img
                     src={`/logos/${obterLogoPorTema(primary)}`}
                     alt="RPMTRUCK"
-                    className="h-7 w-auto object-contain transition-all duration-300"
+                    className={`h-7 w-auto object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
                   />
                   <span className="font-black text-xl tracking-tight whitespace-nowrap" style={{ color: 'var(--foreground)' }}>
                     RPM<span style={{ color: primary }}>TRUCK</span>
@@ -93,7 +96,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
                 <img
                   src={`/logos/${obterLogoPorTema(primary)}`}
                   alt="RPMTRUCK"
-                  className="h-full w-full object-contain transition-all duration-300"
+                  className={`h-full w-full object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
                 />
               </div>
             )}
@@ -103,7 +106,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
             {NAV_ADMIN.map((item) => {
               const active = activeTab === item.id
               const Icon = item.icon
-              const moduloNotificacao = item.id === 'requests' ? 'ACESSO' : item.id === 'resets' ? 'SENHAS' : item.id === 'companies' ? 'EMPRESAS' : 'SISTEMA'
+              const moduloNotificacao = item.id === 'requests' ? 'ACESSO' : item.id === 'subscriptions' ? 'ASSINATURA' : item.id === 'resets' ? 'SENHAS' : item.id === 'companies' ? 'EMPRESAS' : 'SISTEMA'
               const totalPendencias = pendenciasPorModulo[moduloNotificacao] ?? 0
 
               return (
@@ -218,7 +221,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
             <div className="w-px h-6 bg-border hidden sm:block" style={{ backgroundColor: 'var(--border)' }} />
             <div className="hidden sm:flex flex-col text-right font-mono">
               <span className="text-[11px] font-bold text-foreground truncate max-w-[150px]">Administrador Base</span>
-              <span className="text-[9px] uppercase tracking-widest" style={{ color: primary }}>Sudo Access</span>
+              <span className="text-[9px] uppercase tracking-widest" style={{ color: primary }}>Admin Master</span>
             </div>
           </div>
         </header>

@@ -5,74 +5,15 @@ import { motion, useInView } from 'framer-motion'
 import { Check, Star, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { useTheme } from '@/contexts/ThemeContext'
+import { usePlanosPublicos } from '@/hooks/usePlanosPublicos'
 
-// ─── Planos disponíveis (Sincronizados com SolicitarAcesso e Banco de Dados) ───────────────
-const PLANS = [
-  { 
-    id: 'ESSENCIAL', 
-    name: 'ESSENCIAL', 
-    desc: 'Gestão completa e controle operacional para frotas em crescimento', 
-    price: 'R$ 450/mês', 
-    setup: 300, users: 4, vehicles: 10,
-    modules: [
-      'Gestão completa do catálogo de veículos e motoristas',
-      'Até 1 ano (365 dias) de histórico e auditoria',
-      'Dashboard analítica de custos e combustível (R$)',
-      'Controle básico de manutenção preventiva e corretiva',
-      'Até 4 usuários administradores e 10 veículos'
-    ], 
-    restricted: false 
-  },
-  { 
-    id: 'AVANCADO', 
-    name: 'AVANÇADO', 
-    desc: 'Precisão operacional e gestão multi-bases/pátios', 
-    price: 'R$ 650/mês', 
-    setup: 500, users: 10, vehicles: 25,
-    modules: [
-      'Tudo do plano Essencial',
-      'Até 2 anos (730 dias) de histórico analítico',
-      'Delegação direta de tarefas e alertas entre operadores',
-      'Vincular custos por Veículo + Condutor específico',
-      'Gestão de Bases, Pátios e Unidades Operacionais',
-      'Até 10 usuários e 25 veículos inclusos'
-    ], 
-    featured: true, tag: 'MAIS POPULAR', restricted: false 
-  },
-  { 
-    id: 'ENTERPRISE', 
-    name: 'ENTERPRISE', 
-    desc: 'Inteligência de frota de alta escala com delegação e APIs', 
-    price: 'R$ 1.250/mês', 
-    setup: 1000, users: 25, vehicles: 80,
-    modules: [
-      'Tudo do plano Avançado',
-      'Até 3 anos (1.095 dias) de histórico de dados',
-      'Relatórios e Filtros de Data 100% Personalizados',
-      'Notificações e delegações avançadas prioritárias',
-      'Até 25 usuários, 80 veículos e Gerente Dedicado'
-    ], 
-    restricted: false 
-  },
-  { 
-    id: 'PREVIEW', 
-    name: 'PREVIEW', 
-    desc: 'Acesso de teste — somente via Admin', 
-    price: 'Sob Consulta', 
-    setup: 0, users: 'Ilimitado', vehicles: 'Ilimitado',
-    modules: [
-      'Ambiente Sandbox de homologação',
-      'Acesso antecipado a módulos beta',
-      'Testes de novas rotinas operacionais'
-    ], 
-    restricted: true 
-  },
-]
+const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 
 export default function Plans() {
   const { primary, isLight } = useTheme()
   const ref    = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true })
+  const { planos, carregando, erro, recarregar } = usePlanosPublicos()
 
   const btnVars = `
     .plan-btn {
@@ -117,8 +58,18 @@ export default function Plans() {
           </h2>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          {PLANS.map((plan, i) => (
+        {erro && (
+          <div role="alert" className="mb-8 border border-red-500/30 bg-red-500/10 p-4 text-center text-sm text-red-500">
+            {erro}{' '}
+            <button type="button" onClick={() => void recarregar()} className="font-bold underline">Tentar novamente</button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {carregando && Array.from({ length: 3 }, (_, index) => (
+            <div key={index} className="min-h-[42rem] animate-pulse border border-border bg-card" />
+          ))}
+          {planos.map((plan, i) => (
             <motion.div
               key={plan.name}
               initial={{ opacity: 0, y: 48, scale: 0.96, rotateX: 5 }}
@@ -143,13 +94,13 @@ export default function Plans() {
               </span>
               <div>
                 {/* Badge */}
-                {plan.featured && plan.tag && (
+                {plan.featured && (
                   <div className="absolute left-1/2 top-0 -translate-x-1/2">
                     <span
                       className="inline-flex items-center px-3 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em] whitespace-nowrap border font-mono"
                       style={{ backgroundColor: 'var(--card)', borderColor: primary, color: primary }}
                     >
-                      {plan.tag}
+                      MAIS POPULAR
                     </span>
                   </div>
                 )}
@@ -167,7 +118,8 @@ export default function Plans() {
                   {plan.name}
                 </h3>
                 <p className="text-foreground-muted text-sm mb-6">{plan.desc}</p>
-                <div className="text-3xl font-bold mb-8 text-foreground font-rajdhani">{plan.price}</div>
+                <div className="text-3xl font-bold mb-2 text-foreground font-rajdhani">{moeda.format(plan.price)}</div>
+                <div className="mb-8 text-[10px] uppercase tracking-widest text-foreground-muted">por mês</div>
 
                 <ul className="space-y-3 mb-8 font-mono">
                   {plan.modules.map((m) => (

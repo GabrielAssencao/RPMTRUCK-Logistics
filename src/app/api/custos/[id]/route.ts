@@ -17,7 +17,12 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   const parsed = schema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ erro: 'Alteração inválida.' }, { status: 400 })
   const custo = await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.custo.update({ where: { id: atual.id }, data: parsed.data }))
-  return NextResponse.json({ ...custo, data: custo.data.toISOString().slice(0, 10), duplaId: custo.veiculoId })
+  return NextResponse.json({
+    ...custo,
+    data: custo.data.toISOString().slice(0, 10),
+    duplaId: custo.veiculoId,
+    arquivado: Boolean(custo.relatorioArquivoId),
+  })
 }
 
 export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {

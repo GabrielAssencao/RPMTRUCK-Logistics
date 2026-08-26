@@ -6,13 +6,13 @@ import { notificarAdmins, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import {
-  calcularMensalidade,
   MODULOS,
   normalizarModulos,
   obterModulosPadrao,
   PLANOS,
   STATUS_EMPRESA,
 } from '@/utils/planos'
+import { calcularMensalidadePersistida } from '@/lib/planosComerciais'
 
 const atualizarEmpresaSchema = z.object({
   plano: z.enum(PLANOS).optional(),
@@ -87,10 +87,11 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
       })
     }
 
+    const mensalidade = await calcularMensalidadePersistida(plano, usuariosAdicionais, veiculosAdicionais)
     return NextResponse.json({
       sucesso: true,
       empresa,
-      mensalidade: calcularMensalidade(plano, usuariosAdicionais, veiculosAdicionais),
+      mensalidade,
     })
   } catch (error) {
     console.error('Erro ao atualizar plano da empresa:', error)

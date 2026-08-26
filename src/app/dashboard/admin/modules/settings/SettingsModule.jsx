@@ -1,9 +1,8 @@
 'use client'
 import { useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { CORES_E_LOGOS } from '@/data/temasELogos';
 import { Palette, Moon, Sun } from 'lucide-react';
-
-const CORES_PRIMARIAS = ['#3b82f6', '#8b5cf6', '#ef4444', '#10b981', '#f59e0b'];
 
 export default function SettingsModule() {
   // Chamamos as variáveis reais do seu ThemeContext atual
@@ -67,17 +66,18 @@ export default function SettingsModule() {
           <Palette size={16} style={{ color: primary }} /> Cor de Destaque
         </h3>
         <div className="flex gap-4">
-          {CORES_PRIMARIAS.map(cor => (
+          {CORES_E_LOGOS.map(tema => (
             <button 
-              key={cor} 
-              onClick={() => handleSave({ primary: cor })}
+              key={tema.value}
+              onClick={() => handleSave({ primary: tema.value })}
               className="w-10 h-10 rounded-full transition-transform hover:scale-110 cursor-pointer"
               style={{ 
-                backgroundColor: cor,
-                outline: primary === cor ? `2px solid ${cor}` : 'none',
+                backgroundColor: tema.value,
+                outline: primary === tema.value ? `2px solid ${tema.value}` : 'none',
                 outlineOffset: '2px'
               }}
-              title={`Trocar cor para ${cor}`}
+              title={`Trocar cor para ${tema.label}`}
+              aria-label={`Trocar cor para ${tema.label}`}
             />
           ))}
         </div>

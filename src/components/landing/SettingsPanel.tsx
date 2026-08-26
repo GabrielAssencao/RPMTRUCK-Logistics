@@ -1,17 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Palette, Save } from 'lucide-react'
+import { Palette } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
-import { motion } from 'framer-motion'
-
-const COLORS = [
-  { name: 'Verde', value: '#22c55e', logo: 'logoRPMTRUCK_verde.png' },
-  { name: 'Vermelho', value: '#ef4444', logo: 'logoRPMTRUCK_vermelho.png' },
-  { name: 'Azul', value: '#3b82f6', logo: 'logoRPMTRUCK_azul.png' },
-  { name: 'Âmbar', value: '#f59e0b', logo: 'logoRPMTRUCK_amarelo.png' },
-  { name: 'Roxo', value: '#5e17eb', logo: 'logoRPMTRUCK_roxo.png' },
-]
+import { CORES_E_LOGOS } from '@/data/temasELogos'
 
 export default function SettingsPanel() {
   const { primary, setPrimary } = useTheme()
@@ -31,9 +23,9 @@ export default function SettingsPanel() {
       </h3>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-        {COLORS.map(c => (
+        {CORES_E_LOGOS.map(c => (
           <button
-            key={c.name}
+            key={c.value}
             onClick={() => setPrimary(c.value)}
             className="group flex flex-col items-center gap-2"
           >
@@ -41,7 +33,7 @@ export default function SettingsPanel() {
               className={`w-16 h-16 border-2 transition-all ${primary === c.value ? 'border-foreground scale-110' : 'border-border'}`}
               style={{ backgroundColor: c.value }}
             />
-            <span className="text-[10px] font-bold uppercase tracking-widest">{c.name}</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest">{c.label}</span>
           </button>
         ))}
       </div>

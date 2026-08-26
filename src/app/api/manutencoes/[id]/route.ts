@@ -24,7 +24,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     }
     return historico
   })
-  return NextResponse.json({ id: h.id, veiculoPlaca: atual.veiculo.placa, veiculoModelo: atual.veiculo.modelo, dataAgendada: h.data_agendada.toISOString().slice(0, 10), tipo: h.tipo, pecas: h.pecas_substituidas || h.descricao || '', custo: h.custo, kmAtual: h.km_atual, status: h.status, origem: h.origem })
+  return NextResponse.json({ id: h.id, veiculoPlaca: atual.veiculo.placa, veiculoModelo: atual.veiculo.modelo, dataAgendada: h.data_agendada.toISOString().slice(0, 10), tipo: h.tipo, pecas: h.pecas_substituidas || h.descricao || '', custo: h.custo, kmAtual: h.km_atual, status: h.status, origem: h.origem, arquivado: false })
 }
 
 export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {

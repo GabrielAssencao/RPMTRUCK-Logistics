@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { calcularMensalidade, normalizarModulos } from '@/utils/planos'
+import { normalizarModulos } from '@/utils/planos'
+import { calcularMensalidadePorCatalogo, listarPlanosComerciais } from '@/lib/planosComerciais'
 import { exposeEmpresa } from '@/lib/fieldEncryption'
 
 export const dynamic = 'force-dynamic'
@@ -13,29 +14,38 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const empresas = await prisma.empresa.findMany({
-      include: {
-        _count: {
-          select: {
-            usuarios: true,
-            veiculos_frota: true,
-            motoristas: true,
+    const [empresas, catalogo] = await Promise.all([
+      prisma.empresa.findMany({
+        include: {
+          _count: {
+            select: {
+              usuarios: true,
+              veiculos_frota: true,
+              motoristas: true,
+            },
           },
         },
-      },
-      orderBy: { criado_em: 'desc' },
-    })
+        orderBy: { criado_em: 'desc' },
+      }),
+      listarPlanosComerciais(),
+    ])
+    const catalogoPorPlano = new Map(catalogo.map((plano) => [plano.id, plano]))
 
     return NextResponse.json(
-      empresas.map((empresa) => ({
-        ...exposeEmpresa(empresa),
-        modulos: normalizarModulos(empresa.modulos),
-        mensalidade: calcularMensalidade(
-          empresa.plano,
-          empresa.usuarios_adicionais,
-          empresa.veiculos_adicionais,
-        ),
-      })),
+      empresas.map((empresa) => {
+        const planoComercial = catalogoPorPlano.get(empresa.plano)
+        return {
+          ...exposeEmpresa(empresa),
+          modulos: normalizarModulos(empresa.modulos),
+          mensalidade: planoComercial
+            ? calcularMensalidadePorCatalogo(
+                planoComercial,
+                empresa.usuarios_adicionais,
+                empresa.veiculos_adicionais,
+              )
+            : null,
+        }
+      }),
     )
   } catch (error) {
     console.error('Erro ao listar empresas no Admin:', error)
