@@ -15,6 +15,7 @@ import {
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { notificarAdmins, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 import { executarComAuditoria } from '@/lib/auditoria'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -61,6 +62,13 @@ export async function GET(request: NextRequest) {
   if (auth.error || !auth.session || !auth.empresaId || !auth.empresa) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
+  const limited = await applyRateLimit(
+    request,
+    `report-read:${auth.empresaId}:${auth.session.userId}`,
+    RATE_LIMITS.REPORT_READ.limit,
+    RATE_LIMITS.REPORT_READ.windowMs,
+  )
+  if (limited) return limited
 
   const [arquivos, usoEmpresa, usoGlobal, tamanhoBanco] = await Promise.all([
     prisma.relatorioArquivo.findMany({
@@ -142,6 +150,14 @@ export async function POST(request: NextRequest) {
   if (!gestorAutorizado(auth.session.role)) {
     return NextResponse.json({ erro: 'Apenas o gestor pode arquivar relatórios.' }, { status: 403 })
   }
+
+  const limited = await applyRateLimit(
+    request,
+    `report-upload:${auth.empresaId}:${auth.session.userId}`,
+    RATE_LIMITS.FILE_UPLOAD.limit,
+    RATE_LIMITS.FILE_UPLOAD.windowMs,
+  )
+  if (limited) return limited
 
   try {
     const formData = await request.formData()

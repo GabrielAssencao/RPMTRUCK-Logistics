@@ -1,5 +1,6 @@
 // src/app/layout.tsx
 import type { Metadata, Viewport } from 'next'
+import { connection } from 'next/server'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import './globals.css'
 
@@ -15,7 +16,9 @@ export const viewport: Viewport = {
   themeColor: '#22c55e',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // A CSP usa nonce por requisição; páginas estáticas não possuem esse contexto.
+  await connection()
   return (
     <html lang="pt-BR" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>

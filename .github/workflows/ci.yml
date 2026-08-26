@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, seguranca/autenticacao]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://user:password@localhost:5432/rpmtruck
+      DIRECT_URL: postgresql://user:password@localhost:5432/rpmtruck
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: public-placeholder
+      JWT_SECRET: ci-only-placeholder-with-at-least-thirty-two-characters
+      RATE_LIMIT_HASH_SECRET: another-ci-only-placeholder-with-thirty-two-characters
+      TURNSTILE_REQUIRED: "false"
+      DATA_ENCRYPTION_ACTIVE_VERSION: v1
+      DATA_ENCRYPTION_MASTER_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      DATA_BLIND_INDEX_KEY: MTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE=
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test:security
+      - run: npm run prisma:validate
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high

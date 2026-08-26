@@ -6,6 +6,7 @@ import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { criarNotificacao, escopoNotificacoes, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
 import { textoOperacional } from '@/lib/domainValidation'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,6 +43,13 @@ export async function GET(request: NextRequest) {
     const empresaAuth = await requireEmpresaAuth(request)
     if (empresaAuth.error) return NextResponse.json({ erro: empresaAuth.error }, { status: empresaAuth.status })
   }
+  const limited = await applyRateLimit(
+    request,
+    `notification-read:${auth.session.userId}`,
+    RATE_LIMITS.NOTIFICATION_READ.limit,
+    RATE_LIMITS.NOTIFICATION_READ.windowMs,
+  )
+  if (limited) return limited
 
   const lidas = request.nextUrl.searchParams.get('lidas')
   const where: Prisma.NotificacaoWhereInput = {
@@ -89,6 +97,13 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await requireAuth(request)
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
+  const limited = await applyRateLimit(
+    request,
+    `notification-mutation:${auth.session.userId}`,
+    RATE_LIMITS.NOTIFICATION_MUTATION.limit,
+    RATE_LIMITS.NOTIFICATION_MUTATION.windowMs,
+  )
+  if (limited) return limited
 
   await prisma.notificacao.updateMany({
     where: { ...escopoNotificacoes(auth.session), lida: false },
@@ -105,6 +120,14 @@ export async function POST(request: NextRequest) {
   if (!['GESTOR_EMPRESA', 'GESTOR'].includes(empresaAuth.session.role)) {
     return NextResponse.json({ erro: 'Apenas gestores podem enviar notificações.' }, { status: 403 })
   }
+
+  const limited = await applyRateLimit(
+    request,
+    `notification-send:${empresaAuth.session.empresaId}:${empresaAuth.session.userId}`,
+    RATE_LIMITS.NOTIFICATION_SEND.limit,
+    RATE_LIMITS.NOTIFICATION_SEND.windowMs,
+  )
+  if (limited) return limited
 
   const parsed = criarSchema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ erro: 'Dados da notificação inválidos.' }, { status: 400 })

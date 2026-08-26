@@ -10,6 +10,13 @@ import { randomBytes } from 'crypto';
 import { executarComAuditoria } from '@/lib/auditoria';
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 
+class SolicitacaoJaProcessadaError extends Error {
+  constructor() {
+    super('SOLICITACAO_JA_PROCESSADA');
+    this.name = 'SolicitacaoJaProcessadaError';
+  }
+}
+
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const auth = await requireAdminAuth(request);
@@ -29,7 +36,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     }
 
     if (solicitacao.status !== StatusSolicitacao.PENDENTE) {
-      return NextResponse.json({ erro: 'Esta solicitação já foi processada anteriormente.' }, { status: 400 });
+      return NextResponse.json({ erro: 'Esta solicitação já foi processada anteriormente.' }, { status: 409 });
     }
 
     const configPlano = PLANOS_PADRONIZADOS[solicitacao.plano];
@@ -44,17 +51,19 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
     // 2. Executa a TRANSACTION (Garante que se um passo falhar, nenhum dado corrompido é gravado)
     const resultado = await executarComAuditoria({ usuarioId: auth.session.userId, origem: 'SUPERADMIN' }, async (tx) => {
+      // A transição condicional funciona como um claim atômico. Em chamadas
+      // concorrentes, apenas uma transação consegue sair de PENDENTE.
+      const claim = await tx.solicitacaoAcesso.updateMany({
+        where: { id, status: StatusSolicitacao.PENDENTE },
+        data: { status: StatusSolicitacao.APROVADO },
+      });
+      if (claim.count !== 1) throw new SolicitacaoJaProcessadaError();
+
       const planoComercial = await obterPlanoComercial(solicitacao.plano, tx);
       if (!planoComercial?.ativo) {
         throw new Error('O plano comercial solicitado não está disponível.');
       }
       
-      // Passo A: Atualizar o status do Lead de entrada
-      await tx.solicitacaoAcesso.update({
-        where: { id },
-        data: { status: StatusSolicitacao.APROVADO }
-      });
-
       // Passo B: Criar a Instância da Empresa (Tenant)
       const novaEmpresa = await tx.empresa.create({
         data: {
@@ -132,6 +141,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     }, { status: 200 });
 
   } catch (error) {
+    if (error instanceof SolicitacaoJaProcessadaError) {
+      return NextResponse.json({ erro: 'Esta solicitação já foi processada anteriormente.' }, { status: 409 });
+    }
     console.error('Erro crítico ao aprovar e implantar tenant:', error);
     return NextResponse.json({ erro: 'Falha na transação técnica de implantação da infraestrutura.' }, { status: 500 });
   }

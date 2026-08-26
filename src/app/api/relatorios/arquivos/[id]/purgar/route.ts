@@ -5,6 +5,7 @@ import { notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { executarComAuditoria } from '@/lib/auditoria'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -24,6 +25,14 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
   if (!gestorAutorizado(auth.session.role)) {
     return NextResponse.json({ erro: 'Apenas o gestor pode concluir a limpeza dos dados.' }, { status: 403 })
   }
+
+  const limited = await applyRateLimit(
+    request,
+    `report-mutation:${auth.empresaId}:${auth.session.userId}`,
+    RATE_LIMITS.REPORT_MUTATION.limit,
+    RATE_LIMITS.REPORT_MUTATION.windowMs,
+  )
+  if (limited) return limited
 
   const parsed = schema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ erro: 'Confirmação de segurança inválida.' }, { status: 400 })

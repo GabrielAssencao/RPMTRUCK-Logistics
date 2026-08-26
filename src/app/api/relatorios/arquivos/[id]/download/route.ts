@@ -3,6 +3,7 @@ import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,6 +14,14 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
   if (auth.error || !auth.session || !auth.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
+
+  const limited = await applyRateLimit(
+    request,
+    `report-download:${auth.empresaId}:${auth.session.userId}`,
+    RATE_LIMITS.REPORT_DOWNLOAD.limit,
+    RATE_LIMITS.REPORT_DOWNLOAD.windowMs,
+  )
+  if (limited) return limited
 
   const arquivo = await prisma.relatorioArquivo.findFirst({
     where: { id: params.id, empresaId: auth.empresaId },

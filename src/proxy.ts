@@ -1,6 +1,33 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { isAdminRole, verifySession } from '@/lib/sessionToken'
 
+function createContentSecurityPolicy(nonce: string) {
+  const isDevelopment = process.env.NODE_ENV !== 'production'
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "frame-src https://challenges.cloudflare.com",
+    "object-src 'none'",
+    `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://challenges.cloudflare.com${isDevelopment ? " 'unsafe-eval'" : ''}`,
+    "script-src-attr 'none'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https://*.supabase.co",
+    `connect-src 'self' blob: https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com${isDevelopment ? ' ws://localhost:* ws://127.0.0.1:*' : ''}`,
+    "media-src 'self' blob:",
+    "worker-src 'self' blob:",
+    "manifest-src 'self'",
+    ...(isDevelopment ? [] : ['upgrade-insecure-requests']),
+  ].join('; ')
+}
+
+function withCsp(response: NextResponse, contentSecurityPolicy: string) {
+  response.headers.set('Content-Security-Policy', contentSecurityPolicy)
+  return response
+}
+
 const PUBLIC_ROUTES = [
   '/api/auth/login',
   '/api/auth/logout',
@@ -26,6 +53,12 @@ const PROTECTED_ROUTES = [
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
+  const contentSecurityPolicy = createContentSecurityPolicy(nonce)
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-nonce', nonce)
+  requestHeaders.set('Content-Security-Policy', contentSecurityPolicy)
+  const next = () => withCsp(NextResponse.next({ request: { headers: requestHeaders } }), contentSecurityPolicy)
 
   if (pathname.startsWith('/api/')) {
     const mutatingMethod = !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
@@ -38,35 +71,35 @@ export async function proxy(request: NextRequest) {
         ...(process.env.APP_ALLOWED_ORIGINS || '').split(','),
       ].filter((value): value is string => Boolean(value)).map((value) => value.trim().replace(/\/$/, '')))
       if ((origin && !allowedOrigins.has(origin.replace(/\/$/, ''))) || fetchSite === 'cross-site') {
-        return NextResponse.json({ erro: 'Origem da requisição não permitida.' }, { status: 403 })
+        return withCsp(NextResponse.json({ erro: 'Origem da requisição não permitida.' }, { status: 403 }), contentSecurityPolicy)
       }
 
       const contentLength = Number(request.headers.get('content-length') || 0)
       const maxBodyBytes = pathname.includes('/foto') ? 8 * 1024 * 1024 : 2 * 1024 * 1024
       if (Number.isFinite(contentLength) && contentLength > maxBodyBytes) {
-        return NextResponse.json({ erro: 'Corpo da requisição excede o limite permitido.' }, { status: 413 })
+        return withCsp(NextResponse.json({ erro: 'Corpo da requisição excede o limite permitido.' }, { status: 413 }), contentSecurityPolicy)
       }
     }
   }
 
   if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
-    return NextResponse.next()
+    return next()
   }
 
   if (!PROTECTED_ROUTES.some((route) => pathname.startsWith(route))) {
-    return NextResponse.next()
+    return next()
   }
 
   const session = await verifySession(request)
   if (!session) {
     if (pathname.startsWith('/dashboard')) {
-      return NextResponse.redirect(new URL('/auth/login', request.url))
+      return withCsp(NextResponse.redirect(new URL('/auth/login', request.url)), contentSecurityPolicy)
     }
-    return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 })
+    return withCsp(NextResponse.json({ erro: 'Não autenticado' }, { status: 401 }), contentSecurityPolicy)
   }
 
   if (pathname.startsWith('/dashboard/admin') && !isAdminRole(session.role)) {
-    return NextResponse.redirect(new URL('/dashboard/empresa', request.url))
+    return withCsp(NextResponse.redirect(new URL('/dashboard/empresa', request.url)), contentSecurityPolicy)
   }
 
   const rotasSomenteGestor = [
@@ -81,10 +114,10 @@ export async function proxy(request: NextRequest) {
     session.role !== 'GESTOR_EMPRESA' &&
     session.role !== 'GESTOR'
   ) {
-    return NextResponse.redirect(new URL('/dashboard/empresa/frota', request.url))
+    return withCsp(NextResponse.redirect(new URL('/dashboard/empresa/frota', request.url)), contentSecurityPolicy)
   }
 
-  return NextResponse.next()
+  return next()
 }
 
 export const config = {

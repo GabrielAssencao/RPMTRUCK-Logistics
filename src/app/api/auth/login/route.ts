@@ -1,7 +1,7 @@
 // src/app/api/auth/login/route.ts
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { hashPassword, passwordNeedsRehash, verifyPassword } from '@/lib/password';
+import { hashPassword, passwordNeedsRehash, verifyLoginPassword } from '@/lib/password';
 import { createSession } from '@/lib/auth';
 import { loginSchema } from '@/lib/validation';
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
@@ -61,21 +61,13 @@ export async function POST(request: NextRequest) {
     });
 
     // 4. Mensagem genérica para segurança (impede enum de emails)
-    if (!usuario) {
-      await recordSecurityEvent({ tipo: 'LOGIN_FALHA', request, email, ip: clientIp });
-      return NextResponse.json(
-        { erro: 'Credenciais de acesso inválidas.' },
-        { status: 401 }
-      );
-    }
+    // Executa bcrypt também para e-mails ausentes, evitando enumeração por tempo.
+    const senhaValida = await verifyLoginPassword(senha, usuario?.senha_hash);
 
-    // 5. Valida a senha antes de revelar qualquer estado da conta.
-    const senhaValida = await verifyPassword(senha, usuario.senha_hash);
-
-    if (!senhaValida) {
+    if (!usuario || !senhaValida) {
       await recordSecurityEvent({
-        tipo: 'LOGIN_FALHA', request, usuarioId: usuario.id,
-        empresaId: usuario.empresaId, email, ip: clientIp,
+        tipo: 'LOGIN_FALHA', request, usuarioId: usuario?.id,
+        empresaId: usuario?.empresaId, email, ip: clientIp,
       });
       return NextResponse.json(
         { erro: 'Credenciais de acesso inválidas.' },

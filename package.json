@@ -2,11 +2,19 @@
   "name": "rpmtrucks",
   "version": "0.2.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:security": "node --test tests/security-regressions.test.mjs",
+    "prisma:validate": "prisma validate",
+    "vercel-build": "prisma generate && next build",
+    "security:audit-git": "node scripts/audit-git-secrets.mjs",
     "security:encrypt-data": "node --env-file=.env scripts/encrypt-sensitive-data.mjs",
     "security:rotate-data": "node --env-file=.env scripts/rotate-sensitive-data-keys.mjs"
   },

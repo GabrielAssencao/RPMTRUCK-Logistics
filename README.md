@@ -1,159 +1,179 @@
 # RPMTruck Logistics
 
-Plataforma web para gestão operacional de transportadoras, criada para centralizar frota, motoristas, custos, manutenção, usuários e indicadores de negócio em uma experiência moderna e responsiva.
+Plataforma full-stack de gestão logística para transportadoras, com isolamento
+multiempresa, administração de planos, frota, motoristas, custos, manutenção,
+containers, tarefas, notificações e relatórios privados.
 
-> Projeto full-stack em desenvolvimento ativo, construído como produto SaaS multiempresa e como demonstração prática de arquitetura, segurança, modelagem de dados e UI/UX aplicada ao setor logístico.
+O projeto combina uma aplicação operacional em Next.js com PostgreSQL/Supabase,
+Prisma e uma camada própria de autenticação e autorização. É um produto em
+evolução e um projeto público de portfólio; antes de operar dados reais em
+produção, valide infraestrutura, backups, observabilidade, domínio e políticas
+organizacionais aplicáveis.
 
-## Visão do produto
+## Principais recursos
 
-A RPMTruck nasceu para reduzir a fragmentação de informações comuns na operação de transportadoras. Em vez de distribuir dados entre planilhas e ferramentas isoladas, a plataforma propõe uma visão única da empresa e de sua frota.
+- landing page responsiva com experiência 3D otimizada;
+- sessão JWT em cookie `HttpOnly`, persistida e revogável no banco;
+- papéis administrativos e empresariais com autorização no servidor;
+- isolamento por empresa derivado da sessão, sem confiar em IDs do cliente;
+- gestão de empresas, usuários, planos, cotas e solicitações de assinatura;
+- frota, motoristas, localizações, manutenção, custos e containers;
+- tarefas, notificações direcionadas e indicadores operacionais;
+- geração e guarda de relatórios em bucket privado;
+- fotos de motoristas normalizadas e armazenadas de forma privada;
+- criptografia versionada de campos sensíveis e índices cegos;
+- auditoria transacional, eventos de segurança, RLS e rate limit persistente;
+- temas, interface responsiva e componentes reutilizáveis.
 
-O sistema possui dois ambientes principais:
+## Stack
 
-- **Administração RPM:** gestão de empresas, solicitações de acesso, planos, módulos, usuários e redefinições de senha.
-- **Operação da empresa:** acompanhamento da frota, motoristas, custos, manutenção, localizações, relatórios, notificações e equipe.
-
-Cada empresa opera em seu próprio contexto, enquanto o administrador global controla o ciclo de entrada e os recursos liberados para cada cliente.
-
-## Destaques
-
-- Landing page interativa com animações e caminhão 3D.
-- Autenticação com sessão JWT armazenada em cookie `HttpOnly`.
-- Controle de acesso baseado em papéis e separação por empresa.
-- Painel administrativo para operação do produto SaaS.
-- Dashboard empresarial com módulos de logística.
-- Gestão de veículos, motoristas, usuários, custos e notificações.
-- Tela de manutenção com conceito visual de **Raio-X do caminhão**.
-- Indicadores públicos agregados, sem exposição de registros sensíveis.
-- Validação de entradas e proteção de rotas no servidor.
-- Modelagem relacional e migrações versionadas com Prisma.
-- Interface responsiva, temas e componentes reutilizáveis.
-
-## Stack tecnológica
-
-| Camada | Tecnologias |
+| Camada | Tecnologia |
 | --- | --- |
-| Aplicação | Next.js 16, React 19, TypeScript |
-| Interface | Tailwind CSS, Lucide React, Framer Motion, GSAP |
-| 3D | Three.js, React Three Fiber, Drei |
-| Formulários e validação | React Hook Form, Zod |
-| Dados e gráficos | Recharts, Zustand |
-| Backend | Next.js Route Handlers |
-| Banco de dados | PostgreSQL, Supabase, Prisma ORM |
-| Autenticação | JWT com `jose`, cookies `HttpOnly`, bcrypt |
+| Aplicação | Next.js 16.3, React 19.2, TypeScript 5.6 |
+| Interface | Tailwind CSS, Framer Motion, GSAP, Lucide React |
+| 3D | Three.js, React Three Fiber, Drei, Draco |
+| Backend | Next.js Route Handlers e Proxy |
+| Dados | PostgreSQL, Supabase e Prisma 6 |
+| Validação | Zod e React Hook Form |
+| Autenticação | `jose`, JWT, cookies `HttpOnly` e bcrypt |
+| Arquivos | Supabase Storage privado, Sharp e ExcelJS |
 
 ## Arquitetura
 
 ```text
-src/
-├── app/
-│   ├── api/                 # APIs de autenticação, administração e operação
-│   ├── auth/                # Login, solicitação de acesso e recuperação
-│   ├── dashboard/admin/     # Painel do administrador RPM
-│   └── dashboard/empresa/   # Ambiente operacional da transportadora
-├── components/
-│   ├── dashboard/           # Componentes dos painéis
-│   ├── landing/             # Seções públicas e experiência 3D
-│   └── ui/                  # Primitivos visuais reutilizáveis
-├── contexts/                # Contextos compartilhados da interface
-├── hooks/                   # Hooks da aplicação
-├── lib/                     # Autenticação, banco e serviços internos
-└── utils/                   # Funções auxiliares
-
-prisma/
-├── schema.prisma            # Modelo relacional da plataforma
-└── migrations/              # Histórico versionado do banco
-
-public/
-├── images/                  # Ilustrações e componentes visuais do caminhão
-├── logos/                   # Identidade visual
-└── models/                  # Ativos 3D
+Navegador
+   │
+   ├── páginas e componentes React
+   │
+   └── requisições /api
+          │
+          ▼
+     Proxy do Next.js
+     origem, tamanho, sessão leve e CSP com nonce
+          │
+          ▼
+     Route Handlers
+     autenticação → autorização → validação → rate limit
+          │
+          ├── Prisma → PostgreSQL/Supabase
+          │              ├── integridade e transações
+          │              ├── auditoria
+          │              ├── rate limit atômico
+          │              └── RLS/revogação de acesso direto
+          │
+          └── Supabase Admin → buckets privados
+                              ├── relatórios
+                              └── fotos de motoristas
 ```
 
-## Domínio e controle de acesso
+Estrutura principal:
 
-A plataforma foi modelada para um cenário multiempresa. Os principais papéis são:
+```text
+src/
+├── app/
+│   ├── api/                 # fronteiras HTTP e regras de acesso
+│   ├── auth/                # login, solicitação e recuperação
+│   └── dashboard/           # ambientes admin e empresa
+├── components/              # UI, dashboard, landing e segurança
+├── contexts/                # estado compartilhado da interface
+├── hooks/                   # integrações reutilizáveis da UI
+├── lib/                     # autenticação, banco, segurança e serviços
+├── proxy.ts                 # proteção inicial e CSP por requisição
+└── utils/                   # exportação e utilidades de domínio
 
-- `ADMIN_RPM`: administra a plataforma e todas as empresas.
-- `GESTOR_EMPRESA`: gerencia a operação e os usuários da própria empresa.
-- `OPERADOR`: atua nos módulos operacionais permitidos.
-- `VISUALIZADOR`: possui acesso prioritariamente consultivo.
+prisma/
+├── schema.prisma            # modelo relacional
+└── migrations/              # histórico imutável de mudanças
 
-Os planos disponíveis no domínio são `PREVIEW`, `ESSENCIAL`, `AVANCADO` e `ENTERPRISE`. A definição de plano e módulos pertence ao administrador RPM, não ao cliente no navegador.
+assets/source/               # fontes preservadas, fora da publicação web
+public/                      # ativos efetivamente servidos ao navegador
+scripts/                     # criptografia e rotação de dados
+tests/                       # regressões de segurança
+```
 
-As entidades centrais incluem empresas, usuários, veículos, motoristas, localizações, histórico veicular, custos, notificações, faturas, solicitações de acesso e redefinições de senha.
+## Papéis e autorização
+
+| Papel | Escopo |
+| --- | --- |
+| `ADMIN_RPM` | administração global da plataforma |
+| `GESTOR_EMPRESA` | gestão da própria empresa, equipe e módulos |
+| `OPERADOR` | operações permitidas para a própria empresa |
+| `VISUALIZADOR` | acesso prioritariamente consultivo |
+
+Autenticação não é tratada como autorização. APIs sensíveis revalidam a sessão
+no banco, o papel, a empresa, os módulos e a propriedade do recurso. Valores
+como `empresaId`, papel, plano, preço e permissões enviados pelo navegador não
+são fonte de autoridade.
+
+## Planos
+
+Capacidades técnicas ficam versionadas em `src/utils/planos.ts`; preços e
+visibilidade comercial ficam no catálogo `planos_comerciais`, editável pelo
+administrador.
+
+| Plano | Usuários base | Veículos base | Histórico | Recursos adicionais |
+| --- | ---: | ---: | ---: | --- |
+| `ESSENCIAL` | 4 | 10 | 1 ano | frota, gestão e notificações |
+| `AVANCADO` | 10 | 25 | 2 anos | tarefas e delegação |
+| `ENTERPRISE` | 25 | 80 | 3 anos | relatórios personalizados |
+| `PREVIEW` | sandbox | sandbox | 3 anos | todos os módulos; acesso restrito |
+
+Solicitações de mudança de plano, cotas ou negociação são calculadas no
+servidor, guardam a versão do catálogo e impedem pedidos pendentes concorrentes
+do mesmo tipo.
 
 ## Segurança
 
-Algumas decisões incorporadas ao projeto:
+As principais decisões de segurança são:
 
-- credenciais privadas restritas ao ambiente do servidor;
-- cookies de sessão inacessíveis ao JavaScript do navegador;
-- autorização separada de autenticação;
-- sessão revalidada no banco e revogável por usuário;
-- identidade e empresa derivadas da sessão confiável nas APIs protegidas;
-- validação de dados nas fronteiras do backend;
-- senhas armazenadas somente como hashes;
-- redefinição de senha com token de uso único, hash e expiração;
-- respostas públicas agregadas e com exposição mínima;
-- limitação persistente e atômica de requisições sensíveis no PostgreSQL;
-- auditoria por triggers com autor confiável, estado anterior/novo e logs imutáveis;
-- RLS habilitada e acesso direto negado aos papéis `anon` e `authenticated`;
-- CSP, HSTS em produção e cabeçalhos defensivos aplicados globalmente;
-- `.env` e artefatos locais excluídos do versionamento.
+- cookie de sessão `HttpOnly`, `SameSite=Lax` e `Secure` em produção;
+- sessões persistidas, expiradas e revogáveis, com versão por usuário;
+- bcrypt com custo uniforme também para e-mails inexistentes no login;
+- respostas indistinguíveis na solicitação de recuperação de senha;
+- tokens de redefinição com hash, expiração e uso único;
+- Cloudflare Turnstile opcional, com hostname e ação verificados no servidor;
+- rate limit atômico no PostgreSQL para login, reset, relatórios,
+  notificações, uploads e operações administrativas;
+- aprovação de acesso com transição atômica contra replay concorrente;
+- validação Zod e limites de corpo nas fronteiras HTTP;
+- proteção CSRF por origem e `Sec-Fetch-Site` nas mutações;
+- CSP com nonce por requisição, bloqueio de scripts inline e permissões mínimas;
+- HSTS em produção e headers contra clickjacking, MIME sniffing e vazamento de
+  referência;
+- AES-256-GCM com chave derivada por empresa/campo e índices cegos HMAC;
+- auditoria transacional com identidade confiável e eventos pseudonimizados;
+- buckets privados, URLs assinadas curtas e validação real de uploads;
+- RLS habilitada, privilégios revogados de `anon` e `authenticated` e Data API
+  desativada para as tabelas internas.
 
-O projeto usa sessão própria validada nas APIs, e não `auth.uid()` do Supabase. Por
-isso, as tabelas não são expostas diretamente pelo SDK do navegador: o Prisma se
-conecta no servidor e as APIs aplicam papel, empresa e plano. Novas tabelas e APIs
-devem manter essa fronteira ou receber uma política RLS explicitamente revisada.
+O frontend nunca é uma barreira de segurança. Não use a chave
+`SUPABASE_SECRET_KEY`, credenciais do banco ou chaves de criptografia em
+variáveis `NEXT_PUBLIC_*`.
 
-A integração privilegiada com o Storage usa `SUPABASE_SECRET_KEY` no servidor. Essa
-variável recebe a chave moderna `sb_secret_...` e nunca deve possuir o prefixo
-`NEXT_PUBLIC_`. O código não aceita mais a variável legada `SUPABASE_SERVICE_ROLE_KEY`.
-Com a Data API desativada, a migração
-`20260820070000_data_api_desativada` mantém um schema vazio no PostgREST para evitar
-o erro recorrente `3F000`; antes de reativar a Data API, essa configuração precisa
-ser revertida e os schemas expostos devem ser revisados.
+Para reportar uma vulnerabilidade, consulte [SECURITY.md](SECURITY.md).
 
-## Estado atual
+## Pré-requisitos
 
-O projeto está em desenvolvimento incremental. Autenticação, sessão, estrutura administrativa, APIs centrais, modelagem Prisma e partes da comunicação com o banco já fazem parte da aplicação. Alguns módulos empresariais ainda utilizam dados demonstrativos enquanto suas operações persistentes são conectadas e validadas.
+- Node.js 20.9 ou superior;
+- npm 10 ou superior;
+- PostgreSQL compatível com Prisma 6 ou um projeto Supabase;
+- projeto Supabase com Storage, caso relatórios e fotos sejam usados.
 
-Essa abordagem permite evoluir a interface e o domínio sem apresentar protótipos como funcionalidades de produção. Os próximos ciclos priorizam:
-
-- concluir a persistência dos módulos empresariais;
-- ampliar testes de autorização e isolamento entre empresas;
-- consolidar relatórios e indicadores operacionais;
-- evoluir o Raio-X de manutenção e o histórico dos componentes;
-- adicionar observabilidade, testes automatizados e pipeline de CI.
-
-## Executando localmente
-
-### Pré-requisitos
-
-- Node.js 20.9 ou superior
-- npm
-- banco PostgreSQL ou projeto Supabase
-
-### Instalação
+## Instalação local
 
 ```bash
 git clone https://github.com/GabrielAssencao/RPMTRUCK-Logistics.git
 cd RPMTRUCK-Logistics
-npm install
+npm ci
 ```
 
-Crie o arquivo de ambiente a partir do exemplo:
+Crie o arquivo local de ambiente:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Preencha as credenciais locais sem versionar o arquivo `.env`. O `JWT_SECRET` deve
-conter pelo menos 32 caracteres aleatórios; a aplicação não utiliza chave de
-desenvolvimento como fallback. Defina também um `RATE_LIMIT_HASH_SECRET` independente,
-com pelo menos 32 caracteres, para pseudonimizar IPs e e-mails gravados pelo limitador.
-Se ele ainda não existir, o servidor usa temporariamente `JWT_SECRET`. Em seguida:
+Preencha `.env`, gere o client e aplique as migrations:
 
 ```bash
 npx prisma generate
@@ -161,109 +181,181 @@ npx prisma migrate deploy
 npm run dev
 ```
 
-### Bucket privado de relatórios no Supabase Free
+A aplicação ficará disponível em `http://localhost:3000`.
 
-A migração `20260819000000_padroniza_planos_e_arquivos_privados` cria o bucket
-`relatorios-privados` como privado, com limite de 10 MB por arquivo. Para habilitar
-upload e download, copie a chave `service_role` de **Supabase > Project Settings > API**
-para `SUPABASE_SECRET_KEY` no ambiente do servidor. Prefira a chave moderna
-`sb_secret_...` e nunca use essa chave em uma variável `NEXT_PUBLIC_*`.
+## Variáveis de ambiente
 
-O aplicativo aplica um teto interno padrão de 700 MiB para preservar margem dentro
-do 1 GB do plano Free para fotos e outros objetos. O valor pode ser reduzido por
-`RELATORIOS_STORAGE_SOFT_LIMIT_BYTES`. O teto considera os relatórios registrados
-pelo aplicativo; outros buckets também consomem a franquia e devem ser acompanhados
-no painel do Supabase.
+| Variável | Escopo | Obrigatória | Finalidade |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | servidor | sim | conexão pooled usada pela aplicação |
+| `DIRECT_URL` | servidor | sim | conexão direta usada por migrations |
+| `NEXT_PUBLIC_SUPABASE_URL` | público | sim | URL do projeto Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | público | sim | chave pública do Supabase |
+| `SUPABASE_SECRET_KEY` | servidor | Storage | acesso privilegiado aos buckets privados |
+| `RELATORIOS_STORAGE_SOFT_LIMIT_BYTES` | servidor | não | teto preventivo; padrão de 700 MiB |
+| `NEXT_PUBLIC_SITE_URL` | público | produção | origem canônica da aplicação |
+| `APP_ALLOWED_ORIGINS` | servidor | não | origens extras, separadas por vírgula |
+| `JWT_SECRET` | servidor | sim | assinatura de sessão; mínimo de 32 caracteres |
+| `RATE_LIMIT_HASH_SECRET` | servidor | recomendado | pseudonimização separada para o limitador |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | público | Turnstile | chave pública do widget |
+| `TURNSTILE_SECRET_KEY` | servidor | Turnstile | validação do desafio |
+| `TURNSTILE_ALLOWED_HOSTNAMES` | servidor | Turnstile | hosts aceitos, separados por vírgula |
+| `TURNSTILE_REQUIRED` | servidor | não | exige desafio quando igual a `true` |
+| `DATA_ENCRYPTION_ACTIVE_VERSION` | servidor | criptografia | versão ativa: `v1` ou `v2` |
+| `DATA_ENCRYPTION_MASTER_KEY` | servidor | recomendado | chave Base64 de 32 bytes para AES-GCM |
+| `DATA_BLIND_INDEX_KEY` | servidor | recomendado | chave Base64 de 32 bytes para índices HMAC |
+| `DATA_ENCRYPTION_PREVIOUS_VERSION` | servidor | rotação | versão anterior temporária |
+| `DATA_ENCRYPTION_PREVIOUS_MASTER_KEY` | servidor | rotação | chave mestra anterior |
+| `DATA_BLIND_INDEX_PREVIOUS_KEY` | servidor | rotação | chave de índice anterior |
 
-O bucket não aceita leitura pública. A aplicação grava os arquivos pelo servidor,
-registra SHA-256, período e tamanho no PostgreSQL e libera downloads por URLs
-assinadas válidas por 60 segundos. Esses arquivos são um arquivo operacional; para
-recuperação de desastre, mantenha futuramente uma cópia externa ao projeto Supabase.
-
-A migração `20260820020000_arquivamento_operacional_permanente` adiciona o ciclo
-seguro dos arquivos gerados no servidor: gerar, baixar, confirmar a guarda e, somente
-depois do prazo do plano, remover os detalhes vinculados exatamente àquele arquivo.
-O código do container, empresa, terminal de origem, terminal de destino, data da
-operação, referência do relatório e checksum permanecem na tabela de movimentações
-permanentes. O arquivo temporário só é removido do Storage após a limpeza transacional
-dos detalhes; uma falha no Storage pode ser tentada novamente sem apagar o histórico.
-
-### Fotos privadas de motoristas
-
-A migração `20260820010000_bucket_privado_fotos_motoristas` cria o bucket privado
-`motoristas-fotos`, limitado a WebP de 200 KiB. A API aceita JPG, PNG ou WebP de até
-5 MiB, valida o conteúdo real, remove metadados, recorta em 3:4 e grava somente a
-versão final de 480 × 640 pixels. Cada motorista possui um único arquivo, substituído
-quando a foto é atualizada e removido junto com o cadastro. A leitura usa URL assinada
-por uma hora; o navegador não recebe a chave `service_role`.
-
-A aplicação estará disponível em [http://localhost:3000](http://localhost:3000).
-
-## Comandos úteis
+Gere segredos independentes. Exemplos:
 
 ```bash
-npm run dev       # servidor de desenvolvimento
-npm run build     # build otimizado de produção
-npm run start     # executa o build de produção
-npm run lint      # análise estática do projeto
-npx prisma studio # interface local para inspecionar os dados
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
-## Compromisso de engenharia
+Nunca copie valores de CI ou placeholders para produção. Perder a chave mestra
+de dados torna os campos criptografados irrecuperáveis; mantenha backup seguro e
+teste a restauração.
 
-Este projeto procura ir além de uma interface visual: as decisões consideram isolamento multiempresa, autorização no servidor, integridade do banco, tratamento de falhas, responsividade, acessibilidade e evolução sustentável do código.
+## Supabase e banco de dados
 
-## Autor
+1. Crie o projeto e copie as connection strings do pooler e da conexão direta.
+2. Use a porta do Transaction Pooler em `DATABASE_URL` e a conexão direta em
+   `DIRECT_URL`.
+3. Configure a URL, chave pública e `SUPABASE_SECRET_KEY` no servidor.
+4. Execute `npx prisma migrate deploy` a partir de um ambiente confiável.
+5. Confirme no painel que os buckets `relatorios-privados` e
+   `motoristas-fotos` são privados.
+6. Mantenha a Data API desativada ou revise integralmente grants e RLS antes de
+   reativá-la.
 
-Desenvolvido por **Gabriel Assencao** como um produto de gestão logística e projeto de portfólio full-stack.
+O sistema usa sessão própria e não depende de `auth.uid()` para autorização. O
+Prisma acessa o banco no servidor; as tabelas internas não devem ser expostas ao
+navegador pelo SDK do Supabase.
 
-O repositório permanece privado durante a fase de desenvolvimento. Uma demonstração pública e documentação visual poderão ser adicionadas quando os fluxos principais estiverem estabilizados.
-## Segurança operacional
+### Storage privado
 
-As credenciais privilegiadas do Supabase devem existir somente no servidor. Use
-`SUPABASE_SECRET_KEY=sb_secret_...`; nunca crie uma variável `NEXT_PUBLIC_` para essa chave.
+`relatorios-privados` aceita PDF, XLS, XLSX ou CSV de até 10 MB. Arquivos gerados
+recebem checksum SHA-256, período, tamanho e ciclo de retenção. Downloads usam
+URL assinada por 60 segundos.
 
-Depois de atualizar o projeto:
+`motoristas-fotos` guarda apenas WebP final de 480 × 640 pixels e até 200 KiB.
+A API recebe JPG, PNG ou WebP de até 5 MiB, valida o conteúdo, remove metadados e
+substitui a foto anterior.
 
-1. Execute as migrations Prisma para ativar os índices, a redação da auditoria, RLS fechado,
-   sessões e eventos de segurança.
-2. Gere duas chaves independentes de 32 bytes em Base64 para
-   `DATA_ENCRYPTION_MASTER_KEY` e `DATA_BLIND_INDEX_KEY` e armazene-as no cofre da hospedagem.
-3. Faça backup do banco e simule a migração com `npm run security:encrypt-data`.
-4. Aplique a criptografia existente com `npm run security:encrypt-data -- --apply`.
-5. Configure Cloudflare Turnstile e somente então altere `TURNSTILE_REQUIRED=true`.
+Storage não substitui backup. Mantenha cópia externa dos arquivos necessários à
+recuperação de desastre.
 
-Se a chave mestra de dados for perdida, CPF, CNPJ, CNH, RG e telefones criptografados não
-poderão ser recuperados. Mantenha uma cópia offline protegida e teste a recuperação.
+## Migrations
 
-### Rotação das chaves de dados
+Migrations são incrementais e devem ser aplicadas na ordem versionada. Elas
+cobrem:
 
-Nunca substitua diretamente uma chave que já protege registros `enc:v1`. Para migrar para
-`enc:v2`, interrompa as escritas, faça um backup restaurável e preserve as chaves antigas em
-um cofre offline. Gere duas chaves novas e configure temporariamente:
+- modelagem inicial e relações de frota;
+- atualização de campos de veículos e motoristas;
+- padronização de planos e buckets privados;
+- dados persistentes de tarefas e notificações;
+- fotos privadas, arquivamento operacional e histórico permanente;
+- permissões do dashboard, faturamento e quilometragem;
+- sessões, reset seguro, rate limit e auditoria;
+- bloqueio da Data API para tabelas internas;
+- índices de desempenho, criptografia, redação de logs e eventos;
+- catálogo comercial e solicitações de assinatura.
 
-```env
-DATA_ENCRYPTION_ACTIVE_VERSION="v2"
-DATA_ENCRYPTION_MASTER_KEY="NOVA_CHAVE_MESTRA"
-DATA_BLIND_INDEX_KEY="NOVA_CHAVE_DE_INDICE"
-DATA_ENCRYPTION_PREVIOUS_VERSION="v1"
-DATA_ENCRYPTION_PREVIOUS_MASTER_KEY="CHAVE_MESTRA_V1"
-DATA_BLIND_INDEX_PREVIOUS_KEY="CHAVE_DE_INDICE_V1"
+Em desenvolvimento, crie migrations com `npx prisma migrate dev`. Em produção,
+use somente:
+
+```bash
+npx prisma migrate deploy
 ```
 
-Com a aplicação parada, execute primeiro a simulação, que descriptografa e valida os registros
-sem alterá-los:
+Não execute `prisma db push` em produção e não edite migrations já aplicadas.
+Faça backup restaurável antes de mudanças de banco.
+
+## Criptografia e rotação
+
+Para proteger registros legados, configure as chaves `v1`, faça backup e rode
+primeiro a simulação:
+
+```bash
+npm run security:encrypt-data
+npm run security:encrypt-data -- --apply
+```
+
+Para migrar de `v1` para `v2`, preserve as duas chaves antigas nas variáveis
+`PREVIOUS_*`, configure as novas chaves ativas e interrompa escritas durante o
+processo:
 
 ```bash
 npm run security:rotate-data
+npm run security:rotate-data -- --apply
 ```
 
-Depois do backup e da simulação bem-sucedida, aplique a transação atômica:
+Remova as chaves anteriores do ambiente somente depois de verificar que não
+restam valores `enc:v1` e de confirmar um backup recuperável.
+
+## Qualidade e testes
 
 ```bash
-npm run security:rotate-data -- --apply --confirm=ROTATE_TO_V2
+npm run typecheck          # TypeScript sem emissão
+npm run lint               # ESLint
+npm run test:security      # regressões da auditoria
+npm run prisma:validate    # schema e datasource Prisma
+npm run build              # build de produção
+npm run security:audit-git # segredos na árvore e no histórico Git
+npm audit --audit-level=high
 ```
 
-Execute novamente a simulação e confirme que todos os campos estão em `v2`. Teste a leitura e
-a edição de empresas e motoristas. Só então remova da hospedagem as três variáveis `PREVIOUS_*`;
-as chaves v1 devem continuar guardadas offline pelo período definido para recuperação de backup.
+O workflow em `.github/workflows/ci.yml` executa essas verificações em pushes e
+pull requests. Dependabot acompanha npm e GitHub Actions.
+
+## Deploy na Vercel
+
+O arquivo `vercel.json` usa `npm run vercel-build`, que gera o Prisma Client e
+executa o build. Migrations não são executadas automaticamente no build para
+evitar que previews alterem um banco compartilhado.
+
+1. Importe o repositório na Vercel como projeto Next.js.
+2. Cadastre todas as variáveis de servidor somente em ambientes apropriados.
+3. Use valores separados para Preview e Production; nunca conecte previews ao
+   banco de produção sem intenção explícita.
+4. Defina `NEXT_PUBLIC_SITE_URL` com a URL HTTPS final e configure
+   `APP_ALLOWED_ORIGINS` se houver domínios adicionais.
+5. Cadastre o domínio final no Turnstile antes de definir
+   `TURNSTILE_REQUIRED=true`.
+6. Aplique `npx prisma migrate deploy` por um job confiável ou terminal seguro.
+7. Faça o deploy e valide login, logout, reset, isolamento entre empresas,
+   relatórios, fotos, headers e CSP.
+8. Monitore logs, consumo do banco/Storage e eventos de rate limit.
+
+Após trocar domínio, segredo JWT ou chaves, planeje o impacto: mudar
+`JWT_SECRET` invalida sessões; trocar chaves de dados sem rotação impede leitura.
+
+## Checklist para repositório público
+
+- `.env` está ignorado e apenas `.env.example` é versionado;
+- LICENSE, avisos de terceiros, política de segurança e contribuição existem;
+- o modelo 3D preserva atribuição CC BY 4.0;
+- arquivos-fonte grandes ficam fora de `public/` e do deploy;
+- CI, Dependabot e testes de segredos estão configurados;
+- nenhum dump, token, chave privada ou credencial deve aparecer no histórico;
+- habilite **Private vulnerability reporting** nas configurações do GitHub;
+- proteja `main` exigindo CI e revisão antes de merge.
+
+## Roadmap
+
+- ampliar testes unitários e de integração de autorização multiempresa;
+- automatizar migrations em pipeline separado e controlado;
+- adicionar observabilidade, alertas e estratégia formal de backup;
+- concluir persistência e refinamento dos módulos ainda em evolução;
+- aprofundar acessibilidade e testes de interface responsiva;
+- evoluir cobrança, comunicação por e-mail e operação dos planos.
+
+## Licença e atribuições
+
+O código do projeto está sob a [licença MIT](LICENSE). Modelos 3D e decoders têm
+licenças próprias descritas em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Desenvolvido por **Gabriel Assencao**.

@@ -1,9 +1,8 @@
 // src/app/api/auth/reset-request/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { notificarAdmins } from '@/lib/notificacoes';
 import { z } from 'zod';
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
-import { prisma } from '@/lib/prisma';
 import { executarComAuditoria } from '@/lib/auditoria';
 import { verifyBotToken } from '@/lib/botProtection';
 import { recordSecurityEvent } from '@/lib/securityEvents';
@@ -12,6 +11,18 @@ const schema = z.object({
   email: z.string().trim().email().max(254).toLowerCase(),
   turnstileToken: z.string().max(2048).optional(),
 }).strict();
+
+const respostaPublica = {
+  sucesso: true,
+  mensagem: 'Se o e-mail estiver cadastrado, a solicitação será encaminhada para análise.',
+} as const;
+
+function respostaAceita() {
+  return NextResponse.json(respostaPublica, {
+    status: 202,
+    headers: { 'Cache-Control': 'no-store' },
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,23 +48,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ erro: 'Verificação de segurança recusada.' }, { status: 403 });
     }
 
-    // Verifica se o usuário de fato existe no ecossistema RPMTruck
-    const usuarioExistente = await prisma.usuario.findUnique({
-      where: { email }
-    });
-
-    if (!usuarioExistente) {
-      // Por motivos de segurança contra raspagem de dados, não confirmamos se o e-mail é válido ou não
-      return NextResponse.json({ sucesso: true, mensagem: 'Se o e-mail constar em nossa base, a solicitação foi encaminhada para a triagem.' }, { status: 200 });
-    }
-
-    // Cria o registro de reset pendente que aparecerá no painel administrativo
+    // Conta existente e ausente percorrem a mesma fronteira transacional e as
+    // mesmas consultas iniciais. Apenas uma conta real pode gerar persistência.
     const solicitacaoCriada = await executarComAuditoria({ origem: 'PUBLIC_API' }, async (tx) => {
-      const ativa = await tx.resetSenha.findFirst({
-        where: { email, status: { in: ['PENDENTE', 'APROVADO'] } },
-        select: { id: true, status: true, token_expira_em: true },
-        orderBy: { atualizado_em: 'desc' },
-      });
+      const [usuarioExistente, ativa] = await Promise.all([
+        tx.usuario.findUnique({ where: { email }, select: { id: true } }),
+        tx.resetSenha.findFirst({
+          where: { email, status: { in: ['PENDENTE', 'APROVADO'] } },
+          select: { id: true, status: true, token_expira_em: true },
+          orderBy: { atualizado_em: 'desc' },
+        }),
+      ]);
+      if (!usuarioExistente) return false;
       if (ativa?.status === 'PENDENTE') return false;
       if (
         ativa?.status === 'APROVADO' &&
@@ -75,13 +81,16 @@ export async function POST(request: NextRequest) {
       return true;
     });
     if (solicitacaoCriada) {
-      await notificarAdmins({ titulo: 'Redefinição de senha pendente', mensagem: `Há uma nova solicitação de segurança para ${email}.`, modulo: 'SENHAS' });
+      after(async () => {
+        await notificarAdmins({
+          titulo: 'Redefinição de senha pendente',
+          mensagem: `Há uma nova solicitação de segurança para ${email}.`,
+          modulo: 'SENHAS',
+        }).catch((error) => console.error('Falha ao notificar redefinição pendente:', error));
+      });
     }
 
-    return NextResponse.json({ 
-      sucesso: true, 
-      mensagem: 'Solicitação de segurança aberta com sucesso na fila do Admin.' 
-    }, { status: 201 });
+    return respostaAceita();
 
   } catch (error) {
     console.error('Erro na rota reset-request:', error);
