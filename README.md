@@ -89,7 +89,7 @@ prisma/
 assets/source/               # fontes preservadas, fora da publicação web
 public/                      # ativos efetivamente servidos ao navegador
 scripts/                     # criptografia e rotação de dados
-tests/                       # regressões de segurança
+tests/                       # regressões de segurança e contratos de formulários
 ```
 
 ## Papéis e autorização
@@ -306,6 +306,7 @@ restam valores `enc:v1` e de confirmar um backup recuperável.
 npm run typecheck          # TypeScript sem emissão
 npm run lint               # ESLint
 npm run test:security      # regressões da auditoria
+npm run test:forms         # contratos entre formulários e APIs
 npm run prisma:validate    # schema e datasource Prisma
 npm run build              # build de produção
 npm run security:audit-git # segredos na árvore e no histórico Git

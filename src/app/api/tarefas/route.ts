@@ -13,7 +13,7 @@ const criarTarefaSchema = z.object({
   prazo: z.string().datetime().optional().nullable(),
   prioridade: z.enum(['BAIXA', 'MEDIA', 'ALTA', 'URGENTE']).default('MEDIA'),
   responsavelId: z.string().uuid(),
-  modulo: z.enum(['FROTA', 'GESTAO', 'NOTIFICACOES', 'TAREFAS', 'RELATORIOS']).optional().nullable(),
+  modulo: z.enum(['FROTA', 'GESTAO', 'MOTORISTAS', 'NOTIFICACOES', 'TAREFAS', 'RELATORIOS']).optional().nullable(),
   origemId: z.string().trim().max(100).regex(/^[A-Za-z0-9:_-]+$/).optional().nullable(),
 }).strict()
 

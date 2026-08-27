@@ -19,7 +19,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
   const parsed = atualizarSchema.safeParse(await request.json())
-  if (!parsed.success) return NextResponse.json({ erro: 'Dados do veículo inválidos.' }, { status: 400 })
+  if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? 'Dados do veículo inválidos.' }, { status: 400 })
   const atual = await prisma.veiculo.findFirst({ where: { id: params.id, empresaId: auth.session.empresaId } })
   if (!atual) return NextResponse.json({ erro: 'Veículo não encontrado.' }, { status: 404 })
   if (parsed.data.quilometragem !== undefined && parsed.data.quilometragem < atual.quilometragem) {

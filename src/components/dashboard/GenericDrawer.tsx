@@ -1,7 +1,7 @@
 // src/components/dashboard/GenericDrawer.tsx
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Loader2, Save } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -10,12 +10,13 @@ import { useTheme } from '@/contexts/ThemeContext'
 export interface FieldConfig {
   name: string
   label: string
-  type: 'text' | 'number' | 'date' | 'select'
+  type: 'text' | 'email' | 'password' | 'number' | 'date' | 'select'
   placeholder?: string
   required?: boolean
   min?: number | string
   max?: number | string
   maxLength?: number
+  minLength?: number
   pattern?: string
   step?: number | string
   title?: string
@@ -27,9 +28,10 @@ interface GenericDrawerProps {
   onClose: () => void
   titulo: string
   subtitulo?: string
+  errorMessage?: string
   campos: FieldConfig[]
   initialValues?: Record<string, unknown>
-  onSubmit: (formData: Record<string, unknown>) => Promise<void>
+  onSubmit: (formData: Record<string, unknown>) => Promise<boolean | void>
 }
 
 export default function GenericDrawer({
@@ -37,16 +39,18 @@ export default function GenericDrawer({
   onClose,
   titulo,
   subtitulo,
+  errorMessage,
   campos,
-  initialValues = {},
+  initialValues,
   onSubmit
 }: GenericDrawerProps) {
   const { primary, isLight } = useTheme()
   const [formData, setFormData] = useState<Record<string, unknown>>({})
   const [loading, setLoading] = useState(false)
+  const submittingRef = useRef(false)
 
   useEffect(() => {
-    if (isOpen) queueMicrotask(() => setFormData(initialValues))
+    if (isOpen) queueMicrotask(() => setFormData(initialValues ?? {}))
   }, [isOpen, initialValues])
 
   const handleChange = (name: string, value: unknown) => {
@@ -55,14 +59,18 @@ export default function GenericDrawer({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submittingRef.current) return
+    submittingRef.current = true
     setLoading(true)
     try {
-      await onSubmit(formData)
+      const sucesso = await onSubmit(formData)
+      if (sucesso === false) return
       setFormData({}) // Limpa após envio
       onClose()
     } catch (err) {
       console.error('Erro ao salvar formulário:', err)
     } finally {
+      submittingRef.current = false
       setLoading(false)
     }
   }
@@ -119,6 +127,11 @@ export default function GenericDrawer({
 
               {/* FORMULÁRIO DINÂMICO */}
               <form id="drawer-form" onSubmit={handleSubmit} className="space-y-5 font-mono">
+                {errorMessage && (
+                  <p role="alert" className="border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-500">
+                    {errorMessage}
+                  </p>
+                )}
                 {campos.map((campo) => (
                   <div key={campo.name}>
                     <label
@@ -155,6 +168,7 @@ export default function GenericDrawer({
                         min={campo.min}
                         max={campo.max}
                         maxLength={campo.maxLength}
+                        minLength={campo.minLength}
                         pattern={campo.pattern}
                         step={campo.step}
                         title={campo.title}

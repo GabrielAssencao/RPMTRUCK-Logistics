@@ -202,6 +202,7 @@ export default function FrotaPage() {
 
   // ✏️ ABRIR EDITAR PREENCHENDO OS DADOS
   const handleAbrirEditar = (veiculo: VeiculoCompleto) => {
+    setFeedback('')
     setVeiculoParaEditar(veiculo)
     setDrawerOpen(true)
     setMenuAcoesAberto(null)
@@ -209,23 +210,36 @@ export default function FrotaPage() {
 
   // ➕ ABRIR NOVO LIMPO
   const handleAbrirNovo = () => {
+    setFeedback('')
     setVeiculoParaEditar(null)
     setDrawerOpen(true)
   }
 
   // 💾 SALVAR
   const handleSalvarVeiculo = async (formData: Record<string, unknown>) => {
+    setFeedback('')
+    const payload = {
+      modelo: formData.modelo,
+      placa: formData.placa,
+      ano: Number(formData.ano),
+      tipo: formData.tipo,
+      quilometragem: Number(formData.quilometragem),
+      localizacaoId: typeof formData.localizacao === 'string' && formData.localizacao ? formData.localizacao : null,
+      status: formData.status,
+    }
     const response = await fetch(veiculoParaEditar ? `/api/veiculos/${veiculoParaEditar.id}` : '/api/veiculos', {
       method: veiculoParaEditar ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...formData, ano: Number(formData.ano), quilometragem: Number(formData.quilometragem), localizacaoId: formData.localizacao || null }),
+      body: JSON.stringify(payload),
     })
     const data = await response.json()
-    if (!response.ok) return setFeedback(data.erro || 'Não foi possível salvar o veículo.')
+    if (!response.ok) {
+      setFeedback(data.erro || 'Não foi possível salvar o veículo.')
+      return false
+    }
     const salvo = normalizarVeiculo(data)
     setVeiculos(prev => veiculoParaEditar ? prev.map(v => v.id === salvo.id ? salvo : v) : [salvo, ...prev])
 
-    setDrawerOpen(false)
-    setVeiculoParaEditar(null)
+    return true
   }
 
   // 🗑️ EXCLUSÃO
@@ -673,6 +687,7 @@ export default function FrotaPage() {
         }}
         titulo={veiculoParaEditar ? `EDITAR VEÍCULO (${veiculoParaEditar.placa})` : "CADASTRAR VEÍCULO NA FROTA"}
         subtitulo={veiculoParaEditar ? "Modifique os dados operacionais e o pátio do caminhão." : "Adicione um novo caminhão ao catálogo."}
+        errorMessage={feedback}
         campos={camposFrotaDinamicos}
         initialValues={veiculoParaEditar ? {
           modelo: veiculoParaEditar.modelo,
@@ -682,7 +697,7 @@ export default function FrotaPage() {
           quilometragem: veiculoParaEditar.quilometragem,
           localizacao: veiculoParaEditar.localizacaoId || listaLocalizacoes[0]?.id || '',
           status: veiculoParaEditar.status
-        } : {}}
+        } : undefined}
         onSubmit={handleSalvarVeiculo}
       />
 

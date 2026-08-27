@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   if (auth.error || !auth.session?.empresaId || !auth.empresa) return NextResponse.json({ erro: auth.error }, { status: auth.status })
 
   const parsed = veiculoSchema.safeParse(await request.json())
-  if (!parsed.success) return NextResponse.json({ erro: 'Dados do veículo inválidos.' }, { status: 400 })
+  if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? 'Dados do veículo inválidos.' }, { status: 400 })
 
   const empresaId = auth.session.empresaId
   const limiteVeiculos = auth.empresa.permissoes.veiculosBase + auth.empresa.veiculos_adicionais

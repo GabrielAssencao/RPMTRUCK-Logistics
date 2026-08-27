@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "test:security": "node --test tests/security-regressions.test.mjs",
+    "test:forms": "node --test tests/form-contract-regressions.test.mjs",
     "prisma:validate": "prisma validate",
     "vercel-build": "prisma generate && next build",
     "security:audit-git": "node scripts/audit-git-secrets.mjs",

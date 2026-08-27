@@ -38,16 +38,18 @@ const CAMPOS_USUARIO: FieldConfig[] = [
   { 
     name: 'email', 
     label: 'E-mail Corporativo', 
-    type: 'text', 
+    type: 'email',
     placeholder: 'exemplo@transportadora.com', 
-    required: true 
+    required: true,
   },
   { 
     name: 'senha', 
     label: 'Senha Inicial de Acesso', 
-    type: 'text', 
+    type: 'password',
     placeholder: 'Mínimo de 8 caracteres',
-    required: true 
+    required: true,
+    minLength: 8,
+    maxLength: 128,
   },
   { 
     name: 'role', 
@@ -153,7 +155,10 @@ export default function UsuariosPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formData,
+          nome: formData.nome,
+          email: formData.email,
+          senha: formData.senha,
+          role: formData.role,
           acessoDashboardGeral: formData.acessoDashboardGeral === 'true',
         })
       })
@@ -161,14 +166,16 @@ export default function UsuariosPage() {
       if (!res.ok) {
         const errData = await res.json()
         alert(errData.error || 'Erro ao criar usuário')
-        return
+        return false
       }
 
       // Recarrega a lista do banco após salvar
       await carregarUsuarios()
+      return true
     } catch (err) {
       console.error('Erro ao salvar:', err)
       alert('Erro de conexão ao salvar usuário')
+      return false
     }
   }
 
