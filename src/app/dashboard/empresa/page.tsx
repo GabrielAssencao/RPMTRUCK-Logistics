@@ -96,6 +96,15 @@ export default function PainelEmpresa() {
       .catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar painel.'))
   }, [])
 
+  useEffect(() => {
+    if (!alertaDetalhado) return
+    const fecharComEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAlertaDetalhado(null)
+    }
+    window.addEventListener('keydown', fecharComEscape)
+    return () => window.removeEventListener('keydown', fecharComEscape)
+  }, [alertaDetalhado])
+
   if (!montado) return null
 
   // 🎨 CONTRASTE ADAPTATIVO DE CORES
@@ -293,11 +302,11 @@ export default function PainelEmpresa() {
                       <div className="font-bold text-xs">{alerta.foco}</div>
                       <div className="text-[10px] text-foreground-muted uppercase">{alerta.categoria} • {alerta.subtipo}</div>
                     </td>
-                    <td className="px-5 py-3 text-xs">
+                    <td className="max-w-xl px-5 py-3 text-xs whitespace-normal">
                       <div className="flex items-center gap-2">
-                        <span className="text-foreground-muted">{descCurta}</span>
+                        <span className="min-w-0 text-foreground-muted">{descCurta}</span>
                         {alerta.descricao.length > 55 && (
-                          <button onClick={() => setAlertaDetalhado(alerta)} className="text-[10px] font-bold uppercase underline hover:opacity-80 shrink-0 cursor-pointer" style={{ color: primary }}>
+                          <button type="button" onClick={() => setAlertaDetalhado(alerta)} className="shrink-0 cursor-pointer text-[10px] font-bold uppercase underline transition-opacity hover:opacity-80" style={{ color: primary }} aria-label={`Ver observação completa de ${alerta.foco}`}>
                             Ver detalhes
                           </button>
                         )}
@@ -334,6 +343,39 @@ export default function PainelEmpresa() {
           </table>
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {alertaDetalhado && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={(event) => event.target === event.currentTarget && setAlertaDetalhado(null)}>
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="titulo-detalhes-alerta"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="w-full max-w-xl border"
+              style={{ backgroundColor: 'var(--background)', borderColor: primary }}
+            >
+              <div className="flex items-start justify-between gap-4 border-b p-5" style={{ borderColor: 'var(--border)' }}>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: primary }}>Observação completa</p>
+                  <h2 id="titulo-detalhes-alerta" className="mt-1 text-lg font-black uppercase font-rajdhani">{alertaDetalhado.foco}</h2>
+                  <p className="mt-1 text-[10px] uppercase tracking-widest text-foreground-muted">{alertaDetalhado.categoria} • {alertaDetalhado.subtipo}</p>
+                </div>
+                <button type="button" autoFocus onClick={() => setAlertaDetalhado(null)} aria-label="Fechar detalhes do alerta" className="p-1 text-foreground-muted transition-colors hover:text-foreground"><X size={18} /></button>
+              </div>
+              <div className="p-5">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-foreground-muted">Descrição da pendência</p>
+                <p className="whitespace-pre-wrap break-words border-l-2 pl-4 text-sm leading-6" style={{ borderColor: primary }}>{alertaDetalhado.descricao}</p>
+              </div>
+              <div className="flex justify-end border-t p-4" style={{ borderColor: 'var(--border)' }}>
+                <button type="button" onClick={() => setAlertaDetalhado(null)} className="border px-4 py-2 text-xs font-bold uppercase" style={{ borderColor: 'var(--border)' }}>Fechar</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {podeDelegarTarefas && alertaParaDelegar && (

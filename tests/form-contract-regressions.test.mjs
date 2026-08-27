@@ -41,3 +41,40 @@ test('delegação de alertas de motoristas é aceita pelo contrato de tarefas', 
   assert.match(page, /: 'MOTORISTAS'/)
   assert.match(route, /z\.enum\(\[[^\]]*'MOTORISTAS'/)
 })
+
+test('CPF e RG usam máscara visual, limites brasileiros e envio somente numérico', () => {
+  const page = read('src/app/dashboard/empresa/motoristas/novo/page.tsx')
+  const route = read('src/app/api/motoristas/route.ts')
+  const documentos = read('src/utils/documentos.ts')
+
+  assert.match(page, /setCpf\(formatarCPF\(e\.target\.value\)\)/)
+  assert.match(page, /setRg\(formatarRG\(e\.target\.value\)\)/)
+  assert.match(page, /formData\.set\('cpf', somenteNumeros\(cpf, 11\)\)/)
+  assert.match(page, /formData\.set\('rg', somenteNumeros\(rg, 9\)\)/)
+  assert.match(documentos, /somenteNumeros\(valor, 11\)/)
+  assert.match(documentos, /somenteNumeros\(valor, 9\)/)
+  assert.match(route, /cpf: z\.string\(\)\.trim\(\)\.regex\(\/\^\\d\{11\}\$\//)
+  assert.match(route, /rg: z\.string\(\)\.trim\(\)\.regex\(\/\^\\d\{9\}\$\//)
+  assert.match(route, /valorDocumentoNumericoOpcional\(formData, 'cpf'\)/)
+  assert.match(route, /valorDocumentoNumericoOpcional\(formData, 'rg'\)/)
+})
+
+test('detalhes do alerta exibem a observação completa em diálogo acessível', () => {
+  const page = read('src/app/dashboard/empresa/page.tsx')
+
+  assert.match(page, /aria-label=\{`Ver observação completa de \$\{alerta\.foco\}`\}/)
+  assert.match(page, /aria-labelledby="titulo-detalhes-alerta"/)
+  assert.match(page, /\{alertaDetalhado\.descricao\}/)
+})
+
+test('central de notificações fica disponível na navegação sem regra de plano', () => {
+  const layout = read('src/app/dashboard/empresa/layout.tsx')
+  const central = read('src/app/dashboard/empresa/notificacoes/page.tsx')
+
+  assert.match(layout, /path: '\/dashboard\/empresa\/notificacoes'/)
+  assert.match(layout, /NOTIFICACOES_ITEM[^\n]*modulo: null/)
+  assert.match(central, /Central de <span[^>]*>Notificações/)
+  assert.match(central, /Marcar todas como lidas/)
+  assert.match(central, /Limpar lidas/)
+  assert.match(central, /notificacao\.lida \? 'Lida' : 'Não lida'/)
+})

@@ -8,6 +8,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { useNotificacoes } from '@/hooks/useNotificacoes'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, Trash2, Check, CheckCheck } from 'lucide-react'
+import Link from 'next/link'
 
 interface NotificacoesPanelProps {
   onPendenciasChange?: (pendencias: Record<string, number>) => void
@@ -16,8 +17,9 @@ interface NotificacoesPanelProps {
 export default function NotificacoesPanel({ onPendenciasChange }: NotificacoesPanelProps) {
   const { primary } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
-  const { notificacoes, naoLidas, loading, error, pendenciasPorModulo, marcarComoLida, marcarTodasComoLidas, deletarNotificacao, recarregar } =
+  const { notificacoes, naoLidas, loading, error, pendenciasPorModulo, marcarComoLida, marcarTodasComoLidas, limparLidas, deletarNotificacao, recarregar } =
     useNotificacoes()
+  const temLidas = notificacoes.some(notificacao => notificacao.lida)
 
   const alternarPainel = () => {
     const proximoEstado = !isOpen
@@ -90,11 +92,16 @@ export default function NotificacoesPanel({ onPendenciasChange }: NotificacoesPa
               </button>
             </div>
 
-            {naoLidas > 0 && (
-              <div className="px-4 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
-                <button onClick={marcarTodasComoLidas} className="flex items-center gap-2 text-xs font-bold hover:underline" style={{ color: primary }}>
+            {(naoLidas > 0 || temLidas) && (
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2" style={{ borderColor: 'var(--border)' }}>
+                {naoLidas > 0 && <button type="button" onClick={() => void marcarTodasComoLidas()} className="flex items-center gap-2 text-xs font-bold hover:underline" style={{ color: primary }}>
                   <CheckCheck size={14} /> Marcar todas como lidas
-                </button>
+                </button>}
+                {temLidas && <button type="button" onClick={() => {
+                  if (window.confirm('Remover permanentemente todas as notificações já lidas?')) void limparLidas()
+                }} className="ml-auto flex items-center gap-2 text-xs font-bold text-red-500 hover:underline">
+                  <Trash2 size={14} /> Limpar lidas
+                </button>}
               </div>
             )}
 
@@ -110,7 +117,7 @@ export default function NotificacoesPanel({ onPendenciasChange }: NotificacoesPa
                 </div>
               ) : (
                 <AnimatePresence>
-                  {notificacoes.map((notif, idx) => (
+                  {notificacoes.map((notif) => (
                     <motion.div
                       key={notif.id}
                       initial={{ opacity: 0, x: -10 }}
@@ -174,7 +181,9 @@ export default function NotificacoesPanel({ onPendenciasChange }: NotificacoesPa
                               <Check size={14} style={{ color: primary }} />
                             </button>
                             <button
-                              onClick={() => deletarNotificacao(notif.id)}
+                              onClick={() => {
+                                if (window.confirm(`Excluir permanentemente a notificação “${notif.titulo}”?`)) void deletarNotificacao(notif.id)
+                              }}
                               className="p-1 hover:opacity-70 transition-opacity text-red-500"
                               title="Deletar"
                             >
@@ -195,12 +204,9 @@ export default function NotificacoesPanel({ onPendenciasChange }: NotificacoesPa
                 className="px-4 py-3 border-t text-center"
                 style={{ borderColor: 'var(--border)' }}
               >
-                <button
-                  className="text-xs font-bold uppercase tracking-widest opacity-50 hover:opacity-100 transition-all"
-                  onClick={() => setIsOpen(false)}
-                >
-                  Fechar
-                </button>
+                <Link href="/dashboard/empresa/notificacoes" onClick={() => setIsOpen(false)} className="text-xs font-bold uppercase tracking-widest transition-all hover:underline" style={{ color: primary }}>
+                  Abrir central de notificações
+                </Link>
               </div>
             )}
           </motion.div>

@@ -28,6 +28,12 @@ function withCsp(response: NextResponse, contentSecurityPolicy: string) {
   return response
 }
 
+function developmentOrigins(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') return []
+  const port = request.nextUrl.port ? `:${request.nextUrl.port}` : ''
+  return [`http://localhost${port}`, `http://127.0.0.1${port}`]
+}
+
 const PUBLIC_ROUTES = [
   '/api/auth/login',
   '/api/auth/logout',
@@ -69,6 +75,7 @@ export async function proxy(request: NextRequest) {
       const allowedOrigins = new Set([
         request.nextUrl.origin,
         process.env.NEXT_PUBLIC_SITE_URL,
+        ...developmentOrigins(request),
         ...(process.env.APP_ALLOWED_ORIGINS || '').split(','),
       ].filter((value): value is string => Boolean(value)).map((value) => value.trim().replace(/\/$/, '')))
       if ((origin && !allowedOrigins.has(origin.replace(/\/$/, ''))) || fetchSite === 'cross-site') {

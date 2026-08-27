@@ -38,6 +38,16 @@ test('todas as rotas de relatórios e notificações aplicam rate limit', () => 
   }
 })
 
+test('limpeza em lote remove somente notificações lidas dentro do escopo autorizado', () => {
+  const route = read('src/app/api/notificacoes/route.ts')
+  const bulkDelete = route.match(/export async function DELETE[\s\S]*?export async function POST/)?.[0] ?? ''
+
+  assert.match(bulkDelete, /applyRateLimit\(/)
+  assert.match(bulkDelete, /deleteMany\(/)
+  assert.match(bulkDelete, /escopoNotificacoes\(auth\.session\)/)
+  assert.match(bulkDelete, /lida: true/)
+})
+
 test('aprovação de acesso possui claim atômico contra replay concorrente', () => {
   const approval = read('src/app/api/solicitacoes/[id]/aprovar/route.ts')
 
@@ -79,6 +89,16 @@ test('CSP usa nonce e não permite scripts inline em produção', () => {
   assert.doesNotMatch(scriptDirective, /unsafe-inline/)
   assert.match(proxy, /script-src-attr 'none'/)
   assert.match(layout, /await connection\(\)/)
+})
+
+test('origens de loopback são aceitas apenas no ambiente de desenvolvimento', () => {
+  const proxy = read('src/proxy.ts')
+  const developmentOrigins = proxy.match(/function developmentOrigins[\s\S]*?\n}/)?.[0] ?? ''
+
+  assert.match(developmentOrigins, /NODE_ENV === 'production'/)
+  assert.match(developmentOrigins, /http:\/\/localhost/)
+  assert.match(developmentOrigins, /http:\/\/127\.0\.0\.1/)
+  assert.match(proxy, /\.\.\.developmentOrigins\(request\)/)
 })
 
 test('arquivos versionados não contêm formatos comuns de segredos privados', () => {

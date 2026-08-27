@@ -17,6 +17,7 @@ import {
   Percent
 } from 'lucide-react'
 import Link from 'next/link'
+import { formatarCPF } from '@/utils/documentos'
 
 interface VeiculoCompleto {
   id: string
@@ -80,7 +81,7 @@ export default function MotoristasPage() {
     queueMicrotask(() => setMontado(true))
     fetch('/api/motoristas', { cache: 'no-store' }).then(async response => {
       const data = await response.json(); if (!response.ok) throw new Error(data.erro)
-      setMotoristas(data.motoristas.map((m: MotoristaApi) => ({ id: m.id, nomeAbreviado: m.nome, cpf: m.cpf || 'Não informado', cnh: m.cnh, categoria: m.categoria, validadeCNH: String(m.validade).slice(0, 10), fotoUrl: m.foto_url || undefined, veiculoIdVinculado: m.veiculoId || undefined })))
+      setMotoristas(data.motoristas.map((m: MotoristaApi) => ({ id: m.id, nomeAbreviado: m.nome, cpf: m.cpf ? formatarCPF(m.cpf) : 'Não informado', cnh: m.cnh, categoria: m.categoria, validadeCNH: String(m.validade).slice(0, 10), fotoUrl: m.foto_url || undefined, veiculoIdVinculado: m.veiculoId || undefined })))
       setVeiculos(data.veiculos.map((v: VeiculoApi) => ({ id: v.id, modelo: v.modelo, placa: v.placa, tipo: v.tipo, kmAtual: v.quilometragem, motoristaVinculadoId: v.motoristas?.[0]?.id })))
     }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar motoristas.'))
   }, [])

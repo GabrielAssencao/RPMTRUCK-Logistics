@@ -19,8 +19,8 @@ export const dynamic = 'force-dynamic'
 
 const schema = z.object({
   nome: nomePessoa(3, 120),
-  cpf: z.string().trim().regex(/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/, 'CPF inválido.').nullable(),
-  rg: z.string().trim().regex(/^[A-Za-z0-9.-]{4,30}$/, 'RG inválido.').nullable(),
+  cpf: z.string().trim().regex(/^\d{11}$/, 'O CPF deve ter 11 números.').nullable(),
+  rg: z.string().trim().regex(/^\d{9}$/, 'O RG deve ter 9 números.').nullable(),
   cnh: z.string().trim().regex(/^\d{11}$/, 'A CNH deve ter 11 números.'),
   categoria: z.enum(['A', 'B', 'C', 'D', 'E', 'AB', 'AC', 'AD', 'AE']),
   validade: dataIsoSchema,
@@ -36,6 +36,12 @@ function valorTexto(formData: FormData, campo: string) {
 function valorOpcional(formData: FormData, campo: string) {
   const valor = valorTexto(formData, campo).trim()
   return valor || null
+}
+
+function valorDocumentoNumericoOpcional(formData: FormData, campo: string) {
+  const valor = valorTexto(formData, campo).trim()
+  if (!valor) return null
+  return /^[\d.-]+$/.test(valor) ? valor.replace(/\D/g, '') : valor
 }
 
 function podeGerenciarMotoristas(role: string) {
@@ -91,8 +97,8 @@ export async function POST(request: NextRequest) {
 
   const parsed = schema.safeParse({
     nome: valorTexto(formData, 'nome'),
-    cpf: valorOpcional(formData, 'cpf'),
-    rg: valorOpcional(formData, 'rg'),
+    cpf: valorDocumentoNumericoOpcional(formData, 'cpf'),
+    rg: valorDocumentoNumericoOpcional(formData, 'rg'),
     cnh: valorTexto(formData, 'cnh'),
     categoria: valorTexto(formData, 'categoria'),
     validade: valorTexto(formData, 'validade'),

@@ -18,6 +18,11 @@ const criarSchema = z.object({
   veiculoId: z.string().uuid().optional(),
 }).strict()
 
+const paginacaoSchema = z.object({
+  pagina: z.coerce.number().int().min(1).max(10_000).default(1),
+  limite: z.coerce.number().int().min(1).max(100).default(20),
+})
+
 type ContagemPorModulo = Array<{
   modulo: string
   _count?: true | { _all?: number }
@@ -52,6 +57,9 @@ export async function GET(request: NextRequest) {
   if (limited) return limited
 
   const lidas = request.nextUrl.searchParams.get('lidas')
+  if (lidas !== null && lidas !== 'true' && lidas !== 'false') {
+    return NextResponse.json({ erro: 'Filtro de leitura inválido.' }, { status: 400 })
+  }
   const where: Prisma.NotificacaoWhereInput = {
     ...escopoNotificacoes(auth.session),
     ...(lidas === null ? {} : { lida: lidas === 'true' }),
@@ -73,7 +81,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(resumirPendencias(contagens))
   }
 
-  const [notificacoes, contagens] = await prisma.$transaction([
+  const paginacao = paginacaoSchema.safeParse({
+    pagina: request.nextUrl.searchParams.get('pagina') ?? undefined,
+    limite: request.nextUrl.searchParams.get('limite') ?? undefined,
+  })
+  if (!paginacao.success) return NextResponse.json({ erro: 'Paginação inválida.' }, { status: 400 })
+  const { pagina, limite } = paginacao.data
+
+  const [notificacoes, total, contagens] = await prisma.$transaction([
     prisma.notificacao.findMany({
       where,
       include: {
@@ -81,8 +96,10 @@ export async function GET(request: NextRequest) {
         tarefa: { select: { id: true, status: true, prioridade: true, prazo: true } },
       },
       orderBy: { criado_em: 'desc' },
-      take: 50,
+      skip: (pagina - 1) * limite,
+      take: limite,
     }),
+    prisma.notificacao.count({ where }),
     prisma.notificacao.groupBy({
       by: ['modulo'],
       where: whereNaoLidas,
@@ -91,7 +108,14 @@ export async function GET(request: NextRequest) {
     }),
   ])
 
-  return NextResponse.json({ notificacoes, ...resumirPendencias(contagens), total: notificacoes.length })
+  return NextResponse.json({
+    notificacoes,
+    ...resumirPendencias(contagens),
+    pagina,
+    limite,
+    total,
+    totalPaginas: Math.max(1, Math.ceil(total / limite)),
+  })
 }
 
 export async function PATCH(request: NextRequest) {
@@ -110,6 +134,23 @@ export async function PATCH(request: NextRequest) {
     data: { lida: true },
   })
   return NextResponse.json({ sucesso: true })
+}
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireAuth(request)
+  if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
+  const limited = await applyRateLimit(
+    request,
+    `notification-mutation:${auth.session.userId}`,
+    RATE_LIMITS.NOTIFICATION_MUTATION.limit,
+    RATE_LIMITS.NOTIFICATION_MUTATION.windowMs,
+  )
+  if (limited) return limited
+
+  const resultado = await prisma.notificacao.deleteMany({
+    where: { ...escopoNotificacoes(auth.session), lida: true },
+  })
+  return NextResponse.json({ sucesso: true, removidas: resultado.count })
 }
 
 export async function POST(request: NextRequest) {

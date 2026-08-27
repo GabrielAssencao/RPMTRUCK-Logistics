@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
+import { formatarCPF, formatarRG, somenteNumeros } from '@/utils/documentos'
 import { ArrowLeft, Upload, CheckCircle2, User, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -99,8 +99,8 @@ export default function NovoMotoristaPage() {
     setErro('')
     const formData = new FormData()
     formData.set('nome', nomeCompleto)
-    formData.set('cpf', cpf)
-    formData.set('rg', rg)
+    formData.set('cpf', somenteNumeros(cpf, 11))
+    formData.set('rg', somenteNumeros(rg, 9))
     formData.set('cnh', cnh)
     formData.set('categoria', categoriaCNH)
     formData.set('validade', validadeCNH)
@@ -161,27 +161,32 @@ export default function NovoMotoristaPage() {
                 type="text" 
                 required
                 inputMode="numeric"
-                pattern="[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}"
+                pattern="[0-9]{3}[.][0-9]{3}[.][0-9]{3}-[0-9]{2}"
                 maxLength={14}
                 placeholder="000.000.000-00"
                 value={cpf}
-                onChange={(e) => setCpf(e.target.value)}
+                onChange={(e) => setCpf(formatarCPF(e.target.value))}
+                aria-describedby="ajuda-cpf"
                 className="w-full p-2.5 border bg-transparent outline-none text-xs"
                 style={{ borderColor: 'var(--border)' }}
               />
+              <p id="ajuda-cpf" className="mt-1 text-[9px] text-foreground-muted">11 números • pontos e traço são adicionados automaticamente</p>
             </div>
             <div>
               <label className="block text-[10px] uppercase font-bold mb-1">RG (Opcional)</label>
               <input 
-                type="text" 
-                pattern="[A-Za-z0-9.-]{4,30}"
-                maxLength={30}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]{2}[.][0-9]{3}[.][0-9]{3}-[0-9]"
+                maxLength={12}
                 placeholder="00.000.000-0"
                 value={rg}
-                onChange={(e) => setRg(e.target.value)}
+                onChange={(e) => setRg(formatarRG(e.target.value))}
+                aria-describedby="ajuda-rg"
                 className="w-full p-2.5 border bg-transparent outline-none text-xs"
                 style={{ borderColor: 'var(--border)' }}
               />
+              <p id="ajuda-rg" className="mt-1 text-[9px] text-foreground-muted">9 números • formatação automática</p>
             </div>
           </div>
 

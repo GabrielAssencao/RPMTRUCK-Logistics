@@ -23,10 +23,13 @@ export interface UseNotificacoesReturn {
   marcarComoLida: (id: string) => Promise<void>
   deletarNotificacao: (id: string) => Promise<void>
   marcarTodasComoLidas: () => Promise<void>
+  limparLidas: () => Promise<number>
   pendenciasPorModulo: Record<string, number>
   recarregar: () => Promise<void>
   recarregarResumo: () => Promise<void>
 }
+
+export const NOTIFICACOES_ATUALIZADAS_EVENT = 'rpmtruck:notificacoes-atualizadas'
 
 interface ResumoNotificacoes {
   naoLidas: number
@@ -150,6 +153,15 @@ export function useNotificacoes(pollingInterval = 60000): UseNotificacoesReturn 
     setPendenciasPorModulo({})
   }, [])
 
+  const limparLidas = useCallback(async () => {
+    const res = await fetch('/api/notificacoes', { method: 'DELETE' })
+    if (!res.ok) return 0
+    const data = await res.json() as { removidas?: number }
+    setNotificacoes(prev => prev.filter(notificacao => !notificacao.lida))
+    void recarregarResumo()
+    return data.removidas ?? 0
+  }, [recarregarResumo])
+
   useEffect(() => {
     const atualizarSeVisivel = () => {
       if (!document.hidden) void recarregarResumo()
@@ -160,11 +172,13 @@ export function useNotificacoes(pollingInterval = 60000): UseNotificacoesReturn 
     const interval = window.setInterval(atualizarSeVisivel, pollingInterval)
     document.addEventListener('visibilitychange', atualizarSeVisivel)
     window.addEventListener('focus', atualizarSeVisivel)
+    window.addEventListener(NOTIFICACOES_ATUALIZADAS_EVENT, atualizarSeVisivel)
 
     return () => {
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', atualizarSeVisivel)
       window.removeEventListener('focus', atualizarSeVisivel)
+      window.removeEventListener(NOTIFICACOES_ATUALIZADAS_EVENT, atualizarSeVisivel)
     }
   }, [pollingInterval, recarregarResumo])
 
@@ -176,6 +190,7 @@ export function useNotificacoes(pollingInterval = 60000): UseNotificacoesReturn 
     marcarComoLida,
     deletarNotificacao,
     marcarTodasComoLidas,
+    limparLidas,
     pendenciasPorModulo,
     recarregar,
     recarregarResumo,

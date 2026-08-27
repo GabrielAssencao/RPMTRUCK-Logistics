@@ -73,6 +73,7 @@ function ManutencaoContent() {
 
   const [veiculos, setVeiculos] = useState<VeiculoSelecao[]>([])
   const [feedback, setFeedback] = useState('')
+  const [salvandoAntecedencia, setSalvandoAntecedencia] = useState(false)
 
   const [indexSelecionado, setIndexSelecionado] = useState(0)
   const [historico, setHistorico] = useState<RegistroManutencao[]>([])
@@ -95,10 +96,20 @@ function ManutencaoContent() {
   const handleAnterior = () => setIndexSelecionado(prev => (prev === 0 ? veiculos.length - 1 : prev - 1))
   const handleProximo = () => setIndexSelecionado(prev => (prev === veiculos.length - 1 ? 0 : prev + 1))
   const handleAtualizarDiasNotificacao = async (dias: number) => {
-    if (!veiculoAtivo) return
-    const response = await fetch(`/api/veiculos/${veiculoAtivo.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ diasAntecedenciaNotif: dias }) })
-    if (!response.ok) return setFeedback('Não foi possível atualizar a antecedência do alerta.')
-    setVeiculos(prev => prev.map((v, idx) => idx === indexSelecionado ? { ...v, diasAntecedenciaNotificacao: dias } : v))
+    if (!veiculoAtivo || salvandoAntecedencia || dias === veiculoAtivo.diasAntecedenciaNotificacao) return
+    const veiculoId = veiculoAtivo.id
+    setSalvandoAntecedencia(true)
+    setFeedback('')
+    try {
+      const response = await fetch(`/api/veiculos/${veiculoId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ diasAntecedenciaNotif: dias }) })
+      if (!response.ok) return setFeedback('Não foi possível atualizar a antecedência do alerta.')
+      setVeiculos(prev => prev.map(v => v.id === veiculoId ? { ...v, diasAntecedenciaNotificacao: dias } : v))
+      setFeedback(`Alertas de ${veiculoAtivo.modelo} serão enviados com ${dias} dias de antecedência.`)
+    } catch {
+      setFeedback('Não foi possível conectar ao servidor para atualizar a antecedência do alerta.')
+    } finally {
+      setSalvandoAntecedencia(false)
+    }
   }
 
   const handleSalvarManutencao = async (e: React.FormEvent) => {
@@ -308,7 +319,7 @@ function ManutencaoContent() {
 
         {/* MÉTRICAS RÁPIDAS */}
         {veiculoAtivo && (
-          <div className="mt-4 pt-4 border-t grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs" style={{ borderColor: 'var(--border)' }}>
+          <div className="mt-4 grid grid-cols-1 gap-4 border-t pt-4 text-xs sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.7fr]" style={{ borderColor: 'var(--border)' }}>
             <div>
               <div className="text-[10px] uppercase text-foreground-muted flex items-center gap-1"><Truck size={12} style={{ color: primary }} /> Veículo</div>
               <div className="font-bold mt-1 text-sm">{veiculoAtivo.modelo}</div>
@@ -323,22 +334,34 @@ function ManutencaoContent() {
                 - {custoTotalVeiculo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </div>
             </div>
-            <div className="flex justify-between items-center pr-2">
-              <div>
-                <div className="text-[10px] uppercase text-foreground-muted flex items-center gap-1"><Bell size={12} style={{ color: primary }} /> Config. Sininho</div>
-                <div className="font-bold mt-1 text-sm">Alerta em {veiculoAtivo.diasAntecedenciaNotificacao} dias</div>
+            <div className="border p-3" style={{ borderColor: `${primary}55`, backgroundColor: `${primary}08` }}>
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center border" style={{ borderColor: `${primary}66`, color: primary, backgroundColor: `${primary}12` }}>
+                  <Bell size={16} className={salvandoAntecedencia ? 'animate-pulse' : ''} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-foreground-muted">Antecedência dos alertas</div>
+                  <div className="mt-0.5 font-bold">Avisar {veiculoAtivo.diasAntecedenciaNotificacao} dias antes da ocorrência</div>
+                </div>
               </div>
-              <select 
-                value={veiculoAtivo.diasAntecedenciaNotificacao}
-                onChange={(e) => handleAtualizarDiasNotificacao(Number(e.target.value))}
-                className="p-1 border text-xs bg-transparent outline-none cursor-pointer"
-                style={{ borderColor: primary, color: primary }}
-              >
-                <option value={3} style={{ background: 'var(--background)' }}>3</option>
-                <option value={7} style={{ background: 'var(--background)' }}>7</option>
-                <option value={15} style={{ background: 'var(--background)' }}>15</option>
-                <option value={30} style={{ background: 'var(--background)' }}>30</option>
-              </select>
+              <div className="mt-3 grid grid-cols-4 gap-1" aria-label="Escolher antecedência do alerta">
+                {[3, 7, 15, 30].map(dias => {
+                  const selecionado = dias === veiculoAtivo.diasAntecedenciaNotificacao
+                  return (
+                    <button
+                      key={dias}
+                      type="button"
+                      aria-pressed={selecionado}
+                      disabled={salvandoAntecedencia}
+                      onClick={() => void handleAtualizarDiasNotificacao(dias)}
+                      className="border px-2 py-2 text-[10px] font-black uppercase transition-colors disabled:cursor-wait disabled:opacity-60"
+                      style={{ borderColor: selecionado ? primary : 'var(--border)', backgroundColor: selecionado ? primary : 'transparent', color: selecionado ? '#000' : 'var(--foreground-muted)' }}
+                    >
+                      {dias} dias
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
         )}
