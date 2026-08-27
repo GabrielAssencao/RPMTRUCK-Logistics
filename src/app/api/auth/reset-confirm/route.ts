@@ -6,16 +6,12 @@ import { prisma } from '@/lib/prisma'
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit'
 import { tokenResetConfere } from '@/lib/resetToken'
 import { executarComAuditoria } from '@/lib/auditoria'
+import { senhaForteSchema } from '@/lib/validation'
 
 const schema = z.object({
   email: z.string().trim().email().max(254).toLowerCase(),
   token: z.string().trim().min(20).max(64),
-  novaSenha: z.string()
-    .min(10, 'A nova senha deve possuir pelo menos 10 caracteres.')
-    .max(128)
-    .regex(/[a-z]/, 'Inclua uma letra minúscula.')
-    .regex(/[A-Z]/, 'Inclua uma letra maiúscula.')
-    .regex(/[0-9]/, 'Inclua um número.'),
+  novaSenha: senhaForteSchema,
 }).strict()
 
 export async function POST(request: NextRequest) {
@@ -91,6 +87,8 @@ export async function POST(request: NextRequest) {
         data: {
           senha_hash: senhaHash,
           sessaoVersao: { increment: 1 },
+          exigeTrocaSenha: false,
+          senhaTemporariaExpiraEm: null,
         },
       })
 

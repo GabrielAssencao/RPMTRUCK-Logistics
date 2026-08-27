@@ -196,6 +196,7 @@ A aplicação ficará disponível em `http://localhost:3000`.
 | `RELATORIOS_STORAGE_SOFT_LIMIT_BYTES` | servidor | não | teto preventivo; padrão de 700 MiB |
 | `NEXT_PUBLIC_SITE_URL` | público | produção | origem canônica da aplicação |
 | `PRIVACY_CONTACT_EMAIL` | servidor | produção | canal público exibido na Política de Privacidade |
+| `ENABLE_SPEED_INSIGHTS` | servidor | opcional | use `true` somente após habilitar e revisar cobrança na Vercel |
 | `APP_ALLOWED_ORIGINS` | servidor | não | origens extras, separadas por vírgula |
 | `JWT_SECRET` | servidor | sim | assinatura de sessão; mínimo de 32 caracteres |
 | `RATE_LIMIT_HASH_SECRET` | servidor | recomendado | pseudonimização separada para o limitador |
@@ -265,6 +266,7 @@ cobrem:
 - bloqueio da Data API para tabelas internas;
 - índices de desempenho, criptografia, redação de logs e eventos;
 - catálogo comercial e solicitações de assinatura.
+- senha temporária expiráveis e troca obrigatória no primeiro acesso.
 
 Em desenvolvimento, crie migrations com `npx prisma migrate dev`. Em produção,
 use somente:
@@ -333,9 +335,13 @@ evitar que previews alterem um banco compartilhado.
 7. Aplique `npx prisma migrate deploy` por um job confiável ou terminal seguro.
 8. Faça o deploy e valide login, logout, reset, isolamento entre empresas,
    relatórios, fotos, headers e CSP.
-9. Meça a landing com Lighthouse/PageSpeed em mobile e desktop e monitore os
-   Core Web Vitals reais depois da publicação.
-10. Monitore logs, consumo do banco/Storage e eventos de rate limit.
+9. Habilite Web Analytics e, se desejar contratar o recurso, Speed Insights no
+   painel da Vercel. Os componentes oficiais já estão integrados ao layout e não
+   enviam eventos personalizados ou identificadores de usuário. Para Speed
+   Insights, defina `ENABLE_SPEED_INSIGHTS=true` somente após revisar a cobrança.
+10. Meça a landing com Lighthouse/PageSpeed em mobile e desktop e acompanhe os
+   Core Web Vitals reais no Speed Insights.
+11. Monitore logs, consumo do banco/Storage e eventos de rate limit.
 
 Após trocar domínio, segredo JWT ou chaves, planeje o impacto: mudar
 `JWT_SECRET` invalida sessões; trocar chaves de dados sem rotação impede leitura.
@@ -355,7 +361,7 @@ Após trocar domínio, segredo JWT ou chaves, planeje o impacto: mudar
 
 - ampliar testes unitários e de integração de autorização multiempresa;
 - automatizar migrations em pipeline separado e controlado;
-- adicionar observabilidade, alertas e estratégia formal de backup;
+- ampliar observabilidade com alertas e estratégia formal de backup;
 - concluir persistência e refinamento dos módulos ainda em evolução;
 - aprofundar acessibilidade e testes de interface responsiva;
 - evoluir cobrança, comunicação por e-mail e operação dos planos.

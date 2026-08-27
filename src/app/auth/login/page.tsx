@@ -23,6 +23,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [newPassword, setNewPassword] = useState('') 
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [forgotEmail, setForgotEmail] = useState('')
   const [error, setError] = useState('') 
   const [turnstileToken, setTurnstileToken] = useState('')
@@ -41,29 +42,51 @@ export default function LoginPage() {
     if (step === 0) {
       if (!email) return
       setStep(1)
-    } else if (step === 1) {
+    } else if (step === 1 || step === 3) {
       if (!senha) return
+      if (step === 3) {
+        if (!newPassword || newPassword !== confirmPassword) {
+          setError('A confirmação deve ser igual à nova senha.')
+          return
+        }
+        if (newPassword.length < 12) {
+          setError('Use pelo menos 12 caracteres, com maiúscula, minúscula, número e símbolo.')
+          return
+        }
+      }
       if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken) {
         setError('Conclua a verificação de segurança.')
         return
       }
-      setStep(2)
+      const etapaOrigem = step
+      if (etapaOrigem === 1) setStep(2)
+      else setLoading(true)
 
       try {
         // ROTA CORRIGIDA PARA O CAMINHO DO BACKEND
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, senha, turnstileToken: turnstileToken || undefined })
+          body: JSON.stringify({
+            email,
+            senha,
+            novaSenha: etapaOrigem === 3 ? newPassword : undefined,
+            turnstileToken: turnstileToken || undefined,
+          })
         })
 
         const data = await res.json()
         setTurnstileToken('')
         setTurnstileVersion((value) => value + 1)
 
+        if (data.trocaSenhaObrigatoria) {
+          setStep(3)
+          return
+        }
+
         if (!res.ok) {
           setError(data.erro || 'Falha na autenticação.')
-          setStep(1) 
+          setStep(etapaOrigem)
           return
         }
 
@@ -77,7 +100,9 @@ export default function LoginPage() {
         }
       } catch (err) {
         setError('Erro de conexão com o servidor.')
-        setStep(1)
+        setStep(step === 3 ? 3 : 1)
+      } finally {
+        setLoading(false)
       }
     }
   }
@@ -95,6 +120,7 @@ export default function LoginPage() {
     setEmail('')
     setSenha('')
     setNewPassword('')
+    setConfirmPassword('')
     setLoading(false)
     setError('')
   }
@@ -106,6 +132,7 @@ export default function LoginPage() {
       email={email} setEmail={setEmail}
       senha={senha} setSenha={setSenha}
       newPassword={newPassword} setNewPassword={setNewPassword}
+      confirmPassword={confirmPassword} setConfirmPassword={setConfirmPassword}
       showPass={showPass} setShowPass={setShowPass}
       loading={loading}
       error={error} // Passando o erro para o form
@@ -205,7 +232,7 @@ export default function LoginPage() {
 // FORMULÁRIO DE LOGIN (multi-step)
 // ═══════════════════════════════════════════════════════════════════════════════
 function LoginForm({
-  step, email, setEmail, senha, setSenha, newPassword, setNewPassword, showPass, setShowPass,
+  step, email, setEmail, senha, setSenha, newPassword, setNewPassword, confirmPassword, setConfirmPassword, showPass, setShowPass,
   loading, error, onNext, onBack, onForgot, onReset, primary, isLight,
   turnstileVersion, onTurnstileToken,
 }: {
@@ -213,6 +240,7 @@ function LoginForm({
   email: string; setEmail: (v: string) => void
   senha: string; setSenha: (v: string) => void
   newPassword: string; setNewPassword: (v: string) => void
+  confirmPassword: string; setConfirmPassword: (v: string) => void
   showPass: boolean; setShowPass: (v: boolean) => void
   loading: boolean
   error: string
@@ -335,7 +363,12 @@ function LoginForm({
                 <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 transition-opacity hover:opacity-60" style={{ color: 'var(--foreground-muted)' }}>{showPass ? <EyeOff size={16} /> : <Eye size={16} />}</button>
               </div>
             </div>
-            <SubmitBtn onClick={onNext} disabled={!newPassword} loading={loading} primary={primary} label="SALVAR E ACESSAR →" />
+            <p className="text-[11px] leading-relaxed" style={{ color: 'var(--foreground-muted)' }}>
+              Use 12 ou mais caracteres, incluindo maiúscula, minúscula, número e símbolo.
+            </p>
+            <StyledInput icon={<ShieldCheck size={14} />} label="Confirmar nova senha" type={showPass ? 'text' : 'password'} placeholder="••••••••••••" value={confirmPassword} onChange={setConfirmPassword} primary={primary} onEnter={onNext} />
+            <TurnstileWidget key={turnstileVersion} action="login" onTokenChange={onTurnstileToken} />
+            <SubmitBtn onClick={onNext} disabled={!newPassword || !confirmPassword} loading={loading} primary={primary} label="SALVAR E ACESSAR →" />
           </motion.div>
         )}
       </AnimatePresence>

@@ -29,8 +29,9 @@ export default function GuidePage() {
         <h2 id="primeiros-passos">1. Primeiros passos</h2>
         <ol className="mt-4 list-decimal space-y-3 [&_li]:ml-5 [&_li]:pl-1">
           <li>Na página inicial, selecione <strong className="text-foreground">Solicitar acesso</strong>, informe empresa, responsável, e-mail, frota e plano desejado.</li>
-          <li>Depois da aprovação, use o e-mail corporativo e a senha recebida em <strong className="text-foreground">Login</strong>.</li>
-          <li>No primeiro acesso, confirme o nome da empresa, os módulos ativos e seu papel. Se algo estiver incorreto, fale com o gestor antes de cadastrar dados.</li>
+          <li>Depois da aprovação, use o e-mail corporativo e a senha temporária recebida em <strong className="text-foreground">Login</strong>. Ela vale por 72 horas e deve ser mantida em sigilo.</li>
+          <li>No primeiro acesso, crie uma senha pessoal e definitiva com 12 ou mais caracteres, maiúscula, minúscula, número e símbolo. Só então a sessão será iniciada.</li>
+          <li>Confirme o nome da empresa, os módulos ativos e seu papel. Se algo estiver incorreto, fale com o gestor antes de cadastrar dados.</li>
           <li>Use o seletor no topo para ajustar cor e modo claro/escuro; a preferência fica somente no navegador.</li>
         </ol>
       </section>

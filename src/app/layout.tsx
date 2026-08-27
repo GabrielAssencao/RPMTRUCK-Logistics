@@ -2,6 +2,8 @@
 import type { Metadata, Viewport } from 'next'
 import { connection } from 'next/server'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import { Analytics } from '@vercel/analytics/next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -35,6 +37,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <ThemeProvider>
           {children}
         </ThemeProvider>
+        <Analytics />
+        {process.env.ENABLE_SPEED_INSIGHTS === 'true' && <SpeedInsights />}
       </body>
     </html>
   )

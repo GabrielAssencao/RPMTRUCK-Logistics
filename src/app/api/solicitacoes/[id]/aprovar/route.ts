@@ -48,6 +48,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // Gerando uma senha padrão temporária inicial forte para o cliente
     const senhaProvisoria = `RPM@${randomBytes(6).toString('base64url')}`;
     const senhaHash = await hashPassword(senhaProvisoria);
+    const senhaTemporariaExpiraEm = new Date(Date.now() + 72 * 60 * 60 * 1000);
 
     // 2. Executa a TRANSACTION (Garante que se um passo falhar, nenhum dado corrompido é gravado)
     const resultado = await executarComAuditoria({ usuarioId: auth.session.userId, origem: 'SUPERADMIN' }, async (tx) => {
@@ -85,7 +86,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
           email: solicitacao.email,
           senha_hash: senhaHash,
           role: Role.GESTOR_EMPRESA,
-          empresaId: novaEmpresa.id
+          empresaId: novaEmpresa.id,
+          exigeTrocaSenha: true,
+          senhaTemporariaExpiraEm,
         }
       });
 
@@ -136,9 +139,10 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       mensagem: 'Instância multi-tenant implantada com sucesso e faturas anexadas.',
       credencialTemporaria: {
         email: resultado.email,
-        senha: senhaProvisoria
+        senha: senhaProvisoria,
+        expiraEm: senhaTemporariaExpiraEm.toISOString(),
       }
-    }, { status: 200 });
+    }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
 
   } catch (error) {
     if (error instanceof SolicitacaoJaProcessadaError) {

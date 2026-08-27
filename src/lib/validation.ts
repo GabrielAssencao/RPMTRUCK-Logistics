@@ -7,9 +7,18 @@ import { nomeOperacional, nomePessoa } from '@/lib/domainValidation';
 /**
  * Login validation schema
  */
+export const senhaForteSchema = z.string()
+  .min(12, 'A senha deve possuir pelo menos 12 caracteres')
+  .max(128, 'A senha deve possuir no máximo 128 caracteres')
+  .regex(/[a-z]/, 'Inclua uma letra minúscula')
+  .regex(/[A-Z]/, 'Inclua uma letra maiúscula')
+  .regex(/[0-9]/, 'Inclua um número')
+  .regex(/[^A-Za-z0-9]/, 'Inclua um caractere especial');
+
 export const loginSchema = z.object({
   email: z.string().email('Email inválido').max(254).toLowerCase().trim(),
   senha: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres').max(128),
+  novaSenha: senhaForteSchema.optional(),
   turnstileToken: z.string().max(2048).optional(),
 }).strict();
 

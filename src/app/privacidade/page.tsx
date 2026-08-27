@@ -48,6 +48,7 @@ export default function PrivacyPage() {
           <li>dados de motoristas: nome, CPF, RG, CNH, categoria, validade, fotografia, situação operacional e veículo associado;</li>
           <li>dados operacionais: veículos, placas, localizações ou bases informadas, quilometragem, manutenção, custos, tarefas, containers, relatórios e arquivos enviados;</li>
           <li>dados técnicos e de segurança: endereço IP pseudonimizado, navegador, dispositivo, horários, identificadores de sessão, tentativas de acesso e registros de auditoria;</li>
+          <li>métricas agregadas de audiência e desempenho: página acessada, país ou região aproximada, navegador, dispositivo e indicadores Core Web Vitals, sem envio intencional de nomes, e-mails ou identificadores de conta;</li>
           <li>informações fornecidas em mensagens, solicitações de suporte, acesso, plano ou redefinição de senha.</li>
         </ul>
         <p className="mt-4">
@@ -75,7 +76,7 @@ export default function PrivacyPage() {
         <h2 id="compartilhamento">4. Compartilhamento e transferências</h2>
         <p className="mt-4">Dados podem ser compartilhados, no limite necessário, com:</p>
         <ul>
-          <li>fornecedores de hospedagem, banco de dados e armazenamento contratados para operar a Plataforma, como Vercel e Supabase, quando configurados pelo responsável pela instalação;</li>
+          <li>fornecedores de hospedagem, banco de dados, armazenamento e observabilidade contratados para operar e medir a Plataforma, como Vercel — inclusive Web Analytics e Speed Insights — e Supabase, quando configurados pelo responsável pela instalação;</li>
           <li>Cloudflare Turnstile, quando a proteção contra robôs estiver habilitada nos formulários de autenticação;</li>
           <li>prestadores de suporte, segurança, contabilidade ou assessoria sujeitos a deveres de confidencialidade;</li>
           <li>autoridades públicas ou terceiros quando houver obrigação legal, ordem válida ou necessidade de exercício regular de direitos;</li>

@@ -196,13 +196,15 @@ model Empresa {
 }
 
 model Usuario {
-  id                   String  @id @default(uuid())
-  nome                 String
-  email                String  @unique
-  senha_hash           String // Hash de segurança (bcrypt)
-  role                 Role    @default(GESTOR_EMPRESA)
-  acessoDashboardGeral Boolean @default(false) @map("acesso_dashboard_geral")
-  sessaoVersao         Int     @default(0) @map("sessao_versao")
+  id                      String    @id @default(uuid())
+  nome                    String
+  email                   String    @unique
+  senha_hash              String // Hash de segurança (bcrypt)
+  role                    Role      @default(GESTOR_EMPRESA)
+  acessoDashboardGeral    Boolean   @default(false) @map("acesso_dashboard_geral")
+  sessaoVersao            Int       @default(0) @map("sessao_versao")
+  exigeTrocaSenha         Boolean   @default(false) @map("exige_troca_senha")
+  senhaTemporariaExpiraEm DateTime? @map("senha_temporaria_expira_em")
 
   // Se for nulo, indica que o usuário é da equipe interna RPMTruck (Geral Admin)
   empresaId String?

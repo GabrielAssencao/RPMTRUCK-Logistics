@@ -71,14 +71,17 @@ export default function CookiesPage() {
           </table>
         </div>
         <p className="mt-4">
-          Na versão atual, a landing page não instala cookies de publicidade, redes sociais ou medição de audiência. Por isso, não exibimos uma opção fictícia de “aceitar publicidade”.
+          A Plataforma não instala cookies de publicidade ou redes sociais. O Vercel Web Analytics e, quando habilitado, o Speed Insights coletam métricas técnicas agregadas sem cookies de terceiros e sem associar visualizações a e-mail, conta ou endereço IP.
         </p>
       </section>
 
       <section>
-        <h2 id="terceiros">3. Cloudflare Turnstile</h2>
+        <h2 id="terceiros">3. Serviços de terceiros</h2>
         <p className="mt-4">
           Quando configurado, o Turnstile é carregado somente nos formulários protegidos, como login, solicitação de acesso e recuperação de senha. Ele processa sinais técnicos para distinguir pessoas de automações e pode utilizar cookies ou armazenamento sob responsabilidade da Cloudflare. Esse tratamento é voltado à segurança e prevenção de fraude, não à publicidade da RPMTruck.
+        </p>
+        <p className="mt-4">
+          O Vercel Web Analytics mede visualizações de páginas de forma agregada e o Speed Insights mede indicadores reais de carregamento e estabilidade visual, incluindo Core Web Vitals. Não configuramos eventos personalizados com nomes, e-mails, documentos ou identificadores de usuários. Essas ferramentas servem exclusivamente para diagnóstico e melhoria da Plataforma.
         </p>
       </section>
 
@@ -92,7 +95,7 @@ export default function CookiesPage() {
       <section>
         <h2 id="mudancas">5. Novos recursos e atualização do aviso</h2>
         <p className="mt-4">
-          Se ferramentas opcionais de analytics, publicidade ou personalização forem adicionadas, elas deverão permanecer bloqueadas até a escolha aplicável do usuário, e este aviso e o painel de preferências deverão ser atualizados antes da ativação. A versão publicada será revista sempre que as tecnologias ou finalidades mudarem.
+          Antes de adicionar publicidade, rastreamento entre sites, criação de perfis, eventos personalizados ou outra medição que envolva identificadores pessoais, a RPMTruck deverá reavaliar a base legal, a necessidade de consentimento e os controles de preferência. Este aviso será revisto sempre que as tecnologias ou finalidades mudarem.
         </p>
       </section>
     </PublicDocumentLayout>

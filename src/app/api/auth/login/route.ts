@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ erro: 'Dados de entrada inválidos.' }, { status: 400 });
     }
-    const { email, senha, turnstileToken } = parsed.data;
+    const { email, senha, novaSenha, turnstileToken } = parsed.data;
     const accountRateLimit = await applyRateLimit(
       request,
       `login-account:${email}`,
@@ -75,18 +75,75 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (passwordNeedsRehash(usuario.senha_hash)) {
-      await prisma.usuario.update({
-        where: { id: usuario.id },
-        data: { senha_hash: await hashPassword(senha) },
-      });
-    }
-
     if (usuario.empresaId && usuario.empresa?.status !== 'ATIVO') {
       return NextResponse.json(
         { erro: 'O acesso desta empresa está temporariamente suspenso.' },
         { status: 403 }
       );
+    }
+
+    let sessionVersion = usuario.sessaoVersao;
+    if (usuario.exigeTrocaSenha) {
+      const agora = new Date();
+      if (!usuario.senhaTemporariaExpiraEm || usuario.senhaTemporariaExpiraEm <= agora) {
+        return NextResponse.json(
+          { erro: 'A senha temporária expirou. Solicite uma redefinição de senha.' },
+          { status: 403 },
+        );
+      }
+
+      if (!novaSenha) {
+        return NextResponse.json(
+          {
+            trocaSenhaObrigatoria: true,
+            mensagem: 'Defina uma senha permanente para concluir o primeiro acesso.',
+          },
+          { status: 428 },
+        );
+      }
+
+      if (novaSenha === senha) {
+        return NextResponse.json(
+          { erro: 'A nova senha deve ser diferente da senha temporária.' },
+          { status: 400 },
+        );
+      }
+
+      const novoHash = await hashPassword(novaSenha);
+      const atualizado = await prisma.$transaction(async (tx) => {
+        const troca = await tx.usuario.updateMany({
+          where: {
+            id: usuario.id,
+            senha_hash: usuario.senha_hash,
+            exigeTrocaSenha: true,
+            senhaTemporariaExpiraEm: { gt: agora },
+          },
+          data: {
+            senha_hash: novoHash,
+            exigeTrocaSenha: false,
+            senhaTemporariaExpiraEm: null,
+            sessaoVersao: { increment: 1 },
+          },
+        });
+        if (troca.count !== 1) return false;
+        await tx.sessaoUsuario.updateMany({
+          where: { usuarioId: usuario.id, revogadaEm: null },
+          data: { revogadaEm: agora },
+        });
+        return true;
+      });
+      if (!atualizado) {
+        return NextResponse.json(
+          { erro: 'A credencial temporária já foi utilizada. Entre novamente.' },
+          { status: 409 },
+        );
+      }
+      sessionVersion += 1;
+    } else if (passwordNeedsRehash(usuario.senha_hash)) {
+      await prisma.usuario.update({
+        where: { id: usuario.id },
+        data: { senha_hash: await hashPassword(senha) },
+      });
     }
 
     // 7. Cria sessão segura com JWT em HttpOnly Cookie
@@ -108,7 +165,7 @@ export async function POST(request: NextRequest) {
         email: usuario.email,
         role: (usuario.role as 'ADMIN_RPM' | 'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR') || 'OPERADOR',
         empresaId: usuario.empresaId || undefined,
-        sessionVersion: usuario.sessaoVersao,
+        sessionVersion,
       }, expiraEm);
     } catch (error) {
       await prisma.sessaoUsuario.delete({ where: { id: sessao.id } }).catch(() => undefined);

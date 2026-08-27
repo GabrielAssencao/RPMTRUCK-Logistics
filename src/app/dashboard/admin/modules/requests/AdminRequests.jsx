@@ -2,8 +2,9 @@
 'use client'
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Phone, Building2, User, Truck, Layers, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Mail, Phone, User, Truck, CheckCircle, XCircle, Copy, KeyRound } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { criarMensagensPrimeiroAcesso } from '@/lib/accessMessages';
 
 export default function AdminRequests() {
   const { primary } = useTheme();
@@ -11,6 +12,9 @@ export default function AdminRequests() {
   const [filtro, setFiltro] = useState('pendente');
   const [processando, setProcessando] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [entrega, setEntrega] = useState(null);
+  const [copiado, setCopiado] = useState('');
+  const [erroAcao, setErroAcao] = useState('');
 
   const carregarSolicitacoes = async () => {
     try {
@@ -34,10 +38,37 @@ export default function AdminRequests() {
   const aprovarSolicitacao = async (id) => {
     if (confirm("Confirmar aprovação deste lead? Isso criará a empresa e a conta do gestor automaticamente.")) {
       setProcessando(id);
-      const res = await fetch(`/api/solicitacoes/${id}/aprovar`, { method: 'POST' });
-      if (res.ok) carregarSolicitacoes();
-      setProcessando(null);
+      setErroAcao('');
+      try {
+        const solicitacao = solicitacoes.find((item) => item.id === id);
+        const res = await fetch(`/api/solicitacoes/${id}/aprovar`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          setErroAcao(data.erro || 'Não foi possível aprovar a solicitação.');
+          return;
+        }
+        const mensagens = criarMensagensPrimeiroAcesso({
+          empresa: solicitacao.empresa,
+          responsavel: solicitacao.responsavel,
+          email: data.credencialTemporaria.email,
+          senhaTemporaria: data.credencialTemporaria.senha,
+          expiraEm: data.credencialTemporaria.expiraEm,
+          loginUrl: `${window.location.origin}/auth/login`,
+        });
+        setEntrega({ solicitacao, credencial: data.credencialTemporaria, mensagens });
+        await carregarSolicitacoes();
+      } catch {
+        setErroAcao('Erro de conexão ao aprovar a solicitação.');
+      } finally {
+        setProcessando(null);
+      }
     }
+  };
+
+  const copiar = async (tipo, texto) => {
+    await navigator.clipboard.writeText(texto);
+    setCopiado(tipo);
+    window.setTimeout(() => setCopiado(''), 1800);
   };
 
   const rejeitarSolicitacao = async (id) => {
@@ -62,6 +93,8 @@ export default function AdminRequests() {
           SOLICITAÇÕES DE <span className="text-primary">ACESSO</span>
         </h2>
       </div>
+
+      {erroAcao && <p role="alert" className="border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-500">{erroAcao}</p>}
 
       {/* FILTROS CIBER-INDUSTRIAS */}
       <div className="flex gap-1 overflow-x-auto custom-scrollbar border-b pb-2" style={{ borderColor: 'var(--border)' }}>
@@ -183,6 +216,45 @@ export default function AdminRequests() {
           </AnimatePresence>
         )}
       </div>
+
+      <AnimatePresence>
+        {entrega && (
+          <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div role="dialog" aria-modal="true" aria-labelledby="credencial-title" className="w-full max-w-3xl max-h-[90vh] overflow-y-auto border p-6 space-y-5" style={{ backgroundColor: 'var(--background)', borderColor: primary }} initial={{ scale: 0.97 }} animate={{ scale: 1 }}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: primary }}>Entrega única</p>
+                  <h3 id="credencial-title" className="text-2xl font-black font-rajdhani">CREDENCIAL DE PRIMEIRO ACESSO</h3>
+                </div>
+                <button type="button" onClick={() => setEntrega(null)} aria-label="Fechar" className="p-2 border" style={{ borderColor: 'var(--border)' }}><XCircle size={18} /></button>
+              </div>
+              <p className="border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-500">
+                Esta senha aparece somente agora e não é armazenada em texto legível. Copie a mensagem antes de fechar.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3 text-xs">
+                <div className="border p-3" style={{ borderColor: 'var(--border)' }}><span className="block opacity-60 mb-1">E-mail</span>{entrega.credencial.email}</div>
+                <div className="border p-3" style={{ borderColor: 'var(--border)' }}><span className="block opacity-60 mb-1">Senha temporária</span><span className="font-bold">{entrega.credencial.senha}</span></div>
+              </div>
+              <div className="border p-4 space-y-3" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <strong className="text-xs uppercase tracking-widest"><Mail size={14} className="inline mr-2" />Modelo de e-mail</strong>
+                  <button type="button" onClick={() => copiar('email', `Assunto: ${entrega.mensagens.assunto}\n\n${entrega.mensagens.email}`)} className="flex items-center gap-2 border px-3 py-2 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}><Copy size={13} />{copiado === 'email' ? 'Copiado' : 'Copiar e-mail'}</button>
+                </div>
+                <p className="text-xs"><strong>Assunto:</strong> {entrega.mensagens.assunto}</p>
+                <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-foreground-muted">{entrega.mensagens.email}</pre>
+              </div>
+              <div className="border p-4 space-y-3" style={{ borderColor: entrega.solicitacao.contatoPref === 'whatsapp' ? primary : 'var(--border)' }}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <strong className="text-xs uppercase tracking-widest"><Phone size={14} className="inline mr-2" />Modelo de WhatsApp</strong>
+                  <button type="button" onClick={() => copiar('whatsapp', entrega.mensagens.whatsapp)} className="flex items-center gap-2 border px-3 py-2 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}><Copy size={13} />{copiado === 'whatsapp' ? 'Copiado' : 'Copiar WhatsApp'}</button>
+                </div>
+                <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-foreground-muted">{entrega.mensagens.whatsapp}</pre>
+              </div>
+              <button type="button" onClick={() => setEntrega(null)} className="w-full py-3 text-xs font-black uppercase tracking-wider" style={{ backgroundColor: primary, color: '#000' }}><KeyRound size={14} className="inline mr-2" />Já copiei — fechar</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

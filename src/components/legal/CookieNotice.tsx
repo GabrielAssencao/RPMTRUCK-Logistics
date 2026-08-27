@@ -3,7 +3,7 @@
 import { useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 
-const NOTICE_STORAGE_KEY = 'rpmtruck-cookie-notice-v1'
+const NOTICE_STORAGE_KEY = 'rpmtruck-cookie-notice-v2'
 const NOTICE_EVENT = 'rpmtruck-cookie-notice-changed'
 
 function subscribe(onStoreChange: () => void) {
@@ -60,8 +60,8 @@ export default function CookieNotice() {
           Privacidade e armazenamento essencial
         </h2>
         <p id="cookie-notice-description" className="mt-2 text-sm leading-6 text-foreground-muted">
-          Usamos somente recursos necessários para sessão, segurança, preferências de interface e para lembrar este aviso.
-          Atualmente não usamos cookies de publicidade ou analytics. Saiba mais no nosso{' '}
+          Usamos recursos essenciais para sessão, segurança e preferências, além de métricas agregadas e sem cookies de
+          publicidade para entender audiência e, quando habilitado, desempenho. Saiba mais no nosso{' '}
           <Link href="/cookies" className="font-semibold text-primary hover:underline">Aviso de Cookies</Link>{' '}
           e na <Link href="/privacidade" className="font-semibold text-primary hover:underline">Política de Privacidade</Link>.
         </p>

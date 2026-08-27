@@ -38,6 +38,7 @@ const PUBLIC_ROUTES = [
 ]
 
 const PROTECTED_ROUTES = [
+  '/api/auth/change-password',
   '/api/usuarios',
   '/api/empresas',
   '/api/motoristas',

@@ -46,6 +46,30 @@ test('aprovação de acesso possui claim atômico contra replay concorrente', ()
   assert.match(approval, /status: 409/)
 })
 
+test('primeiro acesso exige troca atômica de senha temporária', () => {
+  const approval = read('src/app/api/solicitacoes/[id]/aprovar/route.ts')
+  const login = read('src/app/api/auth/login/route.ts')
+  const migration = read('prisma/migrations/20260827010000_primeiro_acesso_seguro/migration.sql')
+
+  assert.match(approval, /exigeTrocaSenha: true/)
+  assert.match(approval, /72 \* 60 \* 60 \* 1000/)
+  assert.match(login, /trocaSenhaObrigatoria: true/)
+  assert.match(login, /senhaTemporariaExpiraEm: \{ gt: agora \}/)
+  assert.match(login, /if \(troca\.count !== 1\)/)
+  assert.match(login, /exigeTrocaSenha: false/)
+  assert.match(migration, /ADD COLUMN "exige_troca_senha" BOOLEAN NOT NULL DEFAULT false/)
+})
+
+test('troca de senha autenticada revoga todas as sessões', () => {
+  const route = read('src/app/api/auth/change-password/route.ts')
+
+  assert.match(route, /requireAuth\(request\)/)
+  assert.match(route, /verifyPassword\(parsed\.data\.senhaAtual/)
+  assert.match(route, /sessaoVersao: \{ increment: 1 \}/)
+  assert.match(route, /sessaoUsuario\.updateMany/)
+  assert.match(route, /revogadaEm: agora/)
+})
+
 test('CSP usa nonce e não permite scripts inline em produção', () => {
   const proxy = read('src/proxy.ts')
   const layout = read('src/app/layout.tsx')
