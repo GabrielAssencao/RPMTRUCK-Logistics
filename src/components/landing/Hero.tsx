@@ -58,7 +58,7 @@ function HeroFallback({
         />
         <div className="relative z-10 max-w-2xl">
           <p className="mb-5 text-xs font-bold uppercase tracking-[0.3em] text-primary">
-            RPMTruck Plataforma
+            Plataforma RPMTruck
           </p>
           <h1 className="mb-6 text-5xl font-black leading-none md:text-8xl" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
             POTÊNCIA &amp;<br />
