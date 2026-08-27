@@ -10,7 +10,7 @@ import { usePlanosPublicos } from '@/hooks/usePlanosPublicos'
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 
 export default function Plans() {
-  const { primary, isLight } = useTheme()
+  const { primary } = useTheme()
   const ref    = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true })
   const { planos, carregando, erro, recarregar } = usePlanosPublicos()
@@ -19,7 +19,7 @@ export default function Plans() {
     .plan-btn {
       --btn-color: ${primary};
       --btn-hover-bg: ${primary};
-      --btn-hover-text: ${isLight ? '#000000' : '#ffffff'};
+      --btn-hover-text: var(--primary-contrast);
     }
     .plan-btn:not(:disabled):hover {
       background-color: var(--btn-hover-bg) !important;
@@ -86,12 +86,6 @@ export default function Plans() {
                 className="absolute inset-x-0 top-0 h-[2px] origin-left scale-x-0 transition-transform duration-500 group-hover:scale-x-100"
                 style={{ backgroundColor: primary }}
               />
-              <span
-                className="absolute right-5 top-5 text-5xl font-black leading-none opacity-[0.06]"
-                style={{ color: primary, fontFamily: 'Rajdhani, sans-serif' }}
-              >
-                {String(i + 1).padStart(2, '0')}
-              </span>
               <div>
                 {/* Badge */}
                 {plan.featured && (

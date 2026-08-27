@@ -12,7 +12,8 @@ organizacionais aplicáveis.
 
 ## Principais recursos
 
-- landing page responsiva com experiência 3D otimizada;
+- landing page responsiva com experiência 3D opcional carregada sob demanda;
+- Política de Privacidade, Aviso de Cookies e Guia de Uso públicos;
 - sessão JWT em cookie `HttpOnly`, persistida e revogável no banco;
 - papéis administrativos e empresariais com autorização no servidor;
 - isolamento por empresa derivado da sessão, sem confiar em IDs do cliente;
@@ -194,6 +195,7 @@ A aplicação ficará disponível em `http://localhost:3000`.
 | `SUPABASE_SECRET_KEY` | servidor | Storage | acesso privilegiado aos buckets privados |
 | `RELATORIOS_STORAGE_SOFT_LIMIT_BYTES` | servidor | não | teto preventivo; padrão de 700 MiB |
 | `NEXT_PUBLIC_SITE_URL` | público | produção | origem canônica da aplicação |
+| `PRIVACY_CONTACT_EMAIL` | servidor | produção | canal público exibido na Política de Privacidade |
 | `APP_ALLOWED_ORIGINS` | servidor | não | origens extras, separadas por vírgula |
 | `JWT_SECRET` | servidor | sim | assinatura de sessão; mínimo de 32 caracteres |
 | `RATE_LIMIT_HASH_SECRET` | servidor | recomendado | pseudonimização separada para o limitador |
@@ -323,12 +325,17 @@ evitar que previews alterem um banco compartilhado.
    banco de produção sem intenção explícita.
 4. Defina `NEXT_PUBLIC_SITE_URL` com a URL HTTPS final e configure
    `APP_ALLOWED_ORIGINS` se houver domínios adicionais.
-5. Cadastre o domínio final no Turnstile antes de definir
+5. Defina `PRIVACY_CONTACT_EMAIL`, complete a identificação jurídica do
+   fornecedor nos documentos/contratos e submeta os textos de privacidade à
+   revisão jurídica da operação concreta.
+6. Cadastre o domínio final no Turnstile antes de definir
    `TURNSTILE_REQUIRED=true`.
-6. Aplique `npx prisma migrate deploy` por um job confiável ou terminal seguro.
-7. Faça o deploy e valide login, logout, reset, isolamento entre empresas,
+7. Aplique `npx prisma migrate deploy` por um job confiável ou terminal seguro.
+8. Faça o deploy e valide login, logout, reset, isolamento entre empresas,
    relatórios, fotos, headers e CSP.
-8. Monitore logs, consumo do banco/Storage e eventos de rate limit.
+9. Meça a landing com Lighthouse/PageSpeed em mobile e desktop e monitore os
+   Core Web Vitals reais depois da publicação.
+10. Monitore logs, consumo do banco/Storage e eventos de rate limit.
 
 Após trocar domínio, segredo JWT ou chaves, planeje o impacto: mudar
 `JWT_SECRET` invalida sessões; trocar chaves de dados sem rotação impede leitura.

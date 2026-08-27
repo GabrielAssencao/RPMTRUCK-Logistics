@@ -41,13 +41,6 @@ function FeatureCard({ feature, index, isVisible }: { feature: typeof FEATURES[0
         style={{ backgroundColor: primary }}
       />
 
-      <span
-        className="absolute right-5 top-5 text-4xl font-black opacity-[0.08]"
-        style={{ color: primary, fontFamily: 'Rajdhani, sans-serif' }}
-      >
-        {String(index + 1).padStart(2, '0')}
-      </span>
-
       {/* Ícone */}
       <div
         className="w-12 h-12 border flex items-center justify-center mb-5 transition-colors duration-300"

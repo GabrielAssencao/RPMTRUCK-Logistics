@@ -10,6 +10,7 @@ import Stats     from '@/components/landing/Stats'
 import Plans     from '@/components/landing/Plans'
 import CTA       from '@/components/landing/CTA'
 import Footer    from '@/components/landing/Footer'
+import CookieNotice from '@/components/legal/CookieNotice'
 import { LandingStatsProvider } from '@/contexts/LandingStatsContext'
 
 export default function LandingPage() {
@@ -29,6 +30,7 @@ export default function LandingPage() {
           <Footer />
         </LandingStatsProvider>
       </Hero>
+      <CookieNotice />
     </>
   )
 }

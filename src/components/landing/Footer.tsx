@@ -6,16 +6,6 @@ import { useTheme } from '@/contexts/ThemeContext'
 export default function Footer() {
   const { primary } = useTheme()
 
-  const handleAnchorClick = (event: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
-    const target = document.getElementById(targetId)
-
-    if (!target) return
-
-    event.preventDefault()
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    window.history.replaceState(null, '', `#${targetId}`)
-  }
-
   return (
     <footer className="relative z-10 w-full border-t border-border bg-background py-10 transition-colors duration-500 overflow-hidden">
       <div
@@ -39,23 +29,22 @@ export default function Footer() {
             className="flex flex-wrap items-center justify-center gap-6 text-xs text-foreground-muted uppercase tracking-widest"
             style={{ fontFamily: 'Rajdhani, sans-serif' }}
           >
-            <Link
-              href="#funcionalidades"
-              scroll={false}
-              onClick={(event) => handleAnchorClick(event, 'funcionalidades')}
-              className="hover:text-foreground transition-colors"
-            >
+            <Link href="/#funcionalidades" className="hover:text-foreground transition-colors">
               Funcionalidades
             </Link>
-            <Link
-              href="#planos"
-              scroll={false}
-              onClick={(event) => handleAnchorClick(event, 'planos')}
-              className="hover:text-foreground transition-colors"
-            >
+            <Link href="/#planos" className="hover:text-foreground transition-colors">
               Planos
             </Link>
-            <Link href="/login" className="hover:text-foreground transition-colors">
+            <Link href="/guia" className="hover:text-foreground transition-colors">
+              Guia de uso
+            </Link>
+            <Link href="/privacidade" className="hover:text-foreground transition-colors">
+              Privacidade
+            </Link>
+            <Link href="/cookies" className="hover:text-foreground transition-colors">
+              Cookies
+            </Link>
+            <Link href="/auth/login" className="hover:text-foreground transition-colors">
               Login
             </Link>
             <Link

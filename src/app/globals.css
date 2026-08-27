@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -16,6 +14,7 @@
   /* primary e hover são controlados dinamicamente via ThemeContext */
   --primary: #22c55e; 
   --primary-hover: #16a34a;
+  --primary-contrast: #000000;
   
   /* Opacidade/Dim dinâmico baseado na cor primary definida */
   --primary-dim: color-mix(in srgb, var(--primary) 12%, transparent);

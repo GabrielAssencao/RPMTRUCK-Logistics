@@ -14,7 +14,7 @@ const STATIC_FEATURES = [
 ]
 
 export default function Ticker() {
-  const { primary, isLight } = useTheme()
+  const { primary } = useTheme()
   const stats = useLandingStats()
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-60px' })
@@ -28,7 +28,7 @@ export default function Ticker() {
     : STATIC_FEATURES,
   [stats])
   const repeated = [...tickerItems, ...tickerItems]
-  const textColor = isLight ? '#000000' : '#ffffff'
+  const textColor = 'var(--primary-contrast)'
 
   return (
     <motion.div

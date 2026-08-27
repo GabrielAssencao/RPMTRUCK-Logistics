@@ -961,7 +961,7 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
                 className="hero-button inline-flex items-center justify-center px-8 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 hover:opacity-90 hover:scale-105 cursor-pointer"
                 style={{
                   backgroundColor: primary,
-                  color: isLight ? '#000' : '#fff',
+                  color: 'var(--primary-contrast)',
                   fontFamily: 'Rajdhani, sans-serif',
                   clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
                 }}
@@ -982,7 +982,7 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
                 }}
                 onMouseEnter={e => {
                   e.currentTarget.style.backgroundColor = primary
-                  e.currentTarget.style.color = isLight ? '#000' : '#fff'
+                  e.currentTarget.style.color = 'var(--primary-contrast)'
                 }}
                 onMouseLeave={e => {
                   e.currentTarget.style.backgroundColor = 'transparent'

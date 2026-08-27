@@ -1,10 +1,8 @@
 'use client'
 
-import dynamic from 'next/dynamic'
-import { ReactNode, useSyncExternalStore } from 'react'
-import { useRouter } from 'next/navigation'
-import { motion, MotionConfig } from 'framer-motion'
-import { useTheme } from '@/contexts/ThemeContext'
+import Link from 'next/link'
+import { lazy, ReactNode, Suspense, useState, useSyncExternalStore } from 'react'
+import { MotionConfig } from 'framer-motion'
 
 const MOBILE_MEDIA_QUERY = '(max-width: 767px)'
 
@@ -35,35 +33,79 @@ function getServerHydratedSnapshot() {
   return false
 }
 
-// SSR=false obrigatório — Three.js usa APIs do browser
-const TruckScene = dynamic(() => import('@/components/landing/3d/TruckScene'), {
-  ssr: false,
-  loading: () => (
-    // FIX: Loading state que NÃO pisca — mesmo fundo, só spinner
-    <div
-      className="fixed inset-0 z-0 flex items-center justify-center"
-      style={{ backgroundColor: '#080808' }}
-    >
-      <div style={{ textAlign: 'center' }}>
-        <span
-          className="inline-block w-10 h-10 border-2 border-t-transparent rounded-full animate-spin"
-          style={{ borderColor: '#22c55e', borderTopColor: 'transparent' }}
+// O módulo 3D só é importado depois da escolha explícita do visitante. Usar
+// next/dynamic aqui faria o Next.js antecipar o chunk e o preload do modelo.
+const TruckScene = lazy(() => import('@/components/landing/3d/TruckScene'))
+
+function HeroFallback({
+  children,
+  onEnable3D,
+}: {
+  children?: ReactNode
+  onEnable3D?: () => void
+}) {
+  return (
+    <section className="relative w-full bg-background pt-28 text-foreground">
+      <div className="relative mx-auto flex min-h-[calc(100vh-7rem)] max-w-7xl items-center overflow-hidden px-6 py-16 md:px-20">
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 opacity-40"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 75% 40%, color-mix(in srgb, var(--primary) 22%, transparent), transparent 35%), linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)',
+            backgroundSize: 'auto, 56px 56px, 56px 56px',
+          }}
         />
-        <p
-          className="mt-4 text-xs uppercase tracking-widest"
-          style={{ color: 'rgba(255,255,255,0.3)', fontFamily: 'JetBrains Mono, monospace' }}
-        >
-          Carregando...
-        </p>
+        <div className="relative z-10 max-w-2xl">
+          <p className="mb-5 text-xs font-bold uppercase tracking-[0.3em] text-primary">
+            RPMTruck Plataforma
+          </p>
+          <h1 className="mb-6 text-5xl font-black leading-none md:text-8xl" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+            POTÊNCIA &amp;<br />
+            <span className="text-primary">CONTROLE</span><br />
+            <span className="text-[clamp(2rem,4.5vw,3.5rem)]">NA SUA FROTA</span>
+          </h1>
+          <p className="mb-10 max-w-xl text-lg font-light text-foreground-muted md:text-xl">
+            Gerenciamento completo da sua frota de caminhões, com operação centralizada e decisões mais rápidas.
+          </p>
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <Link
+              href="/auth/solicitar-acesso"
+              className="inline-flex min-h-12 items-center justify-center bg-primary px-8 py-4 text-sm font-bold uppercase tracking-widest"
+              style={{ color: 'var(--primary-contrast)' }}
+            >
+              Solicitar acesso →
+            </Link>
+            <Link
+              href="/auth/login"
+              className="inline-flex min-h-12 items-center justify-center border border-primary px-8 py-4 text-sm font-bold uppercase tracking-widest text-primary"
+            >
+              Fazer login
+            </Link>
+          </div>
+          {onEnable3D && (
+            <div className="mt-6 hidden items-center gap-3 md:flex">
+              <button
+                type="button"
+                onClick={onEnable3D}
+                className="min-h-11 border border-border-strong px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-foreground-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                Ativar experiência 3D
+              </button>
+              <span className="max-w-xs text-xs leading-5 text-foreground-muted">
+                Opcional: baixa aproximadamente 5 MB e usa aceleração gráfica.
+              </span>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  ),
-})
+      {children && <div className="relative z-10">{children}</div>}
+    </section>
+  )
+}
 
 export default function Hero({ children }: { children?: ReactNode }) {
-  const { primary, isLight } = useTheme()
-  const router = useRouter()
-
+  const [experience3DEnabled, setExperience3DEnabled] = useState(false)
   // FIX: isMobile só avaliado no client, default false para evitar mismatch de hydration
   const isMobile = useSyncExternalStore(
     subscribeToMobileViewport,
@@ -76,129 +118,28 @@ export default function Hero({ children }: { children?: ReactNode }) {
     getServerHydratedSnapshot,
   )
 
-  // Antes de hidratar: renderiza o container vazio com o fundo certo (sem flash)
+  // O HTML inicial já contém a proposta de valor e as ações principais. Isso
+  // melhora a percepção de carregamento e evita uma primeira tela vazia.
   if (!hydrated) {
-    return (
-      <section
-        className="relative w-full min-h-screen"
-        style={{ backgroundColor: '#080808' }}
-      />
-    )
+    return <HeroFallback>{children}</HeroFallback>
   }
 
   // Mobile: versão sem 3D
   if (isMobile) {
-    return (
-      <MotionConfig reducedMotion="user">
-        <section
-          className="relative w-full pt-32 text-foreground transition-colors duration-300"
-          style={{ backgroundColor: 'var(--background)' }}
-        >
-        <div className="relative px-6 py-12 text-center max-w-lg mx-auto overflow-hidden">
-          <motion.div
-            aria-hidden="true"
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: 1 }}
-            transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute left-6 right-6 top-3 h-px origin-left"
-            style={{ backgroundColor: primary }}
-          />
-          {/* Badge */}
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, delay: 0.08 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full border mb-6"
-            style={{
-              borderColor: `color-mix(in srgb, ${primary} 30%, transparent)`,
-              backgroundColor: `color-mix(in srgb, ${primary} 10%, transparent)`,
-            }}
-          >
-            <span
-              className="w-2 h-2 rounded-full animate-pulse"
-              style={{ backgroundColor: primary }}
-            />
-            <span
-              className="text-xs uppercase tracking-widest font-bold"
-              style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}
-            >
-              RPMTruck Plataforma
-            </span>
-          </motion.div>
+    return <HeroFallback>{children}</HeroFallback>
+  }
 
-          {/* Título */}
-          <motion.h1
-            initial={{ opacity: 0, y: 42 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.72, delay: 0.16, ease: [0.16, 1, 0.3, 1] }}
-            className="text-5xl font-black mb-4 leading-tight"
-            style={{ fontFamily: 'Rajdhani, sans-serif', color: 'var(--foreground)' }}
-          >
-            POTÊNCIA &amp;<br />
-            <span style={{ color: primary }}>CONTROLE</span><br />
-            <span style={{ fontSize: '2.2rem' }}>NA SUA FROTA</span>
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.34 }}
-            className="mb-10 text-lg font-light"
-            style={{ color: 'var(--foreground-muted)', fontFamily: 'Outfit, sans-serif' }}
-          >
-            Gerenciamento completo da sua frota de caminhões, na palma da mão.
-          </motion.p>
-
-          {/* Botões */}
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.46 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12"
-          >
-            <button
-              type="button"
-              onClick={() => router.push('/auth/solicitar-acesso')}
-              className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 text-sm font-bold uppercase tracking-widest transition-all"
-              style={{
-                backgroundColor: primary,
-                color: isLight ? '#000' : '#fff',
-                fontFamily: 'Rajdhani, sans-serif',
-                clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
-              }}
-            >
-              Solicitar Acesso →
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.push('/auth/login')}
-              className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 text-sm font-bold uppercase tracking-widest border transition-all"
-              style={{
-                borderColor: primary,
-                color: primary,
-                backgroundColor: 'transparent',
-                fontFamily: 'Rajdhani, sans-serif',
-                clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
-              }}
-            >
-              Fazer Login
-            </button>
-          </motion.div>
-        </div>
-
-        {/* Conteúdo estático (Ticker, Features, etc.) */}
-        <div className="relative z-10">{children}</div>
-        </section>
-      </MotionConfig>
-    )
+  if (!experience3DEnabled) {
+    return <HeroFallback onEnable3D={() => setExperience3DEnabled(true)}>{children}</HeroFallback>
   }
 
   // Desktop: versão com 3D (TruckScene controla o scroll inteiro)
   return (
     <MotionConfig reducedMotion="user">
       <section className="relative w-full min-h-screen" style={{ backgroundColor: 'var(--background)' }}>
-        <TruckScene>{children}</TruckScene>
+        <Suspense fallback={<HeroFallback />}>
+          <TruckScene>{children}</TruckScene>
+        </Suspense>
       </section>
     </MotionConfig>
   )

@@ -8,7 +8,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 export default function CTA() {
   const ref    = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-80px' })
-  const { primary, isLight } = useTheme()
+  const { primary } = useTheme()
 
   return (
     <section
@@ -73,7 +73,7 @@ export default function CTA() {
             style={{
               fontFamily: 'Rajdhani, sans-serif',
               backgroundColor: primary,
-              color: isLight ? '#000' : '#fff',
+              color: 'var(--primary-contrast)',
               clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
               boxShadow: `0 0 40px color-mix(in srgb, ${primary} 40%, transparent)`,
             }}

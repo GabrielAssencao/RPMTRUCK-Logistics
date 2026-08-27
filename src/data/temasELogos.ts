@@ -44,3 +44,14 @@ export function obterLogoPorTema(primary: string): string {
   const cor = normalizarCorTema(primary)
   return CORES_E_LOGOS.find(c => c.value === cor)?.logoName || LOGO_PADRAO
 }
+
+/** Retorna preto ou branco conforme o maior contraste WCAG com a cor de fundo. */
+export function obterCorDeContraste(cor: string): '#000000' | '#ffffff' {
+  const hexadecimal = normalizarCorTema(cor).slice(1)
+  const canais = [0, 2, 4].map((inicio) => Number.parseInt(hexadecimal.slice(inicio, inicio + 2), 16) / 255)
+  const [vermelho, verde, azul] = canais.map((canal) => canal <= 0.04045 ? canal / 12.92 : ((canal + 0.055) / 1.055) ** 2.4)
+  const luminancia = 0.2126 * vermelho + 0.7152 * verde + 0.0722 * azul
+  const contrastePreto = (luminancia + 0.05) / 0.05
+  const contrasteBranco = 1.05 / (luminancia + 0.05)
+  return contrastePreto >= contrasteBranco ? '#000000' : '#ffffff'
+}

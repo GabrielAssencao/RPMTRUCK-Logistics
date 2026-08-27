@@ -49,7 +49,7 @@ function Counter({ target, suffix }: { target: number; suffix: string }) {
 }
 
 export default function Stats() {
-  const { primary, isLight } = useTheme()
+  const { primary } = useTheme()
   const stats = useLandingStats()
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-50px' })
@@ -61,8 +61,8 @@ export default function Stats() {
         { value: stats.manutencoes, suffix: '', label: 'Manutenções' },
       ]
     : FALLBACK_STATS
-  const textColor = isLight ? '#000000' : '#ffffff'
-  const subtextColor = isLight ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.8)'
+  const textColor = 'var(--primary-contrast)'
+  const subtextColor = 'color-mix(in srgb, var(--primary-contrast) 78%, transparent)'
 
   return (
     <motion.section

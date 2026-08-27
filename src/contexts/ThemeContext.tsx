@@ -3,7 +3,7 @@
 // src/contexts/ThemeContext.tsx
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { CORES_E_LOGOS, COR_TEMA_PADRAO, normalizarCorTema } from '@/data/temasELogos'
+import { CORES_E_LOGOS, COR_TEMA_PADRAO, normalizarCorTema, obterCorDeContraste } from '@/data/temasELogos'
 
 interface ThemeContextType {
   primary:    string
@@ -70,6 +70,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return
     document.documentElement.style.setProperty('--primary', primary)
+    document.documentElement.style.setProperty('--primary-contrast', obterCorDeContraste(primary))
     document.documentElement.classList.toggle('light', isLight)
   }, [primary, isLight, ready])
 

@@ -56,11 +56,12 @@ export default function Navbar() {
                   key={c.value} 
                   onClick={() => setPrimary(c.value)} 
                   title={c.label}
-                  className="w-4 h-4 rounded-full transition-transform hover:scale-125 cursor-pointer"
+                  aria-label={`Selecionar tema ${c.label}`}
+                  className="h-8 w-8 rounded-full border-[7px] border-background transition-transform hover:scale-110 cursor-pointer"
                   style={{ 
                     backgroundColor: c.value, 
-                    outline: primary === c.value ? `2px solid ${c.value}` : 'none', 
-                    outlineOffset: '2px' 
+                    outline: primary === c.value ? `2px solid ${c.value}` : 'none',
+                    outlineOffset: '-4px',
                   }}
                 />
               ))}
@@ -78,7 +79,7 @@ export default function Navbar() {
                 className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs transition-transform duration-300"
                 style={{ 
                   backgroundColor: primary, 
-                  color: isLight ? '#000' : '#fff', 
+                  color: 'var(--primary-contrast)',
                   transform: isLight ? 'translateX(24px)' : 'translateX(0)' 
                 }}
               >
@@ -102,7 +103,7 @@ export default function Navbar() {
               }}
               onMouseEnter={e => {
                 e.currentTarget.style.backgroundColor = primary
-                e.currentTarget.style.color = isLight ? '#000' : '#fff'
+                e.currentTarget.style.color = 'var(--primary-contrast)'
               }}
               onMouseLeave={e => {
                 e.currentTarget.style.backgroundColor = 'transparent'
@@ -142,11 +143,12 @@ export default function Navbar() {
                 <button 
                   key={c.value} 
                   onClick={() => setPrimary(c.value)} 
-                  className="w-5 h-5 rounded-full"
+                  aria-label={`Selecionar tema ${c.label}`}
+                  className="h-8 w-8 rounded-full border-[6px] border-background"
                   style={{ 
                     backgroundColor: c.value, 
-                    outline: primary === c.value ? `2px solid ${c.value}` : 'none', 
-                    outlineOffset: '2px' 
+                    outline: primary === c.value ? `2px solid ${c.value}` : 'none',
+                    outlineOffset: '-3px',
                   }}
                 />
               ))}
