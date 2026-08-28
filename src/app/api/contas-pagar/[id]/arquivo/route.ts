@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
-import { criarUrlAssinadaContaPagar, ArquivoContaPagarError } from '@/lib/contasPagarStorage'
+import { criarUrlAssinadaContaPagar, ArquivoContaPagarError } from '@/lib/financeiro/contasPagarStorage'
 
 export async function GET(request: NextRequest, context: RouteContext<'/api/contas-pagar/[id]/arquivo'>) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'GESTAO', acao: 'LEITURA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'CONTAS_PAGAR', acao: 'LEITURA' })
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
   const limited = await applyRateLimit(request, `contas-pagar-arquivo:${auth.session.userId}`, RATE_LIMITS.REPORT_DOWNLOAD.limit, RATE_LIMITS.REPORT_DOWNLOAD.windowMs)
   if (limited) return limited

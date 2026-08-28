@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { listarPlanosComerciais } from '@/lib/planosComerciais'
+import { listarPlanosComerciais } from '@/lib/financeiro/planosComerciais'
 
 export const dynamic = 'force-dynamic'
 

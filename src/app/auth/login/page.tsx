@@ -8,7 +8,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import dynamic from 'next/dynamic'
 import TurnstileWidget from '@/components/security/TurnstileWidget'
 
-const TruckPanel = dynamic(() => import('@/app/auth/login/TruckPanel'), { ssr: false })
+const TruckPanel = dynamic(() => import('@/app/auth/login/_componentes/TruckPanel'), { ssr: false })
 
 type Tab = 'login' | 'forgot'
 

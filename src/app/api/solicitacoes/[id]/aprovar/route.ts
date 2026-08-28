@@ -5,7 +5,7 @@ import { requireAdminAuth } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PLANOS_CONFIG as PLANOS_PADRONIZADOS } from '@/utils/planos';
-import { obterPlanoComercial } from '@/lib/planosComerciais';
+import { obterPlanoComercial } from '@/lib/financeiro/planosComerciais';
 import { randomBytes } from 'crypto';
 import { executarComAuditoria } from '@/lib/auditoria';
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit';

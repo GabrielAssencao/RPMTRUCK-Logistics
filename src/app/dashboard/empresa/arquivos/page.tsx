@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Archive, CheckCircle2, Download, FileSpreadsheet, ShieldCheck, Trash2 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import ArquivosContasPagar from '@/components/dashboard/ArquivosContasPagar'
 
 type StatusArquivo = 'PRONTO_DOWNLOAD' | 'DOWNLOAD_REGISTRADO' | 'CONFIRMADO_GESTOR' | 'DADOS_PURGADOS' | 'ARQUIVO_REMOVIDO'
 
@@ -182,6 +183,7 @@ export default function ArquivosOperacionaisPage() {
           </div>
         )}
       </section>
+      <ArquivosContasPagar />
     </div>
   )
 }

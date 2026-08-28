@@ -28,6 +28,7 @@ import {
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
 import { normalizarModulos, type ModuloCodigo } from '@/utils/planos'
+import { useSessionActivity } from '@/hooks/useSessionActivity'
 
 // ─── Marcadores Operacionais do Cliente (Empresa) ─────────────────────────────
 interface NavEmpresaItem {
@@ -51,7 +52,7 @@ const NAV_EMPRESA: NavEmpresaItem[] = [
   { path: '/dashboard/empresa/motoristas', icon: Users, label: 'MOTORISTAS', modulo: 'FROTA', notificacaoModulo: 'MOTORISTAS', somenteGestor: true },
   { path: '/dashboard/empresa/containers', icon: ContainerIcon, label: 'CONTAINERS', modulo: 'FROTA', notificacaoModulo: 'CONTAINERS' },
   { path: '/dashboard/empresa/custos', icon: DollarSign, label: 'CUSTOS / DESPESAS', modulo: 'GESTAO', notificacaoModulo: 'CUSTOS' },
-  { path: '/dashboard/empresa/contas-pagar', icon: ReceiptText, label: 'CONTAS A PAGAR', modulo: 'GESTAO', notificacaoModulo: 'CONTAS_PAGAR', somenteGestor: true },
+  { path: '/dashboard/empresa/contas-pagar', icon: ReceiptText, label: 'CONTAS A PAGAR', modulo: 'CONTAS_PAGAR', notificacaoModulo: 'CONTAS_PAGAR', somenteGestor: true },
   { path: '/dashboard/empresa/tarefas', icon: ClipboardList, label: 'TAREFAS', modulo: 'TAREFAS', notificacaoModulo: 'TAREFAS' },
   { path: '/dashboard/empresa/arquivos', icon: Archive, label: 'ARQUIVO OPERACIONAL', modulo: null, notificacaoModulo: 'RELATORIOS', somenteGestor: true },
   { path: '/dashboard/empresa/relatorios', icon: FilePieChart, label: 'RELATÓRIOS', modulo: 'RELATORIOS', notificacaoModulo: 'RELATORIOS', somenteGestor: true },
@@ -78,6 +79,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
 }
 
 function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
+  useSessionActivity()
   const { primary, isLight, themeReady } = useTheme()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -328,7 +330,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
           style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}
         >
           {/* Menu Mobile Button */}
-          <button onClick={() => setMobileOpen(true)} className="md:hidden text-foreground-muted hover:text-foreground">
+          <button type="button" onClick={() => setMobileOpen(true)} aria-label="Abrir menu da empresa" aria-expanded={mobileOpen} className="md:hidden min-h-11 min-w-11 text-foreground-muted hover:text-foreground">
             <Menu size={20} />
           </button>
 
@@ -369,12 +371,17 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
             <motion.div 
               initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
               transition={{ type: 'tween', duration: 0.25 }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menu da empresa"
               className="fixed inset-y-0 left-0 w-64 z-40 md:hidden border-r"
               style={{ backgroundColor: isLight ? '#ffffff' : '#0a0a0a', borderColor: 'var(--border)' }}
             >
               <button 
+                type="button"
                 onClick={() => setMobileOpen(false)}
-                className="absolute top-4 right-4 text-foreground-muted hover:text-foreground"
+                aria-label="Fechar menu da empresa"
+                className="absolute top-4 right-4 min-h-10 min-w-10 text-foreground-muted hover:text-foreground"
               >
                 <X size={18} />
               </button>

@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { CORES_E_LOGOS } from '@/data/temasELogos'
-import SubscriptionManagement from './SubscriptionManagement'
+import SubscriptionManagement from './_componentes/SubscriptionManagement'
 import { 
   Building2, 
   Palette, 
@@ -14,6 +15,7 @@ import {
   Sun,
   Check,
   CreditCard,
+  Trash2,
 } from 'lucide-react'
 
 // As opções de cor vêm de src/data/temasELogos.ts — a MESMA fonte usada pela
@@ -200,6 +202,12 @@ export default function ConfiguracoesPage() {
                   <button className="px-4 py-2 border text-xs font-mono font-bold uppercase tracking-widest transition-colors hover:bg-white/5" style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
                     Redefinir Senha
                   </button>
+                </div>
+
+                <div className="border border-red-500/30 bg-red-500/5 p-6">
+                  <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-red-500"><Trash2 size={16} /> Exclusão de conta</h3>
+                  <p className="mt-3 text-sm text-foreground-muted">Exporte o backup completo e consulte o fluxo protegido para encerrar a conta da empresa.</p>
+                  <Link href="/dashboard/empresa/configuracoes/exclusao-conta" className="mt-4 inline-flex min-h-11 items-center border border-red-500/40 px-4 text-xs font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10">Abrir exclusão de conta</Link>
                 </div>
 
               </motion.div>

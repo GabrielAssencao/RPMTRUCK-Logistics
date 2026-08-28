@@ -3,12 +3,12 @@ import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
-import { normalizarPortalFinanceiroUrl } from '@/lib/contasPagar'
+import { normalizarPortalFinanceiroUrl } from '@/lib/financeiro/contasPagar'
 
 const schema = z.object({ nome: z.string().trim().max(80).nullable(), url: z.string().trim().max(500).nullable() }).strict()
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'GESTAO', acao: 'GESTAO' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'CONTAS_PAGAR', acao: 'GESTAO' })
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
   const limited = await applyRateLimit(request, `portal-financeiro:${auth.session.userId}`, RATE_LIMITS.ADMIN_MUTATION.limit, RATE_LIMITS.ADMIN_MUTATION.windowMs)
   if (limited) return limited

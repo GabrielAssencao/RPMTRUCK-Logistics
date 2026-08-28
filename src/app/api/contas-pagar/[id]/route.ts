@@ -4,10 +4,10 @@ import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
-import { ArquivoContaPagarError, removerArquivosContaPagar, salvarArquivoContaPagar } from '@/lib/contasPagarStorage'
+import { ArquivoContaPagarError, removerArquivosContaPagar, salvarArquivoContaPagar } from '@/lib/financeiro/contasPagarStorage'
 
 export async function PATCH(request: NextRequest, context: RouteContext<'/api/contas-pagar/[id]'>) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'GESTAO', acao: 'ESCRITA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'CONTAS_PAGAR', acao: 'ESCRITA' })
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
   const limited = await applyRateLimit(request, `contas-pagar-baixa:${auth.session.userId}`, RATE_LIMITS.FILE_UPLOAD.limit, RATE_LIMITS.FILE_UPLOAD.windowMs)
   if (limited) return limited
@@ -26,6 +26,12 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/co
       await executarComAuditoria({ usuarioId: auth.session.userId, origem: 'API' }, async (tx) => {
         const resultado = await tx.contaPagar.updateMany({ where: { id, empresaId: auth.empresaId!, status: 'PENDENTE' }, data: { status: 'CANCELADO' } })
         if (resultado.count !== 1) throw new Error('JA_PROCESSADA')
+        if (atual.historicoVeiculoId) {
+          await tx.historicoVeiculo.updateMany({
+            where: { id: atual.historicoVeiculoId, empresaId: auth.empresaId!, status: 'PENDENTE' },
+            data: { status: 'CANCELADA' },
+          })
+        }
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
       return NextResponse.json({ sucesso: true, status: 'CANCELADO' })
     }

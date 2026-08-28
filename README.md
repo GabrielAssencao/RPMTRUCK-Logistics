@@ -76,11 +76,17 @@ src/
 ├── app/
 │   ├── api/                 # fronteiras HTTP e regras de acesso
 │   ├── auth/                # login, solicitação e recuperação
-│   └── dashboard/           # ambientes admin e empresa
+│   └── dashboard/
+│       ├── admin/
+│       │   ├── _estrutura/  # layout visual e navegação do administrador
+│       │   ├── _hooks/      # estado e consultas exclusivas do administrador
+│       │   └── _modulos/    # empresas, assinaturas, segurança e solicitações
+│       └── empresa/         # módulos operacionais da transportadora
 ├── components/              # UI, dashboard, landing e segurança
 ├── contexts/                # estado compartilhado da interface
 ├── hooks/                   # integrações reutilizáveis da UI
-├── lib/                     # autenticação, banco, segurança e serviços
+├── lib/
+│   └── financeiro/          # planos, faturamento e contas a pagar
 ├── proxy.ts                 # proteção inicial e CSP por requisição
 └── utils/                   # exportação e utilidades de domínio
 
@@ -93,6 +99,11 @@ public/                      # ativos efetivamente servidos ao navegador
 scripts/                     # criptografia e rotação de dados
 tests/                       # regressões de segurança e contratos de formulários
 ```
+
+Pastas iniciadas por `_` dentro do App Router guardam implementação privada da
+rota e nunca fazem parte da URL. Componentes e utilidades usados por apenas uma
+tela permanecem próximos dela; código compartilhado entre APIs e telas fica em
+`src/lib`, `src/components`, `src/hooks` ou `src/contexts`.
 
 ## Papéis e autorização
 
@@ -112,7 +123,8 @@ são fonte de autoridade.
 
 Capacidades técnicas ficam versionadas em `src/utils/planos.ts`; preços e
 visibilidade comercial ficam no catálogo `planos_comerciais`, editável pelo
-administrador.
+administrador. `CONTAS_PAGAR` é um módulo independente: o Superadmin pode
+habilitá-lo ou revogá-lo sem alterar o acesso a custos e indicadores de gestão.
 
 | Plano | Usuários base | Veículos base | Histórico | Recursos adicionais |
 | --- | ---: | ---: | ---: | --- |
@@ -245,8 +257,12 @@ navegador pelo SDK do Supabase.
 O bucket `contas-pagar` aceita PDF, JPG, PNG e WebP de até 5 MB. O banco guarda
 somente os caminhos internos; boletos e comprovantes são liberados pelo backend
 por URLs assinadas de 60 segundos. A leitura automática usa apenas a camada de
-texto do PDF no dispositivo do usuário e sempre exige conferência humana. O
-RPMTRUCK não inicia nem autoriza transações bancárias.
+texto do PDF no dispositivo do usuário, pode ser desativada por preferência e
+sempre exige ateste humano explícito. A categoria opcional `MANUTENCAO` cria, em
+uma única transação, a conta e uma manutenção pendente do veículo da mesma
+empresa. PDFs sem camada de texto permanecem no fluxo manual para não adicionar
+um motor OCR pesado ao carregamento móvel. O RPMTRUCK não inicia nem autoriza
+transações bancárias.
 
 `relatorios-privados` aceita PDF, XLS, XLSX ou CSV de até 10 MB. Arquivos gerados
 recebem checksum SHA-256, período, tamanho e ciclo de retenção. Downloads usam
@@ -275,6 +291,24 @@ cobrem:
 - índices de desempenho, criptografia, redação de logs e eventos;
 - catálogo comercial e solicitações de assinatura.
 - senha temporária expiráveis e troca obrigatória no primeiro acesso.
+- módulo independente de contas a pagar, vínculo transacional com manutenção e
+  trabalho recuperável para limpeza de Storage na exclusão da empresa.
+
+### Exportação e exclusão da empresa
+
+O gestor encontra o fluxo em
+`/dashboard/empresa/configuracoes/exclusao-conta`. A exportação `.xlsx` é gerada
+na memória e entregue diretamente ao navegador; ela não é persistida no
+Storage. Um comprovante assinado, válido por 15 minutos e vinculado ao usuário e
+à empresa, é exigido junto com a senha atual e a frase de confirmação. Senhas,
+hashes de autenticação e segredos técnicos nunca entram no Excel.
+
+Banco e Storage não compartilham transação. Por isso, o expurgo cria um registro
+técnico sem relação de cascade antes de remover a empresa. Se o banco for
+apagado e a remoção dos buckets falhar, o job preserva somente os caminhos
+opacos necessários para nova tentativa e é limpo quando o Storage termina.
+Esse recurso deve ser usado conforme a política de retenção e após avaliação das
+hipóteses de conservação do art. 16 da LGPD.
 
 Em desenvolvimento, crie migrations com `npx prisma migrate dev`. Em produção,
 use somente:

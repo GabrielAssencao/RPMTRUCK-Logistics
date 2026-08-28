@@ -10,7 +10,7 @@ import dynamic from 'next/dynamic'
 import TurnstileWidget from '@/components/security/TurnstileWidget'
 
 // ─── Importa o Canvas 3D apenas no cliente ─────────────────────────────────────
-const TruckPanel = dynamic(() => import('@/app/auth/login/TruckPanel'), { ssr: false })
+const TruckPanel = dynamic(() => import('@/app/auth/login/_componentes/TruckPanel'), { ssr: false })
 
 export default function ResetPage() {
   const { primary, isLight } = useTheme()

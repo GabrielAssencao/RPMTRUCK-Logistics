@@ -21,6 +21,7 @@ export {
 
 type SessionInput = Omit<SessionPayload, 'iat' | 'exp'>
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000
+const ACTIVITY_WRITE_INTERVAL_MS = 60 * 1000
 const activityWrites = new Map<string, number>()
 
 export async function createSession(payload: SessionInput, expiresAt = new Date(Date.now() + SESSION_DURATION_MS)) {
@@ -101,11 +102,11 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
   if (tokenSession.sessionId) {
     const agora = Date.now()
     const ultimaEscrita = activityWrites.get(tokenSession.sessionId) || 0
-    if (agora - ultimaEscrita >= 5 * 60 * 1000) {
+    if (agora - ultimaEscrita >= ACTIVITY_WRITE_INTERVAL_MS) {
       await prisma.sessaoUsuario.updateMany({
         where: {
           id: tokenSession.sessionId,
-          ultimaAtividade: { lt: new Date(agora - 5 * 60 * 1000) },
+          ultimaAtividade: { lt: new Date(agora - ACTIVITY_WRITE_INTERVAL_MS) },
           revogadaEm: null,
         },
         data: { ultimaAtividade: new Date(agora) },

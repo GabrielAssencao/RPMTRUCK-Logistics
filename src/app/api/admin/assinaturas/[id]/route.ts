@@ -1,14 +1,14 @@
 import { Prisma } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { calcularPropostaAssinatura, valoresIguaisEmCentavos } from '@/lib/assinaturas'
+import { calcularPropostaAssinatura, valoresIguaisEmCentavos } from '@/lib/financeiro/assinaturas'
 import { requireAdminAuth } from '@/lib/auth'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { textoOperacional, valorMonetarioSchema } from '@/lib/domainValidation'
-import { obterPlanoComercial } from '@/lib/planosComerciais'
+import { obterPlanoComercial } from '@/lib/financeiro/planosComerciais'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { obterModulosPadrao } from '@/utils/planos'
-import { sincronizarCobrancaEmpresa } from '@/lib/faturamentoAdmin'
+import { sincronizarCobrancaEmpresa } from '@/lib/financeiro/faturamentoAdmin'
 
 const decidirSchema = z.object({
   decisao: z.enum(['APROVAR', 'REJEITAR']),

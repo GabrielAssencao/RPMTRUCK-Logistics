@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { calcularPropostaAssinatura } from '@/lib/assinaturas'
+import { calcularPropostaAssinatura } from '@/lib/financeiro/assinaturas'
 import { requireAdminAuth } from '@/lib/auth'
-import { listarPlanosComerciais } from '@/lib/planosComerciais'
+import { listarPlanosComerciais } from '@/lib/financeiro/planosComerciais'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 

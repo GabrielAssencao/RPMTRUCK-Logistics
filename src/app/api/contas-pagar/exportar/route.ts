@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { decryptSensitive } from '@/lib/fieldEncryption'
 import { prisma } from '@/lib/prisma'
-import { CAPACIDADES_CONTAS_PAGAR } from '@/lib/contasPagar'
+import { CAPACIDADES_CONTAS_PAGAR } from '@/lib/financeiro/contasPagar'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 
 function csv(valor: unknown) {
@@ -10,7 +10,7 @@ function csv(valor: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'GESTAO', acao: 'GESTAO' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'CONTAS_PAGAR', acao: 'GESTAO' })
   if (auth.error || !auth.session || !auth.empresa) return NextResponse.json({ erro: auth.error }, { status: auth.status })
   if (!CAPACIDADES_CONTAS_PAGAR[auth.empresa.plano].exportacaoLote) return NextResponse.json({ erro: 'A exportação em lote está disponível no plano Enterprise.' }, { status: 403 })
   const limited = await applyRateLimit(request, `contas-pagar-export:${auth.session.userId}`, RATE_LIMITS.REPORT_GENERATE.limit, RATE_LIMITS.REPORT_GENERATE.windowMs)

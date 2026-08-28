@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
-import { diasAteVencimento, nivelVencimento } from '@/lib/contasPagar'
+import { diasAteVencimento, nivelVencimento } from '@/lib/financeiro/contasPagar'
 
 const CATEGORIAS_GRAFICO = ['COMBUSTIVEL', 'MANUTENCAO', 'PEDAGIO'] as const
 type CategoriaGrafico = typeof CATEGORIAS_GRAFICO[number]
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
         orderBy: { nome: 'asc' as const },
       })
     : Promise.resolve([])
-  const contasPendentesPromise = gestor && auth.empresa.modulos.includes('GESTAO')
+  const contasPendentesPromise = gestor && auth.empresa.modulos.includes('CONTAS_PAGAR')
     ? prisma.contaPagar.findMany({
         where: { empresaId, status: 'PENDENTE' },
         select: { id: true, descricao: true, fornecedor: true, vencimento: true, valor: true },

@@ -95,6 +95,9 @@ export default function PrivacyPage() {
         <p className="mt-4">
           Após o encerramento ou uma solicitação válida, os dados serão eliminados, anonimizados ou devolvidos, salvo quando a conservação for permitida ou exigida por lei. Backups seguem seu ciclo técnico de sobrescrita e permanecem protegidos enquanto existirem.
         </p>
+        <p className="mt-4">
+          O gestor da empresa pode acessar Configurações &gt; Exclusão de conta. O fluxo gera primeiro um arquivo Excel com os dados vinculados à empresa e exige confirmação do download, senha atual e frase de segurança antes do expurgo. A exportação não inclui senhas, hashes de autenticação ou segredos técnicos. Antes de utilizar a exclusão, o cliente deve avaliar obrigações fiscais, trabalhistas, contratuais e regulatórias que possam autorizar ou exigir conservação nos termos do art. 16 da LGPD.
+        </p>
       </section>
 
       <section>

@@ -13,7 +13,7 @@ import {
   PLANOS,
   STATUS_EMPRESA,
 } from '@/utils/planos'
-import { sincronizarCobrancaEmpresa } from '@/lib/faturamentoAdmin'
+import { sincronizarCobrancaEmpresa } from '@/lib/financeiro/faturamentoAdmin'
 
 const atualizarEmpresaSchema = z.object({
   plano: z.enum(PLANOS).optional(),

@@ -33,7 +33,6 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "src/app/admin/hooks/useAdminData.js",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [

@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Building2, Check, Copy, Download, ExternalLink, FileText, Plus, ReceiptText, Upload, X } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
-import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel } from '@/lib/contasPagar'
-import { lerBoletoPdfLocalmente } from '@/utils/leituraBoletoPdf'
+import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel } from '@/lib/financeiro/contasPagar'
+import { lerBoletoPdfLocalmente } from './_utils/leituraBoletoPdf'
 
 interface Conta {
   id: string; descricao: string; fornecedor: string | null; vencimento: string; valor: number
@@ -15,10 +15,11 @@ interface Conta {
 }
 interface Capacidades { leituraAutomatica: boolean; alertasVisuais: boolean; copiarEAbrirPortal: boolean; exportacaoLote: boolean }
 interface Portal { nome: string; url: string }
+interface VeiculoResumo { id: string; modelo: string; placa: string }
 
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 const hoje = new Date().toISOString().slice(0, 10)
-const estadoInicial = { descricao: '', fornecedor: '', vencimento: hoje, valor: '', linhaDigitavel: '', origemLeitura: 'MANUAL', revisado: false }
+const estadoInicial = { descricao: '', fornecedor: '', vencimento: hoje, valor: '', linhaDigitavel: '', origemLeitura: 'MANUAL', revisado: false, categoria: '', veiculoId: '' }
 
 export default function ContasPagarPage() {
   const { primary } = useTheme()
@@ -31,6 +32,8 @@ export default function ContasPagarPage() {
   const [abrirCadastro, setAbrirCadastro] = useState(false)
   const [form, setForm] = useState(estadoInicial)
   const [boleto, setBoleto] = useState<File | null>(null)
+  const [preenchimentoAutomatico, setPreenchimentoAutomatico] = useState(true)
+  const [veiculos, setVeiculos] = useState<VeiculoResumo[]>([])
   const [lendoPdf, setLendoPdf] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [baixando, setBaixando] = useState<Conta | null>(null)
@@ -56,7 +59,31 @@ export default function ContasPagarPage() {
     }
   }, [])
 
-  useEffect(() => { queueMicrotask(() => void carregar()) }, [carregar])
+  useEffect(() => {
+    queueMicrotask(() => {
+      const preferencia = localStorage.getItem('@rpmtruck:autoFillBoletoEnabled')
+      setPreenchimentoAutomatico(preferencia !== 'false')
+      void carregar()
+    })
+    void fetch('/api/veiculos', { cache: 'no-store' })
+      .then(async (response) => response.ok ? response.json() : [])
+      .then((data) => setVeiculos(Array.isArray(data) ? data.map((item) => ({ id: item.id, modelo: item.modelo, placa: item.placa })) : []))
+      .catch(() => undefined)
+  }, [carregar])
+
+  const alternarPreenchimentoAutomatico = (ativado: boolean) => {
+    setPreenchimentoAutomatico(ativado)
+    localStorage.setItem('@rpmtruck:autoFillBoletoEnabled', String(ativado))
+    if (!ativado) setForm((atual) => ({ ...atual, origemLeitura: 'MANUAL', revisado: false }))
+  }
+
+  const atualizarCampoAuditado = <K extends keyof typeof estadoInicial>(campo: K, valor: (typeof estadoInicial)[K]) => {
+    setForm((atual) => ({
+      ...atual,
+      [campo]: valor,
+      revisado: atual.origemLeitura === 'MANUAL' ? atual.revisado : false,
+    }))
+  }
 
   const pendentes = contas.filter((conta) => conta.status === 'PENDENTE')
   const exibidas = contas.filter((conta) => filtro === 'TODOS' || conta.status === filtro)
@@ -71,7 +98,7 @@ export default function ContasPagarPage() {
     if (!arquivo) return setBoleto(null)
     if (arquivo.size > CONTA_PAGAR_MAX_FILE_BYTES) return setFeedback('O boleto deve ter no máximo 5 MB.')
     setBoleto(arquivo)
-    if (arquivo.type !== 'application/pdf' || !capacidades?.leituraAutomatica) return
+    if (arquivo.type !== 'application/pdf' || !capacidades?.leituraAutomatica || !preenchimentoAutomatico) return
     setLendoPdf(true)
     try {
       const dados = await lerBoletoPdfLocalmente(arquivo)
@@ -80,6 +107,7 @@ export default function ContasPagarPage() {
         linhaDigitavel: dados.linhaDigitavel || atual.linhaDigitavel,
         vencimento: dados.vencimento || atual.vencimento,
         valor: dados.valor || atual.valor,
+        fornecedor: dados.fornecedor || atual.fornecedor,
         origemLeitura: 'PDF_TEXTO',
         revisado: false,
       }))
@@ -97,12 +125,13 @@ export default function ContasPagarPage() {
     event.preventDefault()
     if (submitRef.current) return
     if (form.origemLeitura !== 'MANUAL' && !form.revisado) return setFeedback('Confirme que você comparou os dados extraídos com o boleto.')
+    if (form.categoria === 'MANUTENCAO' && !form.veiculoId) return setFeedback('Selecione o veículo relacionado à manutenção.')
     submitRef.current = true
     setEnviando(true)
     setFeedback('')
     try {
       const body = new FormData()
-      Object.entries(form).forEach(([chave, valor]) => { if (chave !== 'revisado') body.set(chave, String(valor)) })
+      Object.entries(form).forEach(([chave, valor]) => body.set(chave, String(valor)))
       if (boleto) body.set('boleto', boleto)
       const response = await fetch('/api/contas-pagar', { method: 'POST', body })
       const data = await response.json()
@@ -179,7 +208,40 @@ export default function ContasPagarPage() {
         <div className="grid gap-3 xl:grid-cols-2">{exibidas.map((conta) => <ContaCard key={conta.id} conta={conta} capacidades={capacidades!} portal={portal} primary={primary} onCopiar={() => void copiarLinha(conta)} onArquivo={(tipo) => void abrirArquivo(conta.id, tipo)} onBaixar={() => setBaixando(conta)} />)}</div>
       )}
 
-      {abrirCadastro && <Modal titulo="Cadastrar conta a pagar" onClose={() => !enviando && setAbrirCadastro(false)}><form onSubmit={cadastrar} className="space-y-4"><div className="grid gap-3 sm:grid-cols-2"><Campo label="Descrição *"><input required maxLength={160} value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} className="input-financeiro" /></Campo><Campo label="Fornecedor"><input maxLength={160} value={form.fornecedor} onChange={(e) => setForm({ ...form, fornecedor: e.target.value })} className="input-financeiro" /></Campo><Campo label="Vencimento *"><input type="date" required value={form.vencimento} onChange={(e) => setForm({ ...form, vencimento: e.target.value })} className="input-financeiro" /></Campo><Campo label="Valor *"><input type="number" inputMode="decimal" step="0.01" min="0.01" max="999999999.99" required value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} className="input-financeiro" /></Campo></div><Campo label="Linha digitável (47/48 dígitos)"><input inputMode="numeric" maxLength={64} value={formatarLinhaDigitavel(form.linhaDigitavel)} onChange={(e) => setForm({ ...form, linhaDigitavel: e.target.value, origemLeitura: 'MANUAL', revisado: false })} className="input-financeiro font-mono" /></Campo><Campo label="Boleto (PDF/JPG/PNG/WebP, até 5 MB)"><label className="flex min-h-12 cursor-pointer items-center justify-center border border-dashed px-3 text-center text-xs" style={{ borderColor: 'var(--border)' }}><Upload size={15} className="mr-2" />{lendoPdf ? 'Lendo PDF localmente...' : boleto?.name ?? 'Selecionar arquivo'}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => void selecionarBoleto(e.target.files?.[0] ?? null)} /></label></Campo>{capacidades?.leituraAutomatica ? <p className="text-[11px] text-foreground-muted">PDFs com camada de texto são lidos apenas no seu dispositivo. PDFs escaneados exigem preenchimento manual.</p> : <p className="border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] text-amber-500">No Essencial, o boleto pode ser anexado, mas a leitura automática fica disponível a partir do Avançado.</p>}{form.origemLeitura !== 'MANUAL' && <label className="flex items-start gap-2 border border-amber-500/30 p-3 text-xs"><input type="checkbox" checked={form.revisado} onChange={(e) => setForm({ ...form, revisado: e.target.checked })} className="mt-0.5" /><span>Comparei beneficiário, vencimento, valor e linha digitável com o documento original.</span></label>}<button disabled={enviando || lendoPdf} className="min-h-12 w-full text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}>{enviando ? 'Salvando...' : 'Salvar conta'}</button></form></Modal>}
+      {abrirCadastro && (
+        <Modal titulo="Cadastrar conta a pagar" onClose={() => !enviando && setAbrirCadastro(false)}>
+          <form onSubmit={cadastrar} className="space-y-4">
+            {capacidades?.leituraAutomatica && (
+              <label className="flex items-center justify-between gap-4 border p-3" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+                <span><strong className="block text-xs uppercase">Preenchimento automático</strong><span className="mt-1 block text-[11px] text-foreground-muted">Ler dados da camada de texto do PDF neste dispositivo.</span></span>
+                <input type="checkbox" role="switch" checked={preenchimentoAutomatico} onChange={(event) => alternarPreenchimentoAutomatico(event.target.checked)} className="h-5 w-5 accent-current" style={{ color: primary }} />
+              </label>
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo label="Descrição *"><input required maxLength={160} value={form.descricao} onChange={(e) => atualizarCampoAuditado('descricao', e.target.value)} className="input-financeiro" /></Campo>
+              <Campo label="Beneficiário / fornecedor"><input maxLength={160} value={form.fornecedor} onChange={(e) => atualizarCampoAuditado('fornecedor', e.target.value)} className="input-financeiro" /></Campo>
+              <Campo label="Vencimento *"><input type="date" required value={form.vencimento} onChange={(e) => atualizarCampoAuditado('vencimento', e.target.value)} className="input-financeiro" /></Campo>
+              <Campo label="Valor *"><input type="number" inputMode="decimal" step="0.01" min="0.01" max="999999999.99" required value={form.valor} onChange={(e) => atualizarCampoAuditado('valor', e.target.value)} className="input-financeiro" /></Campo>
+              <Campo label="Categoria opcional">
+                <select value={form.categoria} onChange={(event) => setForm({ ...form, categoria: event.target.value, veiculoId: event.target.value === 'MANUTENCAO' ? form.veiculoId : '' })} className="input-financeiro">
+                  <option value="">Sem integração operacional</option>
+                  <option value="MANUTENCAO">Manutenção da frota</option>
+                </select>
+              </Campo>
+              {form.categoria === 'MANUTENCAO' && <Campo label="Veículo da manutenção *"><select required value={form.veiculoId} onChange={(event) => setForm({ ...form, veiculoId: event.target.value })} className="input-financeiro"><option value="">Selecione</option>{veiculos.map((veiculo) => <option key={veiculo.id} value={veiculo.id}>{veiculo.modelo} · {veiculo.placa}</option>)}</select></Campo>}
+            </div>
+
+            <Campo label="Código de barras / linha digitável (44, 47 ou 48 dígitos)"><input inputMode="numeric" maxLength={64} value={formatarLinhaDigitavel(form.linhaDigitavel)} onChange={(e) => atualizarCampoAuditado('linhaDigitavel', e.target.value)} className="input-financeiro font-mono" /></Campo>
+            <Campo label="Boleto (PDF/JPG/PNG/WebP, até 5 MB)"><label className="flex min-h-12 cursor-pointer items-center justify-center border border-dashed px-3 text-center text-xs" style={{ borderColor: 'var(--border)' }}><Upload size={15} className="mr-2" />{lendoPdf ? 'Lendo PDF localmente...' : boleto?.name ?? 'Selecionar arquivo'}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => void selecionarBoleto(e.target.files?.[0] ?? null)} /></label></Campo>
+
+            {capacidades?.leituraAutomatica ? <p className="text-[11px] text-foreground-muted">A leitura automática é local e opcional. PDFs escaneados sem camada de texto permanecem disponíveis para preenchimento manual.</p> : <p className="border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] text-amber-500">No Essencial, o boleto pode ser anexado, mas a leitura automática fica disponível a partir do Avançado.</p>}
+            {form.categoria === 'MANUTENCAO' && <p className="border border-blue-500/30 bg-blue-500/5 p-3 text-[11px] text-blue-400">Ao salvar, uma manutenção pendente será criada para o veículo selecionado. Sem categoria, a conta não altera módulos operacionais.</p>}
+            {form.origemLeitura !== 'MANUAL' && <label className="flex items-start gap-2 border border-amber-500/30 p-3 text-xs"><input type="checkbox" checked={form.revisado} onChange={(e) => setForm({ ...form, revisado: e.target.checked })} className="mt-0.5" /><span><strong className="block">Verifique e ateste que os dados preenchidos estão corretos antes de concluir.</strong> Comparei beneficiário, vencimento, valor e código com o documento original.</span></label>}
+            <button disabled={enviando || lendoPdf || (form.origemLeitura !== 'MANUAL' && !form.revisado)} className="min-h-12 w-full text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}>{enviando ? 'Salvando...' : 'Salvar conta'}</button>
+          </form>
+        </Modal>
+      )}
 
       {baixando && <Modal titulo="Confirmar pagamento" onClose={() => !enviando && setBaixando(null)}><div className="space-y-4"><p className="text-sm"><strong>{baixando.descricao}</strong><br /><span className="text-foreground-muted">{moeda.format(baixando.valor)} · vencimento {new Date(`${baixando.vencimento}T12:00:00`).toLocaleDateString('pt-BR')}</span></p><p className="border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-500">Esta ação não movimenta dinheiro. Confirme somente depois de autorizar a operação no banco.</p><Campo label="Comprovante obrigatório (até 5 MB)"><input type="file" required accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setComprovante(e.target.files?.[0] ?? null)} className="input-financeiro file:mr-3 file:border-0 file:bg-transparent file:text-xs file:font-bold" /></Campo><button type="button" disabled={!comprovante || enviando} onClick={() => void confirmarBaixa()} className="min-h-12 w-full text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}><Check size={15} className="mr-2 inline" />{enviando ? 'Confirmando...' : 'Confirmar baixa'}</button></div></Modal>}
 
@@ -190,7 +252,7 @@ export default function ContasPagarPage() {
 
 function Resumo({ label, valor, cor }: { label: string; valor: string; cor: string }) { return <div className="min-w-0 border p-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}><p className="text-[9px] font-black uppercase tracking-widest text-foreground-muted">{label}</p><p className="mt-2 truncate font-rajdhani text-xl font-black" style={{ color: cor }}>{valor}</p></div> }
 function Campo({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider">{label}</span>{children}</label> }
-function Modal({ titulo, onClose, children }: { titulo: string; onClose: () => void; children: React.ReactNode }) { return <div className="fixed inset-0 z-70 flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-4"><div role="dialog" aria-modal="true" aria-label={titulo} className="max-h-[92dvh] w-full overflow-y-auto border p-4 sm:max-w-2xl sm:p-6" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}><div className="mb-5 flex items-center justify-between gap-4"><h2 className="font-rajdhani text-xl font-black uppercase">{titulo}</h2><button type="button" onClick={onClose} aria-label="Fechar" className="min-h-10 min-w-10 border" style={{ borderColor: 'var(--border)' }}><X size={17} className="mx-auto" /></button></div>{children}</div></div> }
+function Modal({ titulo, onClose, children }: { titulo: string; onClose: () => void; children: React.ReactNode }) { return <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-4"><div role="dialog" aria-modal="true" aria-label={titulo} className="max-h-[92dvh] w-full overflow-y-auto border p-4 sm:max-w-2xl sm:p-6" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}><div className="mb-5 flex items-center justify-between gap-4"><h2 className="font-rajdhani text-xl font-black uppercase">{titulo}</h2><button type="button" onClick={onClose} aria-label="Fechar" className="min-h-10 min-w-10 border" style={{ borderColor: 'var(--border)' }}><X size={17} className="mx-auto" /></button></div>{children}</div></div> }
 function ContaCard({ conta, capacidades, portal, primary, onCopiar, onArquivo, onBaixar }: { conta: Conta; capacidades: Capacidades; portal: Portal | null; primary: string; onCopiar: () => void; onArquivo: (tipo: 'boleto' | 'comprovante') => void; onBaixar: () => void }) {
   const cores = capacidades.alertasVisuais ? { VERDE: '#22c55e', AMARELO: '#f59e0b', VERMELHO: '#ef4444' } : { VERDE: primary, AMARELO: primary, VERMELHO: primary }
   const prazo = conta.status !== 'PENDENTE' ? conta.status : conta.diasParaVencer < 0 ? `Vencida há ${Math.abs(conta.diasParaVencer)} dia(s)` : conta.diasParaVencer === 0 ? 'Vence hoje' : `Vence em ${conta.diasParaVencer} dia(s)`

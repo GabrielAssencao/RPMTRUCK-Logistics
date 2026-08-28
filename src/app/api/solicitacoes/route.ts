@@ -10,7 +10,7 @@ import { PLANOS_CONFIG } from '@/utils/planos';
 import { executarComAuditoria } from '@/lib/auditoria';
 import { verifyBotToken } from '@/lib/botProtection';
 import { recordSecurityEvent } from '@/lib/securityEvents';
-import { obterPlanoComercial } from '@/lib/planosComerciais';
+import { obterPlanoComercial } from '@/lib/financeiro/planosComerciais';
 
 const solicitacaoSchema = z.object({
   empresa: nomeOperacional(2, 150),

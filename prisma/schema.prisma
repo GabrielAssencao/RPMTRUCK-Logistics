@@ -67,6 +67,10 @@ enum StatusContaPagar {
   CANCELADO
 }
 
+enum CategoriaContaPagar {
+  MANUTENCAO
+}
+
 enum OrigemLeituraBoleto {
   MANUAL
   PDF_TEXTO
@@ -184,7 +188,7 @@ model Empresa {
   portal_financeiro_url  String? @map("portal_financeiro_url")
 
   // Módulos ativos
-  modulos String[] @default(["FROTA", "GESTAO", "NOTIFICACOES"])
+  modulos String[] @default(["FROTA", "GESTAO", "CONTAS_PAGAR", "NOTIFICACOES"])
 
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
@@ -291,6 +295,7 @@ model Veiculo {
   notificacoes           Notificacao[]
   containers             Container[]
   leituras_quilometragem LeituraQuilometragem[]
+  contas_pagar           ContaPagar[]
 
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
@@ -354,6 +359,7 @@ model HistoricoVeiculo {
 
   relatorioArquivoId String?
   relatorioArquivo   RelatorioArquivo? @relation(fields: [relatorioArquivoId], references: [id], onDelete: Restrict)
+  contaPagar         ContaPagar?
 
   criado_em DateTime @default(now())
 
@@ -560,14 +566,15 @@ model Fatura {
 }
 
 model ContaPagar {
-  id                  String              @id @default(uuid())
+  id                  String               @id @default(uuid())
   descricao           String
   fornecedor          String?
-  vencimento          DateTime            @db.Date
-  valor               Decimal             @db.Decimal(12, 2)
-  status              StatusContaPagar    @default(PENDENTE)
+  vencimento          DateTime             @db.Date
+  valor               Decimal              @db.Decimal(12, 2)
+  status              StatusContaPagar     @default(PENDENTE)
   linha_digitavel     String?
-  origem_leitura      OrigemLeituraBoleto @default(MANUAL)
+  origem_leitura      OrigemLeituraBoleto  @default(MANUAL)
+  categoria           CategoriaContaPagar?
   boleto_path         String?
   boleto_nome         String?
   boleto_mime         String?
@@ -577,8 +584,8 @@ model ContaPagar {
   comprovante_mime    String?
   comprovante_tamanho Int?
   pago_em             DateTime?
-  criado_em           DateTime            @default(now())
-  atualizado_em       DateTime            @updatedAt
+  criado_em           DateTime             @default(now())
+  atualizado_em       DateTime             @updatedAt
 
   empresaId String
   empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
@@ -589,10 +596,18 @@ model ContaPagar {
   pagoPorId String?  @map("pago_por_id")
   pagoPor   Usuario? @relation("ContasPagarBaixadasPor", fields: [pagoPorId], references: [id], onDelete: SetNull)
 
+  veiculoId String?
+  veiculo   Veiculo? @relation(fields: [veiculoId], references: [id], onDelete: SetNull)
+
+  historicoVeiculoId String?           @unique @map("historico_veiculo_id")
+  historicoVeiculo   HistoricoVeiculo? @relation(fields: [historicoVeiculoId], references: [id], onDelete: SetNull)
+
   @@index([empresaId, status, vencimento])
   @@index([empresaId, criado_em])
   @@index([criadoPorId])
   @@index([pagoPorId])
+  @@index([empresaId, categoria, vencimento])
+  @@index([veiculoId])
   @@map("contas_pagar")
 }
 
@@ -721,6 +736,22 @@ model AuditoriaLog {
   @@index([tabela, registroId, criadoEm])
   @@index([usuarioId, criadoEm])
   @@map("auditoria_logs")
+}
+
+model ExclusaoEmpresaJob {
+  id              String    @id @default(uuid())
+  empresaId       String    @map("empresa_id")
+  solicitadoPorId String    @map("solicitado_por_id")
+  status          String    @default("PREPARADO")
+  arquivos        Json
+  erro            String?
+  criadoEm        DateTime  @default(now()) @map("criado_em")
+  atualizadoEm    DateTime  @updatedAt @map("atualizado_em")
+  concluidoEm     DateTime? @map("concluido_em")
+
+  @@index([status, atualizadoEm])
+  @@index([empresaId, criadoEm])
+  @@map("exclusoes_empresa_jobs")
 }
 
 model SessaoUsuario {

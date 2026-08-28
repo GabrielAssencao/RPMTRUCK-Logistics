@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { normalizarModulos } from '@/utils/planos'
-import { calcularMensalidadePorCatalogo, listarPlanosComerciais } from '@/lib/planosComerciais'
+import { calcularMensalidadePorCatalogo, listarPlanosComerciais } from '@/lib/financeiro/planosComerciais'
 import { exposeEmpresa } from '@/lib/fieldEncryption'
 
 export const dynamic = 'force-dynamic'

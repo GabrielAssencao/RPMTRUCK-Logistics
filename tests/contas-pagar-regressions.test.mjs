@@ -20,17 +20,18 @@ test('contas a pagar permanecem isoladas pela empresa autenticada', () => {
 
 test('linha digitável é validada e criptografada antes da persistência', () => {
   const route = read('src/app/api/contas-pagar/route.ts')
-  const domain = read('src/lib/contasPagar.ts')
+  const domain = read('src/lib/financeiro/contasPagar.ts')
 
   assert.match(route, /linhaDigitavelValida\(linha\)/)
   assert.match(route, /encryptSensitive\(linha, auth\.empresaId!, 'contaPagar\.linhaDigitavel'\)/)
   assert.match(domain, /linha\.length === 47/)
+  assert.match(domain, /linha\.length === 44/)
   assert.match(domain, /linha\.length === 48 && linha\.startsWith\('8'\)/)
 })
 
 test('upload é limitado no cliente e no servidor e valida assinatura do conteúdo', () => {
   const page = read('src/app/dashboard/empresa/contas-pagar/page.tsx')
-  const storage = read('src/lib/contasPagarStorage.ts')
+  const storage = read('src/lib/financeiro/contasPagarStorage.ts')
 
   assert.match(page, /CONTA_PAGAR_MAX_FILE_BYTES/)
   assert.match(storage, /arquivo\.size <= 0 \|\| arquivo\.size > CONTA_PAGAR_MAX_FILE_BYTES/)
@@ -49,7 +50,7 @@ test('baixa exige comprovante e possui claim atômico contra concorrência', () 
 
 test('bucket financeiro é privado e acessado por URL assinada curta', () => {
   const migration = read('prisma/migrations/20260828010000_contas_pagar_e_baixa_faturas/migration.sql')
-  const storage = read('src/lib/contasPagarStorage.ts')
+  const storage = read('src/lib/financeiro/contasPagarStorage.ts')
 
   assert.match(migration, /'contas-pagar'[\s\S]*false,[\s\S]*5242880/)
   assert.match(storage, /createSignedUrl\(caminho, 60\)/)
@@ -57,7 +58,7 @@ test('bucket financeiro é privado e acessado por URL assinada curta', () => {
 
 test('troca de plano sincroniza cobrança no servidor sem alterar faturas pagas', () => {
   const company = read('src/app/api/empresas/[id]/route.ts')
-  const billing = read('src/lib/faturamentoAdmin.ts')
+  const billing = read('src/lib/financeiro/faturamentoAdmin.ts')
   const invoice = read('src/app/api/faturas/[id]/route.ts')
 
   assert.match(company, /sincronizarCobrancaEmpresa\(tx/)
@@ -68,10 +69,42 @@ test('troca de plano sincroniza cobrança no servidor sem alterar faturas pagas'
 })
 
 test('portal financeiro aceita somente HTTPS e não armazena credenciais bancárias', () => {
-  const domain = read('src/lib/contasPagar.ts')
+  const domain = read('src/lib/financeiro/contasPagar.ts')
   const route = read('src/app/api/empresa/portal-financeiro/route.ts')
 
   assert.match(domain, /url\.protocol !== 'https:'/)
   assert.match(route, /portal_financeiro_url/)
   assert.doesNotMatch(route, /senha|password|token/i)
+})
+
+test('módulo de contas a pagar é autorizado independentemente de gestão', () => {
+  const collection = read('src/app/api/contas-pagar/route.ts')
+  const item = read('src/app/api/contas-pagar/[id]/route.ts')
+  const plans = read('src/utils/planos.ts')
+
+  assert.match(collection, /modulo: 'CONTAS_PAGAR'/)
+  assert.match(item, /modulo: 'CONTAS_PAGAR'/)
+  assert.match(plans, /'CONTAS_PAGAR'/)
+})
+
+test('leitura automática exige ateste no servidor e integração de manutenção é multiempresa', () => {
+  const route = read('src/app/api/contas-pagar/route.ts')
+
+  assert.match(route, /origemLeitura !== 'MANUAL' && !parsed\.data\.revisado/)
+  assert.match(route, /where: \{ id: parsed\.data\.veiculoId, empresaId: auth\.empresaId! \}/)
+  assert.match(route, /tx\.historicoVeiculo\.create/)
+  assert.match(route, /TransactionIsolationLevel\.Serializable/)
+})
+
+test('exclusão da empresa exige backup assinado, reautenticação e limpeza recuperável', () => {
+  const deletion = read('src/app/api/empresa/exclusao-conta/route.ts')
+  const exportRoute = read('src/app/api/empresa/exclusao-conta/exportar/route.ts')
+
+  assert.match(deletion, /validarTokenBackupEmpresa/)
+  assert.match(deletion, /verifyPassword/)
+  assert.match(deletion, /z\.literal\(CONFIRMACAO\)/)
+  assert.match(deletion, /exclusaoEmpresaJob\.create/)
+  assert.match(deletion, /PENDENTE_STORAGE/)
+  assert.doesNotMatch(exportRoute, /senha_hash:\s*true/)
+  assert.match(exportRoute, /where: \{ empresaId \}/)
 })

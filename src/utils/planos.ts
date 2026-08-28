@@ -2,7 +2,7 @@ export const PLANOS = ['PREVIEW', 'ESSENCIAL', 'AVANCADO', 'ENTERPRISE'] as cons
 
 export type PlanoTipo = (typeof PLANOS)[number]
 
-export const MODULOS = ['FROTA', 'GESTAO', 'NOTIFICACOES', 'TAREFAS', 'RELATORIOS'] as const
+export const MODULOS = ['FROTA', 'GESTAO', 'CONTAS_PAGAR', 'NOTIFICACOES', 'TAREFAS', 'RELATORIOS'] as const
 
 export type ModuloCodigo = (typeof MODULOS)[number]
 
@@ -35,6 +35,10 @@ export const MODULOS_CONFIG: Record<ModuloCodigo, { nome: string; descricao: str
     nome: 'Controle e gestão',
     descricao: 'Custos, despesas e indicadores operacionais.',
   },
+  CONTAS_PAGAR: {
+    nome: 'Contas a pagar / boletos',
+    descricao: 'Vencimentos, boletos, comprovantes e integração opcional com a frota.',
+  },
   NOTIFICACOES: {
     nome: 'Notificações',
     descricao: 'Alertas direcionados aos usuários da empresa.',
@@ -49,7 +53,7 @@ export const MODULOS_CONFIG: Record<ModuloCodigo, { nome: string; descricao: str
   },
 }
 
-const MODULOS_OPERACIONAIS: readonly ModuloCodigo[] = ['FROTA', 'GESTAO', 'NOTIFICACOES']
+const MODULOS_OPERACIONAIS: readonly ModuloCodigo[] = ['FROTA', 'GESTAO', 'CONTAS_PAGAR', 'NOTIFICACOES']
 const MODULOS_COM_TAREFAS: readonly ModuloCodigo[] = [...MODULOS_OPERACIONAIS, 'TAREFAS']
 const TODOS_OS_MODULOS: readonly ModuloCodigo[] = [...MODULOS_COM_TAREFAS, 'RELATORIOS']
 
@@ -140,6 +144,9 @@ const MODULOS_LEGADOS: Record<string, ModuloCodigo> = {
   'controle & gestão': 'GESTAO',
   'controle & gestao': 'GESTAO',
   controle_gestao: 'GESTAO',
+  contas_pagar: 'CONTAS_PAGAR',
+  boletos: 'CONTAS_PAGAR',
+  'contas a pagar': 'CONTAS_PAGAR',
   notificacoes: 'NOTIFICACOES',
   notificações: 'NOTIFICACOES',
   tarefas: 'TAREFAS',

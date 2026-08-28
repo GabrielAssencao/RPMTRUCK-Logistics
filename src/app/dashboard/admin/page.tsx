@@ -3,16 +3,16 @@
 import { useState } from 'react'
 
 // Layout do Admin (a "casca" que arrumamos no Passo 1)
-import AdminLayout, { type AdminTab } from './layout/AdminLayout'
+import AdminLayout, { type AdminTab } from './_estrutura/AdminLayout'
 
 // Importação dos módulos com o alias padrão do Next.js @/
-import DashboardModule from '@/app/dashboard/admin/modules/dashboard/DashboardModule'
-import CompaniesModule from '@/app/dashboard/admin/modules/companies/CompaniesModule'
-import PasswordResetsModule from '@/app/dashboard/admin/modules/password-resets/AdminPasswordResets'
-import AdminRequests from '@/app/dashboard/admin/modules/requests/AdminRequests'
-import SettingsModule from '@/app/dashboard/admin/modules/settings/SettingsModule'
-import SecurityModule from '@/app/dashboard/admin/modules/security/SecurityModule'
-import SubscriptionsModule from '@/app/dashboard/admin/modules/subscriptions/SubscriptionsModule'
+import DashboardModule from './_modulos/visao-geral/DashboardModule'
+import CompaniesModule from './_modulos/empresas/CompaniesModule'
+import PasswordResetsModule from './_modulos/redefinicoes-senha/AdminPasswordResets'
+import AdminRequests from './_modulos/solicitacoes/AdminRequests'
+import SettingsModule from './_modulos/configuracoes/SettingsModule'
+import SecurityModule from './_modulos/seguranca/SecurityModule'
+import SubscriptionsModule from './_modulos/assinaturas/SubscriptionsModule'
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard')

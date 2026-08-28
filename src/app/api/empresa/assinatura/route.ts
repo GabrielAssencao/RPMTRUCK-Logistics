@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { calcularPropostaAssinatura } from '@/lib/assinaturas'
+import { calcularPropostaAssinatura } from '@/lib/financeiro/assinaturas'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { textoOperacional } from '@/lib/domainValidation'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
@@ -10,7 +10,7 @@ import {
   calcularMensalidadePorCatalogo,
   listarPlanosComerciais,
   obterPlanoComercial,
-} from '@/lib/planosComerciais'
+} from '@/lib/financeiro/planosComerciais'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { 
@@ -13,7 +13,8 @@ import {
   CheckCircle2,
   Eye,
   User,
-  Loader2
+  Loader2,
+  ArrowUpDown
 } from 'lucide-react'
 import GenericDrawer, { FieldConfig } from '@/components/dashboard/GenericDrawer'
 
@@ -25,6 +26,14 @@ interface UsuarioLocal {
   acessoDashboardGeral: boolean
   status: 'ATIVO' | 'INATIVO'
   criadoEm: string
+}
+
+type OrdenacaoOperadores = 'HIERARQUIA' | 'NOME' | 'FUNCAO' | 'CADASTRO'
+
+const PESO_HIERARQUIA: Record<UsuarioLocal['role'], number> = {
+  GESTOR_EMPRESA: 3,
+  OPERADOR: 2,
+  VISUALIZADOR: 1,
 }
 
 const CAMPOS_USUARIO: FieldConfig[] = [
@@ -78,6 +87,7 @@ export default function UsuariosPage() {
   const [montado, setMontado] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [busca, setBusca] = useState('')
+  const [ordenacao, setOrdenacao] = useState<OrdenacaoOperadores>('HIERARQUIA')
   const [loading, setLoading] = useState(true)
 
   const [usuarios, setUsuarios] = useState<UsuarioLocal[]>([])
@@ -122,6 +132,21 @@ export default function UsuariosPage() {
     }).catch(() => setLoading(false))
   }, [carregarUsuarios])
 
+  const usuariosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLocaleLowerCase('pt-BR')
+    const filtrados = usuarios.filter((usuario) =>
+      usuario.nome.toLocaleLowerCase('pt-BR').includes(termo) ||
+      usuario.email.toLocaleLowerCase('pt-BR').includes(termo)
+    )
+
+    return [...filtrados].sort((a, b) => {
+      if (ordenacao === 'NOME') return a.nome.localeCompare(b.nome, 'pt-BR')
+      if (ordenacao === 'FUNCAO') return a.role.localeCompare(b.role, 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR')
+      if (ordenacao === 'CADASTRO') return b.criadoEm.localeCompare(a.criadoEm) || a.nome.localeCompare(b.nome, 'pt-BR')
+      return PESO_HIERARQUIA[b.role] - PESO_HIERARQUIA[a.role] || a.nome.localeCompare(b.nome, 'pt-BR')
+    })
+  }, [busca, ordenacao, usuarios])
+
   if (!montado) return null
 
   // 🛡️ Regra de Proteção Front-end
@@ -142,11 +167,6 @@ export default function UsuariosPage() {
       </div>
     )
   }
-
-  const usuariosFiltrados = usuarios.filter(u => 
-    u.nome.toLowerCase().includes(busca.toLowerCase()) || 
-    u.email.toLowerCase().includes(busca.toLowerCase())
-  )
 
   // Envia os dados do Drawer diretamente para a API Backend
   const handleCriarUsuario = async (formData: Record<string, unknown>) => {
@@ -258,24 +278,42 @@ export default function UsuariosPage() {
       </div>
 
       {/* ─── BARRA DE PESQUISA ─── */}
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none" style={{ color: 'var(--foreground-muted)' }}>
-          <Search size={16} />
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none" style={{ color: 'var(--foreground-muted)' }}>
+            <Search size={16} />
+          </div>
+          <input
+            type="search"
+            aria-label="Procurar operador"
+            placeholder="Procurar operador por nome ou e-mail..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 text-sm outline-none border transition-colors font-mono"
+            style={{
+              backgroundColor: 'var(--background-secondary)',
+              borderColor: 'var(--border)',
+              color: 'var(--foreground)'
+            }}
+            onFocus={(e) => e.target.style.borderColor = primary}
+            onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+          />
         </div>
-        <input 
-          type="text" 
-          placeholder="Procurar operador por nome ou e-mail..." 
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          className="w-full pl-11 pr-4 py-3 text-sm outline-none border transition-colors font-mono"
-          style={{ 
-            backgroundColor: 'var(--background-secondary)', 
-            borderColor: 'var(--border)', 
-            color: 'var(--foreground)' 
-          }}
-          onFocus={(e) => e.target.style.borderColor = primary}
-          onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
-        />
+        <label className="relative flex items-center border" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
+          <ArrowUpDown size={15} className="pointer-events-none absolute left-3" style={{ color: primary }} />
+          <span className="sr-only">Ordenar operadores</span>
+          <select
+            value={ordenacao}
+            onChange={(event) => setOrdenacao(event.target.value as OrdenacaoOperadores)}
+            className="min-h-11 w-full appearance-none bg-transparent py-3 pl-10 pr-4 text-xs font-bold uppercase tracking-wider outline-none"
+            style={{ color: 'var(--foreground)' }}
+          >
+            <option value="HIERARQUIA">Hierarquia (maior primeiro)</option>
+            <option value="NOME">Nome (A–Z)</option>
+            <option value="FUNCAO">Função / cargo</option>
+            <option value="CADASTRO">Cadastro (mais recente)</option>
+          </select>
+        </label>
       </div>
 
       {/* ─── TABELA DE USUÁRIOS ─── */}

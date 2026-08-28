@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
+import ArquivosContasPagar from '@/components/dashboard/ArquivosContasPagar'
 import { 
   FilePieChart, 
   Download, 
@@ -446,6 +447,8 @@ export default function RelatoriosPage() {
           <p className="text-[10px] text-foreground-muted">Nenhum relatório gerado. Escolha um período com dados operacionais e gere o primeiro Excel.</p>
         )}
       </section>
+
+      <ArquivosContasPagar limite={20} />
 
       {/* ─── BARRA DE FILTRO DE TEMPO INTELIGENTE ─── */}
       <div className="flex flex-col md:flex-row gap-4 mb-8">

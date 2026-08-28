@@ -12,9 +12,13 @@ import Link from 'next/link'
 
 interface NotificacoesPanelProps {
   onPendenciasChange?: (pendencias: Record<string, number>) => void
+  centralHref?: string | null
 }
 
-export default function NotificacoesPanel({ onPendenciasChange }: NotificacoesPanelProps) {
+export default function NotificacoesPanel({
+  onPendenciasChange,
+  centralHref = '/dashboard/empresa/notificacoes',
+}: NotificacoesPanelProps) {
   const { primary } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
   const { notificacoes, naoLidas, loading, error, pendenciasPorModulo, marcarComoLida, marcarTodasComoLidas, limparLidas, deletarNotificacao, recarregar } =
@@ -70,7 +74,10 @@ export default function NotificacoesPanel({ onPendenciasChange }: NotificacoesPa
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute top-12 right-0 w-96 rounded-lg border shadow-xl z-50"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Central de notificações"
+            className="fixed left-3 right-3 top-16 z-[70] max-h-[calc(100dvh-5rem)] overflow-hidden rounded-lg border shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-96"
             style={{
               backgroundColor: 'var(--background-secondary)',
               borderColor: 'var(--border)'
@@ -199,12 +206,12 @@ export default function NotificacoesPanel({ onPendenciasChange }: NotificacoesPa
             </div>
 
             {/* Footer */}
-            {notificacoes.length > 0 && (
+            {notificacoes.length > 0 && centralHref && (
               <div
                 className="px-4 py-3 border-t text-center"
                 style={{ borderColor: 'var(--border)' }}
               >
-                <Link href="/dashboard/empresa/notificacoes" onClick={() => setIsOpen(false)} className="text-xs font-bold uppercase tracking-widest transition-all hover:underline" style={{ color: primary }}>
+                <Link href={centralHref} onClick={() => setIsOpen(false)} className="text-xs font-bold uppercase tracking-widest transition-all hover:underline" style={{ color: primary }}>
                   Abrir central de notificações
                 </Link>
               </div>
@@ -216,7 +223,7 @@ export default function NotificacoesPanel({ onPendenciasChange }: NotificacoesPa
       {/* Fechar ao clicar fora */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40"
+          className="fixed inset-0 z-[60] bg-black/20 sm:bg-transparent"
           onClick={() => setIsOpen(false)}
         />
       )}

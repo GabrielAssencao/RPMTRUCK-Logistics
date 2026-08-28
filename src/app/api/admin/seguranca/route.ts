@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   if (limited) return limited
 
   const agora = new Date()
-  const ativoDesde = new Date(agora.getTime() - 15 * 60 * 1000)
+  const ativoDesde = new Date(agora.getTime() - 5 * 60 * 1000)
   const ultimas24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000)
 
   const [sessoes, eventos, auditoria, falhasLogin, bloqueiosRateLimit] = await Promise.all([
