@@ -80,11 +80,11 @@ export default function SecurityModule() {
   }, [])
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4">
+    <div className="space-y-6 sm:space-y-8">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: primary }}>Segurança e auditoria</p>
-          <h1 className="mt-2 text-3xl font-black font-rajdhani">CENTRAL DE LOGS</h1>
+          <h1 className="mt-2 text-2xl font-black font-rajdhani sm:text-3xl">CENTRAL DE LOGS</h1>
           <p className="mt-1 text-sm text-foreground-muted">Sessões com atividade nos últimos 15 minutos e trilhas sem dados pessoais sensíveis.</p>
         </div>
         <button onClick={() => void load()} disabled={loading} className="flex items-center gap-2 border px-3 py-2 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>
@@ -129,5 +129,5 @@ function Metric({ icon: Icon, label, value, color }: { icon: typeof Activity; la
 }
 
 function LogTable({ title, empty, columns, rows }: { title: string; empty: string; columns: string[]; rows: string[][] }) {
-  return <section className="space-y-3"><h2 className="text-sm font-black uppercase tracking-widest font-rajdhani">{title}</h2><div className="overflow-x-auto border" style={{ borderColor: 'var(--border)' }}><table className="min-w-full text-left text-xs"><thead style={{ backgroundColor: 'var(--background-secondary)' }}><tr>{columns.map((column) => <th key={column} className="px-4 py-3 font-bold uppercase tracking-wider text-foreground-muted">{column}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan={columns.length} className="px-4 py-8 text-center text-foreground-muted">{empty}</td></tr> : rows.map((row, rowIndex) => <tr key={rowIndex} className="border-t" style={{ borderColor: 'var(--border)' }}>{row.map((cell, cellIndex) => <td key={`${rowIndex}-${cellIndex}`} className="px-4 py-3 align-top">{cell}</td>)}</tr>)}</tbody></table></div></section>
+  return <section className="space-y-3"><h2 className="text-sm font-black uppercase tracking-widest font-rajdhani">{title}</h2><div className="space-y-2 sm:hidden">{rows.length === 0 ? <p className="border p-6 text-center text-xs text-foreground-muted" style={{borderColor: 'var(--border)'}}>{empty}</p> : rows.map((row, rowIndex) => <article key={rowIndex} className="border p-3" style={{borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)'}}>{row.map((cell, cellIndex) => <div key={`${rowIndex}-${cellIndex}`} className="grid grid-cols-[6rem_minmax(0,1fr)] gap-2 border-b py-2 text-xs last:border-0" style={{borderColor: 'var(--border)'}}><span className="text-[9px] font-bold uppercase tracking-wider text-foreground-muted">{columns[cellIndex]}</span><span className="min-w-0 break-words">{cell}</span></div>)}</article>)}</div><div className="hidden overflow-x-auto border sm:block" style={{ borderColor: 'var(--border)' }}><table className="min-w-[680px] w-full text-left text-xs"><thead style={{ backgroundColor: 'var(--background-secondary)' }}><tr>{columns.map((column) => <th key={column} className="px-4 py-3 font-bold uppercase tracking-wider text-foreground-muted">{column}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan={columns.length} className="px-4 py-8 text-center text-foreground-muted">{empty}</td></tr> : rows.map((row, rowIndex) => <tr key={rowIndex} className="border-t" style={{ borderColor: 'var(--border)' }}>{row.map((cell, cellIndex) => <td key={`${rowIndex}-${cellIndex}`} className="px-4 py-3 align-top">{cell}</td>)}</tr>)}</tbody></table></div></section>
 }

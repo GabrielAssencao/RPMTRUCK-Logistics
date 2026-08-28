@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
+import { diasAteVencimento, nivelVencimento } from '@/lib/contasPagar'
 
 const CATEGORIAS_GRAFICO = ['COMBUSTIVEL', 'MANUTENCAO', 'PEDAGIO'] as const
 type CategoriaGrafico = typeof CATEGORIAS_GRAFICO[number]
@@ -46,6 +47,14 @@ export async function GET(request: NextRequest) {
         orderBy: { nome: 'asc' as const },
       })
     : Promise.resolve([])
+  const contasPendentesPromise = gestor && auth.empresa.modulos.includes('GESTAO')
+    ? prisma.contaPagar.findMany({
+        where: { empresaId, status: 'PENDENTE' },
+        select: { id: true, descricao: true, fornecedor: true, vencimento: true, valor: true },
+        orderBy: { vencimento: 'asc' },
+        take: 20,
+      })
+    : Promise.resolve([])
 
   const [
     veiculosPorStatus,
@@ -54,6 +63,7 @@ export async function GET(request: NextRequest) {
     motoristas,
     operadores,
     tarefasPendentes,
+    contasPendentes,
   ] = await Promise.all([
     prisma.veiculo.groupBy({
       by: ['status'],
@@ -85,6 +95,7 @@ export async function GET(request: NextRequest) {
         ...(gestor ? {} : { responsavelId: auth.session.userId }),
       },
     }),
+    contasPendentesPromise,
   ])
 
   const totalVeiculos = veiculosPorStatus.reduce((total, grupo) => total + grupo._count._all, 0)
@@ -195,6 +206,19 @@ export async function GET(request: NextRequest) {
       distribuicao,
     },
     alertas,
+    contasPagar: {
+      visivel: gestor,
+      total: contasPendentes.reduce((soma, conta) => soma + Number(conta.valor), 0),
+      urgentes: contasPendentes.filter((conta) => nivelVencimento(conta.vencimento, agora) === 'VERMELHO').length,
+      proximas: contasPendentes.filter((conta) => nivelVencimento(conta.vencimento, agora) === 'AMARELO').length,
+      contas: contasPendentes.slice(0, 5).map((conta) => ({
+        ...conta,
+        valor: Number(conta.valor),
+        vencimento: conta.vencimento.toISOString().slice(0, 10),
+        diasParaVencer: diasAteVencimento(conta.vencimento, agora),
+        nivel: nivelVencimento(conta.vencimento, agora),
+      })),
+    },
     operadores: operadores.map(operador => ({
       id: operador.id,
       nome: operador.nome,

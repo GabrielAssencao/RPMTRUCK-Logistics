@@ -71,6 +71,8 @@ export async function requireEmpresaAuth(request: NextRequest, options: EmpresaA
       modulos: true,
       usuarios_adicionais: true,
       veiculos_adicionais: true,
+      portal_financeiro_nome: true,
+      portal_financeiro_url: true,
     },
   })
 

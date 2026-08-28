@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react';
-import { Search, SlidersHorizontal, ArrowLeft } from 'lucide-react';
+import { Search, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAdminData } from '../../hooks/useAdminData';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -26,7 +26,7 @@ export default function CompaniesModule() {
           <motion.div key="lista-view" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-6">
             <div>
               <p className="text-primary font-bold tracking-[0.3em] text-[10px] mb-1">MÓDULO DE CONTROLE</p>
-              <h1 className="text-3xl font-black" style={{ fontFamily: 'Rajdhani, sans-serif' }}>GESTÃO DE <span className="text-primary">EMPRESAS</span></h1>
+              <h1 className="text-2xl font-black sm:text-3xl" style={{ fontFamily: 'Rajdhani, sans-serif' }}>GESTÃO DE <span className="text-primary">EMPRESAS</span></h1>
             </div>
 
             <div className="flex gap-3 w-full">
@@ -41,8 +41,19 @@ export default function CompaniesModule() {
               </div>
             </div>
 
-            <div className="w-full border overflow-y-auto max-h-[calc(100vh-270px)] custom-scrollbar" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
-              <table className="w-full text-left border-collapse relative">
+            <div className="space-y-3 sm:hidden">
+              {empresasFiltradas.length === 0 && <p className="border border-dashed p-8 text-center text-xs text-foreground-muted" style={{borderColor: 'var(--border)'}}>Nenhuma empresa encontrada.</p>}
+              {empresasFiltradas.map(empresa => (
+                <article key={empresa.id} className="border p-4" style={{borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)'}}>
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="break-words font-black uppercase">{empresa.nome}</h2><span className="mt-2 inline-block border px-2 py-0.5 text-[9px] font-mono" style={{color: primary, borderColor: `${primary}40`}}>{empresa.plano}</span></div><span className={`shrink-0 border px-2 py-1 text-[9px] font-black uppercase ${empresa.status === 'ATIVO' ? 'border-green-500/20 text-green-500' : 'border-red-500/20 text-red-500'}`}>{empresa.plano === 'PREVIEW' ? 'PREVIEW' : empresa.status}</span></div>
+                  <div className="my-4"><p className="text-[9px] font-black uppercase tracking-widest text-foreground-muted">Mensalidade</p><p className="mt-1 font-rajdhani text-xl font-black">{empresa.plano === 'PREVIEW' ? 'GRÁTIS' : `R$ ${Number(empresa.mensalidade).toFixed(2)}`}</p></div>
+                  <button type="button" onClick={() => setEmpresaSelecionada(empresa)} className="min-h-11 w-full text-xs font-black text-black" style={{backgroundColor: primary}}>GERENCIAR</button>
+                </article>
+              ))}
+            </div>
+
+            <div className="hidden w-full border overflow-auto max-h-[calc(100vh-270px)] custom-scrollbar sm:block" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+              <table className="min-w-[760px] w-full text-left border-collapse relative">
                 <thead className="sticky top-0 bg-[var(--background-secondary)] z-10 shadow-[0_1px_0_0_var(--border)]">
                   <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
                     {['TRANSPORTADORA', 'PLANO', 'MENSALIDADE', 'STATUS FINANCEIRO', 'AÇÃO'].map(h => (

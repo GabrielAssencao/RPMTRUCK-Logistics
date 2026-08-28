@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, Layers, Users, Truck, 
-  CreditCard, Plus, Minus, Check, Save 
+  CreditCard, Plus, Minus
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { motion } from 'framer-motion';
@@ -32,7 +32,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
   const comercial = catalogoComercial.find(item => item.id === plano);
   const precoUsuarioAdicional = comercial?.precoUsuarioAdicional ?? 25;
   const precoVeiculoAdicional = comercial?.precoVeiculoAdicional ?? 30;
-  const taxaImplantacao = comercial?.taxaImplantacao ?? 0;
+  const taxaImplantacaoCatalogo = comercial?.taxaImplantacao ?? 0;
   const mensalidadeCalculada = comercial
     ? comercial.precoBase + uExtra * precoUsuarioAdicional + vExtra * precoVeiculoAdicional
     : Number(empresa.mensalidade ?? 0);
@@ -51,28 +51,8 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
   };
 
   // 2. Recálculo automático de faturas que ainda estão pendentes
-  useEffect(() => {
-    queueMicrotask(() => setFaturas(prevFaturas =>
-      prevFaturas.map(fatura => {
-        if (fatura.status === 'pendente') {
-          if (fatura.tipo === 'IMPLEMENTACAO') {
-            return { ...fatura, valor: taxaImplantacao };
-          }
-          if (fatura.tipo === 'MENSALIDADE') {
-            return { ...fatura, valor: mensalidadeCalculada };
-          }
-        }
-        return fatura;
-      })
-    ));
-  }, [plano, uExtra, vExtra, mensalidadeCalculada, taxaImplantacao]);
-
   const toggleModulo = (mod) => {
     setModulosAtivos(prev => prev.includes(mod) ? prev.filter(m => m !== mod) : [...prev, mod]);
-  };
-
-  const handleEditValorFatura = (id, novoValor) => {
-    setFaturas(prev => prev.map(f => f.id === id ? { ...f, valor: parseFloat(novoValor) || 0 } : f));
   };
 
   const salvarAlteracoes = async () => {
@@ -93,20 +73,28 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.erro || 'Não foi possível salvar as alterações.');
+      setFaturas((data.faturas || []).map(fatura => ({ ...fatura, status: fatura.status.toLowerCase() })));
       await onUpdate?.(data.empresa);
-      const resultadosFaturas = await Promise.allSettled(faturas.map(async fatura => {
-        const faturaResponse = await fetch(`/api/faturas/${fatura.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valor: Number(fatura.valor), status: fatura.status.toUpperCase() }) });
-        if (!faturaResponse.ok) {
-          const erroFatura = await faturaResponse.json().catch(() => ({}));
-          throw new Error(erroFatura.erro || 'Falha ao atualizar uma fatura.');
-        }
-      }));
-      const houveFalhaEmFatura = resultadosFaturas.some(resultado => resultado.status === 'rejected');
-      setFeedback(houveFalhaEmFatura
-        ? 'Plano e módulos salvos. Uma ou mais faturas não puderam ser atualizadas.'
-        : 'Configuração salva com sucesso.');
+      setFeedback(`Configuração e cobrança sincronizadas. Mensalidade atual: R$ ${Number(data.mensalidade).toFixed(2)}.`);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Não foi possível salvar as alterações.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const liquidarFatura = async (fatura) => {
+    if (!window.confirm(`Confirmar o recebimento de R$ ${Number(fatura.valor).toFixed(2)}? Esta baixa ficará registrada em seu usuário.`)) return;
+    setSalvando(true);
+    setFeedback('');
+    try {
+      const response = await fetch(`/api/faturas/${fatura.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'PAGO' }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível dar baixa na fatura.');
+      setFaturas(prev => prev.map(item => item.id === fatura.id ? { ...item, ...data, status: 'pago' } : item));
+      setFeedback('Pagamento confirmado e registrado no histórico.');
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : 'Não foi possível dar baixa na fatura.');
     } finally {
       setSalvando(false);
     }
@@ -123,17 +111,17 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
   return (
     <div className="space-y-6">
       {/* HEADER DA EMPRESA */}
-      <div className="flex justify-between items-start border-b pb-6" style={{borderColor: 'var(--border)'}}>
-        <div className="flex gap-4">
-          <div className="w-12 h-12 bg-primary/10 border flex items-center justify-center text-primary" style={{borderColor: primary}}>
+      <div className="flex flex-col justify-between gap-4 border-b pb-6 sm:flex-row sm:items-start" style={{borderColor: 'var(--border)'}}>
+        <div className="flex min-w-0 gap-3 sm:gap-4">
+          <div className="hidden w-12 h-12 bg-primary/10 border sm:flex items-center justify-center text-primary" style={{borderColor: primary}}>
             <Truck size={24} />
           </div>
           <div>
-            <h2 className="text-3xl font-black font-rajdhani uppercase leading-none">{empresa.nome}</h2>
-            <p className="text-xs opacity-50 font-mono mt-1">GESTÃO E FINANÇAS • {empresa.email}</p>
+            <h2 className="break-words text-2xl font-black font-rajdhani uppercase leading-none sm:text-3xl">{empresa.nome}</h2>
+            <p className="mt-1 break-all text-[10px] opacity-50 font-mono sm:text-xs">GESTÃO E FINANÇAS • {empresa.email}</p>
           </div>
         </div>
-        <div className="space-y-2 min-w-[220px]">
+        <div className="w-full space-y-2 sm:min-w-[220px] sm:w-auto">
           <select
             value={statusEmpresa}
             onChange={(event) => setStatusEmpresa(event.target.value)}
@@ -171,7 +159,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
       {/* CONTEÚDO DINÂMICO DAS ABAS */}
       <div className="py-4">
         {tabAtiva === 'geral' && (
-           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <StatCard label="VEÍCULOS" val={`${empresa._count?.veiculos_frota ?? 0} / ${config.veiculosBase + vExtra}`} sub="Frota atual" primary={primary}/>
               <StatCard label="MOTORISTAS" val={empresa._count?.motoristas ?? 0} sub="Cadastrados" primary={primary}/>
               <StatCard label="MENSALIDADE" val={plano === 'PREVIEW' ? 'GRÁTIS' : `R$ ${mensalidadeCalculada.toFixed(2)}`} sub="Valor recorrente" primary={primary} className={plano === 'PREVIEW' ? 'text-blue-500' : ''} />
@@ -180,10 +168,10 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
         )}
 
         {tabAtiva === 'plano' && (
-          <div className="border p-8 space-y-8" style={{borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)'}}>
+          <div className="border p-4 space-y-6 sm:p-8 sm:space-y-8" style={{borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)'}}>
              <section>
                 <label className="text-[10px] font-black opacity-50 block mb-4 tracking-[0.3em]">PLANO BASE</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 gap-3">
                    {PLANOS.map(p => (
                       <button key={p} onClick={() => selecionarPlano(p)} className={`p-4 border text-left transition-all ${plano === p ? 'bg-primary text-black' : 'opacity-40 hover:opacity-100'}`} style={{borderColor: plano === p ? primary : 'var(--border)'}}>
                         <p className="text-[10px] font-bold">PLANO</p>
@@ -191,6 +179,11 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
                       </button>
                    ))}
                 </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="border p-3" style={{borderColor: 'var(--border)'}}><p className="text-[9px] font-black uppercase tracking-widest opacity-50">Mensalidade calculada</p><p className="mt-1 font-rajdhani text-xl font-black">R$ {mensalidadeCalculada.toFixed(2)}</p></div>
+                  <div className="border p-3" style={{borderColor: 'var(--border)'}}><p className="text-[9px] font-black uppercase tracking-widest opacity-50">Implantação do catálogo</p><p className="mt-1 font-rajdhani text-xl font-black">R$ {Number(taxaImplantacaoCatalogo).toFixed(2)}</p></div>
+                </div>
+                <p className="mt-3 text-[10px] text-foreground-muted">Ao salvar, a mensalidade pendente da competência atual será sincronizada. A implantação só é criada no onboarding e nunca altera uma cobrança já paga.</p>
              </section>
              <section>
                 <label className="text-[10px] font-black opacity-50 block mb-4 tracking-[0.3em]">MÓDULOS ATIVOS</label>
@@ -222,8 +215,19 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
 
         {tabAtiva === 'pagamentos' && (
            <div className="space-y-6">
-             <div className="border overflow-hidden" style={{borderColor: 'var(--border)'}}>
-                <table className="w-full text-left border-collapse">
+             <p className="text-xs text-foreground-muted">Os valores pendentes da competência atual são sincronizados automaticamente ao salvar o plano. Cobranças pagas e competências anteriores não são reprecificadas.</p>
+             <div className="space-y-3 sm:hidden">
+               {faturas.length === 0 && <p className="border p-8 text-center text-xs opacity-50" style={{borderColor: 'var(--border)'}}>Nenhuma fatura registrada.</p>}
+               {faturas.map(f => (
+                 <article key={f.id} className="border p-4" style={{borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)'}}>
+                   <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-xs font-bold">{f.mes} / {f.ano}</p><p className="mt-1 text-[10px] font-black uppercase opacity-60">{f.tipo === 'IMPLEMENTACAO' ? 'TAXA DE CONFIGURAÇÃO' : f.tipo}</p></div><span className={`border px-2 py-1 text-[9px] font-black uppercase ${f.status === 'pago' ? 'border-green-500/20 text-green-500' : 'border-red-500/20 text-red-500'}`}>{f.status}</span></div>
+                   <p className="my-4 font-rajdhani text-2xl font-black">R$ {Number(f.valor).toFixed(2)}</p>
+                   {f.status === 'pendente' ? <button type="button" disabled={salvando} onClick={() => void liquidarFatura(f)} className="min-h-11 w-full border text-[10px] font-black uppercase hover:border-green-500 hover:text-green-500 disabled:opacity-50" style={{borderColor: 'var(--border)'}}>Confirmar pagamento</button> : <p className="text-[10px] font-bold text-green-500">✓ RECEBIMENTO CONFERIDO</p>}
+                 </article>
+               ))}
+             </div>
+             <div className="hidden overflow-x-auto border sm:block" style={{borderColor: 'var(--border)'}}>
+                <table className="min-w-[780px] w-full text-left border-collapse">
                    <thead className="bg-background-secondary border-b" style={{borderColor: 'var(--border)'}}>
                       <tr>{['REFERÊNCIA', 'TIPO', 'VALOR (R$)', 'STATUS', 'COMPROVANTE', 'AÇÃO'].map(h => <th key={h} className="px-5 py-3 text-[10px] font-black tracking-widest opacity-60">{h}</th>)}</tr>
                    </thead>
@@ -238,21 +242,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
                             
                             {/* VALOR EDITÁVEL SE TIVER PENDENTE */}
                             <td className="px-5 py-4 font-mono text-xs font-black">
-                               {plano === 'PREVIEW' ? (
-                                 <span className="text-blue-500 font-bold">GRÁTIS</span>
-                               ) : f.status === 'pendente' ? (
-                                 <div className="flex items-center gap-1 border border-border bg-background px-2 py-1 max-w-[130px]">
-                                   <span className="opacity-40 text-[10px]">R$</span>
-                                   <input 
-                                     type="number" 
-                                     value={f.valor} 
-                                     onChange={(e) => handleEditValorFatura(f.id, e.target.value)}
-                                     className="bg-transparent w-full font-bold outline-none text-xs"
-                                   />
-                                 </div>
-                               ) : (
-                                 `R$ ${Number(f.valor).toFixed(2)}`
-                               )}
+                               R$ {Number(f.valor).toFixed(2)}
                             </td>
 
                             <td className="px-5 py-4">
@@ -281,7 +271,8 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
                             <td className="px-5 py-4">
                                {f.status === 'pendente' ? (
                                  <button 
-                                   onClick={async () => { const response = await fetch(`/api/faturas/${f.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'PAGO' }) }); if (response.ok) setFaturas(faturas.map(fat => fat.id === f.id ? {...fat, status: 'pago'} : fat)); else setFeedback('Não foi possível dar baixa na fatura.'); }}
+                                   onClick={() => void liquidarFatura(f)}
+                                   disabled={salvando}
                                    className="px-3 py-1.5 text-[10px] font-black border hover:border-green-500 hover:text-green-500 transition-all"
                                    style={{ borderColor: 'var(--border)' }}
                                  >
@@ -302,12 +293,12 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
 
       {/* BOTÃO FIXO SALVAR */}
       <div className="flex justify-end pt-6 border-t mt-4" style={{borderColor: 'var(--border)'}}>
-         <div className="flex items-center gap-4">
+         <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
            {feedback && <p className="text-xs" role="status">{feedback}</p>}
            <button
              onClick={salvarAlteracoes}
              disabled={salvando}
-             className="bg-primary text-black px-8 py-3 font-black text-xs hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100"
+             className="min-h-12 bg-primary text-black px-8 py-3 font-black text-xs hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100"
              style={{backgroundColor: primary}}
            >
              {salvando ? 'SALVANDO...' : 'SALVAR ALTERAÇÕES'}

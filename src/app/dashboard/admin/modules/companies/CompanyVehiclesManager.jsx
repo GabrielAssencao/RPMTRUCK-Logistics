@@ -73,8 +73,8 @@ export default function CompanyVehiclesManager({ empresa, limiteTotal, primary }
       </div>
 
       {/* TABELA DE VEÍCULOS */}
-      <div className="border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-        <table className="w-full text-left border-collapse">
+      <div className="border overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
+        <table className="min-w-[620px] w-full text-left border-collapse">
           <thead className="bg-background-secondary border-b" style={{ borderColor: 'var(--border)' }}>
             <tr>
               {['VEÍCULO / MODELO', 'PLACA', 'TIPO DE COMPOSIÇÃO', 'AÇÕES'].map(h => (
@@ -142,7 +142,7 @@ export default function CompanyVehiclesManager({ empresa, limiteTotal, primary }
               </div>
 
               {/* Body */}
-              <div className="p-6 space-y-4">
+              <div className="p-4 space-y-4 sm:p-6">
                 <InputField label="Modelo / Marca" placeholder="Ex: Scania R450 ou Mercedes Axor" val={formData.modelo} onChange={e => setFormData({...formData, modelo: e.target.value})} primary={primary} />
                 <InputField label="Placa do Veículo" placeholder="Ex: BRA2E19 ou ABC-1234" val={formData.placa} onChange={e => setFormData({...formData, placa: e.target.value})} primary={primary} />
                 

@@ -75,7 +75,7 @@ export default function SettingsModule() {
       </div>
 
       {/* Modo de Cor */}
-      <div className="border p-6 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+      <div className="border p-4 space-y-4 sm:p-6" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
         <h3 className="font-bold text-sm uppercase tracking-widest">Tema da Interface</h3>
         <div className="flex gap-4">
           <button 
@@ -102,7 +102,7 @@ export default function SettingsModule() {
         </div>
       </div>
 
-      <form onSubmit={handlePasswordChange} className="border p-6 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+      <form onSubmit={handlePasswordChange} className="border p-4 space-y-4 sm:p-6" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
         <div>
           <h3 className="font-bold text-sm flex items-center gap-2 uppercase tracking-widest">
             <ShieldCheck size={16} style={{ color: primary }} /> Segurança da conta
@@ -132,7 +132,7 @@ export default function SettingsModule() {
       </form>
 
       {/* Cores Primárias */}
-      <div className="border p-6 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+      <div className="border p-4 space-y-4 sm:p-6" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
         <h3 className="font-bold text-sm flex items-center gap-2 uppercase tracking-widest">
           <Palette size={16} style={{ color: primary }} /> Cor de Destaque
         </h3>

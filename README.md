@@ -19,6 +19,8 @@ organizacionais aplicáveis.
 - isolamento por empresa derivado da sessão, sem confiar em IDs do cliente;
 - gestão de empresas, usuários, planos, cotas e solicitações de assinatura;
 - frota, motoristas, localizações, manutenção, custos e containers;
+- contas a pagar com alertas de vencimento, leitura local de PDFs, linha
+  digitável criptografada e baixa manual com comprovante;
 - tarefas, notificações direcionadas e indicadores operacionais;
 - geração e guarda de relatórios em bucket privado;
 - fotos de motoristas normalizadas e armazenadas de forma privada;
@@ -114,9 +116,9 @@ administrador.
 
 | Plano | Usuários base | Veículos base | Histórico | Recursos adicionais |
 | --- | ---: | ---: | ---: | --- |
-| `ESSENCIAL` | 4 | 10 | 1 ano | frota, gestão e notificações |
-| `AVANCADO` | 10 | 25 | 2 anos | tarefas e delegação |
-| `ENTERPRISE` | 25 | 80 | 3 anos | relatórios personalizados |
+| `ESSENCIAL` | 4 | 10 | 1 ano | frota, gestão, notificações e contas a pagar básicas |
+| `AVANCADO` | 10 | 25 | 2 anos | leitura local de boleto, alertas visuais, cópia e portal financeiro |
+| `ENTERPRISE` | 25 | 80 | 3 anos | recursos do Avançado, relatórios e exportação financeira em lote |
 | `PREVIEW` | sandbox | sandbox | 3 anos | todos os módulos; acesso restrito |
 
 Solicitações de mudança de plano, cotas ou negociação são calculadas no
@@ -229,8 +231,8 @@ teste a restauração.
    `DIRECT_URL`.
 3. Configure a URL, chave pública e `SUPABASE_SECRET_KEY` no servidor.
 4. Execute `npx prisma migrate deploy` a partir de um ambiente confiável.
-5. Confirme no painel que os buckets `relatorios-privados` e
-   `motoristas-fotos` são privados.
+5. Confirme no painel que os buckets `relatorios-privados`,
+   `motoristas-fotos` e `contas-pagar` são privados.
 6. Mantenha a Data API desativada ou revise integralmente grants e RLS antes de
    reativá-la.
 
@@ -239,6 +241,12 @@ Prisma acessa o banco no servidor; as tabelas internas não devem ser expostas a
 navegador pelo SDK do Supabase.
 
 ### Storage privado
+
+O bucket `contas-pagar` aceita PDF, JPG, PNG e WebP de até 5 MB. O banco guarda
+somente os caminhos internos; boletos e comprovantes são liberados pelo backend
+por URLs assinadas de 60 segundos. A leitura automática usa apenas a camada de
+texto do PDF no dispositivo do usuário e sempre exige conferência humana. O
+RPMTRUCK não inicia nem autoriza transações bancárias.
 
 `relatorios-privados` aceita PDF, XLS, XLSX ou CSV de até 10 MB. Arquivos gerados
 recebem checksum SHA-256, período, tamanho e ciclo de retenção. Downloads usam

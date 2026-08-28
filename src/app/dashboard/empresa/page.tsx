@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -20,7 +21,8 @@ import {
   ShieldAlert,
   Lock,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  ReceiptText,
 } from 'lucide-react'
 import type { PlanoTipo } from '@/utils/planos'
 
@@ -49,6 +51,14 @@ interface OperadorOption {
   cargo: string
 }
 
+interface ResumoContasPagar {
+  visivel: boolean
+  total: number
+  urgentes: number
+  proximas: number
+  contas: Array<{ id: string; descricao: string; fornecedor: string | null; vencimento: string; valor: number; diasParaVencer: number; nivel: 'VERDE' | 'AMARELO' | 'VERMELHO' }>
+}
+
 export default function PainelEmpresa() {
   const { primary } = useTheme()
   const [montado, setMontado] = useState(false)
@@ -64,6 +74,7 @@ export default function PainelEmpresa() {
   const [operadores, setOperadores] = useState<OperadorOption[]>([])
   const [metricas, setMetricas] = useState({ totalVeiculos: 0, totalAtivos: 0, totalOperacionais: 0, custoMes: 0, custoKm: 0, tarefasPendentes: 0 })
   const [feedback, setFeedback] = useState('')
+  const [contasPagar, setContasPagar] = useState<ResumoContasPagar>({ visivel: false, total: 0, urgentes: 0, proximas: 0, contas: [] })
 
   const [recorteDias, setRecorteDias] = useState<'7_DIAS' | '15_DIAS' | '30_DIAS'>('7_DIAS')
 
@@ -92,6 +103,7 @@ export default function PainelEmpresa() {
         setDadosDistribuicaoCustos(data.graficos.distribuicao)
         setAlertas(data.alertas)
         setOperadores(data.operadores)
+        setContasPagar(data.contasPagar ?? { visivel: false, total: 0, urgentes: 0, proximas: 0, contas: [] })
       })
       .catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar painel.'))
   }, [])
@@ -162,7 +174,7 @@ export default function PainelEmpresa() {
       
       {/* ─── CABEÇALHO ─── */}
       <div className="mb-6 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
-        <h1 className="text-3xl font-black uppercase tracking-tight font-rajdhani" style={{ color: 'var(--foreground)' }}>
+        <h1 className="text-2xl font-black uppercase tracking-tight font-rajdhani sm:text-3xl" style={{ color: 'var(--foreground)' }}>
           Visão Geral <span style={{ color: primary }}>da Frota</span>
         </h1>
         
@@ -183,12 +195,22 @@ export default function PainelEmpresa() {
       </div>
 
       {/* ─── LINHA 1: METRICAS ─── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <MetricaCard titulo="FROTA ATIVA" valor={`${metricas.totalAtivos} / ${metricas.totalVeiculos}`} icone={<Truck size={20} />} variacao={`${metricas.totalOperacionais} operacionais`} positivo={true} primary={primary} />
         <MetricaCard titulo="OPERACIONAIS AGORA" valor={String(metricas.totalOperacionais)} icone={<MapPin size={20} />} variacao={`${metricas.totalVeiculos ? Math.round(metricas.totalOperacionais / metricas.totalVeiculos * 100) : 0}% da frota`} positivo={true} primary={primary} />
         <MetricaCard titulo="CUSTO ACUMULADO (MÊS)" valor={metricas.custoMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icone={<DollarSign size={20} />} variacao="Dados consolidados do banco" positivo={metricas.custoMes === 0} primary={primary} />
         <MetricaCard titulo="CUSTO MÉDIO POR KM" valor={metricas.custoKm.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icone={<TrendingDown size={20} />} variacao="Custo mensal / odômetros" positivo={true} primary={primary} />
       </div>
+
+      {contasPagar.visivel && (
+        <section className="border" style={{ borderColor: contasPagar.urgentes > 0 ? '#ef4444' : 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+          <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between" style={{borderColor: 'var(--border)'}}>
+            <div><p className="flex items-center gap-2 text-xs font-black uppercase tracking-widest"><ReceiptText size={15} style={{color: primary}} />Contas a pagar</p><p className="mt-1 text-[11px] text-foreground-muted">{contasPagar.urgentes} urgente(s) · {contasPagar.proximas} próxima(s) · {contasPagar.total.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})} pendente</p></div>
+            <Link href="/dashboard/empresa/contas-pagar" className="flex min-h-10 items-center justify-center border px-3 text-[10px] font-black uppercase" style={{borderColor: primary, color: primary}}>Abrir organizador <ArrowRight size={13} className="ml-2" /></Link>
+          </div>
+          {contasPagar.contas.length === 0 ? <p className="p-5 text-xs text-foreground-muted">Nenhum vencimento pendente.</p> : <div className="grid gap-px bg-[var(--border)] sm:grid-cols-2 lg:grid-cols-5">{contasPagar.contas.map(conta => { const cor = conta.nivel === 'VERMELHO' ? '#ef4444' : conta.nivel === 'AMARELO' ? '#f59e0b' : '#22c55e'; return <div key={conta.id} className="min-w-0 bg-[var(--background-secondary)] p-4"><p className="truncate text-xs font-black">{conta.descricao}</p><p className="mt-1 truncate text-[10px] text-foreground-muted">{conta.fornecedor || 'Fornecedor não informado'}</p><p className="mt-3 font-rajdhani text-lg font-black">{conta.valor.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</p><p className="text-[9px] font-black uppercase" style={{color: cor}}>{conta.diasParaVencer < 0 ? `Vencida há ${Math.abs(conta.diasParaVencer)} dia(s)` : conta.diasParaVencer === 0 ? 'Vence hoje' : `Vence em ${conta.diasParaVencer} dia(s)`}</p></div> })}</div>}
+        </section>
+      )}
 
       {/* ─── LINHA 2: GRÁFICOS ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-4">
@@ -272,15 +294,20 @@ export default function PainelEmpresa() {
 
       {/* ─── LINHA 3: ALERTAS COM ATRIBUIÇÃO/DELEGAÇÃO CONDICIONAL POR PLANO ─── */}
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="border mt-6 overflow-hidden" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
-        <div className="px-5 py-4 border-b flex justify-between items-center" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex flex-col gap-1 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5" style={{ borderColor: 'var(--border)' }}>
           <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--foreground)' }}>
             <AlertTriangle size={14} style={{ color: primary }} /> Alertas Que Exigem Atenção
           </h3>
           <span className="text-[10px] text-foreground-muted">Prioridades calculadas automaticamente</span>
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
+        <div className="divide-y sm:hidden" style={{borderColor: 'var(--border)'}}>
+          {alertas.length === 0 && <p className="p-8 text-center text-xs text-foreground-muted">Nenhum alerta operacional pendente.</p>}
+          {alertas.map(alerta => { const urgencia = calcularUrgencia(alerta); return <article key={alerta.id} className="space-y-3 p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="break-words text-xs font-black">{alerta.foco}</p><p className="mt-1 text-[9px] uppercase text-foreground-muted">{alerta.categoria} · {alerta.subtipo}</p></div><BadgeUrgencia urgencia={urgencia} /></div><p className="break-words text-xs leading-5 text-foreground-muted">{alerta.descricao}</p><div className="flex flex-col gap-2 min-[420px]:flex-row">{alerta.descricao.length > 55 && <button type="button" onClick={() => setAlertaDetalhado(alerta)} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{borderColor: 'var(--border)', color: primary}}>Ver detalhes</button>}{podeDelegarTarefas && <button type="button" onClick={() => handleClicarDelegar(alerta)} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{borderColor: tarefasHabilitadas ? primary : 'var(--border)', color: tarefasHabilitadas ? primary : 'var(--foreground-muted)'}}>{tarefasHabilitadas ? 'Delegar tarefa' : 'Delegar · Avançado'}</button>}</div></article> })}
+        </div>
+
+        <div className="hidden overflow-x-auto sm:block">
+          <table className="min-w-[760px] w-full text-left text-sm whitespace-nowrap">
             <thead style={{ backgroundColor: 'var(--background)', color: 'var(--foreground-muted)' }}>
               <tr className="text-[10px] uppercase tracking-widest">
                 <th className="px-5 py-3 font-medium">Urgência</th>

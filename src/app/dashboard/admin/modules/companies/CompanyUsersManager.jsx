@@ -89,8 +89,8 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
       </div>
 
       {/* TABELA DE USUÁRIOS */}
-      <div className="border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-        <table className="w-full text-left border-collapse">
+      <div className="border overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
+        <table className="min-w-[720px] w-full text-left border-collapse">
           <thead className="bg-background-secondary border-b" style={{ borderColor: 'var(--border)' }}>
             <tr>
               {['COLABORADOR', 'NÍVEL DE ACESSO', 'STATUS', 'AÇÕES'].map(h => (
@@ -154,11 +154,11 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
               </div>
 
               {/* Modal Body */}
-              <div className="p-6 space-y-4">
+              <div className="p-4 space-y-4 sm:p-6">
                 <InputGroup label="NOME COMPLETO" val={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} primary={primary} />
                 <InputGroup label="E-MAIL CORPORATIVO" val={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} primary={primary} />
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-[9px] font-black opacity-50 block mb-1 tracking-widest uppercase">Nível de Acesso</label>
                     <select 

@@ -23,6 +23,7 @@ import {
   Archive,
   Container as ContainerIcon,
   type LucideIcon,
+  ReceiptText,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
@@ -50,6 +51,7 @@ const NAV_EMPRESA: NavEmpresaItem[] = [
   { path: '/dashboard/empresa/motoristas', icon: Users, label: 'MOTORISTAS', modulo: 'FROTA', notificacaoModulo: 'MOTORISTAS', somenteGestor: true },
   { path: '/dashboard/empresa/containers', icon: ContainerIcon, label: 'CONTAINERS', modulo: 'FROTA', notificacaoModulo: 'CONTAINERS' },
   { path: '/dashboard/empresa/custos', icon: DollarSign, label: 'CUSTOS / DESPESAS', modulo: 'GESTAO', notificacaoModulo: 'CUSTOS' },
+  { path: '/dashboard/empresa/contas-pagar', icon: ReceiptText, label: 'CONTAS A PAGAR', modulo: 'GESTAO', notificacaoModulo: 'CONTAS_PAGAR', somenteGestor: true },
   { path: '/dashboard/empresa/tarefas', icon: ClipboardList, label: 'TAREFAS', modulo: 'TAREFAS', notificacaoModulo: 'TAREFAS' },
   { path: '/dashboard/empresa/arquivos', icon: Archive, label: 'ARQUIVO OPERACIONAL', modulo: null, notificacaoModulo: 'RELATORIOS', somenteGestor: true },
   { path: '/dashboard/empresa/relatorios', icon: FilePieChart, label: 'RELATÓRIOS', modulo: 'RELATORIOS', notificacaoModulo: 'RELATORIOS', somenteGestor: true },
@@ -350,7 +352,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* ÁREA DE RENDERIZAÇÃO DA PÁGINA INTERNA */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-8">
           {rotaAtualPermitida ? children : <div className="py-16 text-center text-xs font-mono text-foreground-muted">Validando permissões...</div>}
         </main>
       </div>

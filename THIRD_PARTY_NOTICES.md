@@ -21,3 +21,10 @@ Os arquivos em `public/draco/gltf/` são builds do decoder Draco distribuídos
 pelo Three.js. Draco é Copyright 2016 Google Inc. e está sob a
 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). O Three.js é
 Copyright 2010-2024 three.js authors e está sob a licença MIT.
+
+## PDF.js
+
+A leitura local da camada de texto de boletos em PDF usa o
+[PDF.js](https://github.com/mozilla/pdf.js), Copyright Mozilla Foundation e
+colaboradores, distribuído sob a
+[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).

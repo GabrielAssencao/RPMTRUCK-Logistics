@@ -161,14 +161,14 @@ export default function DashboardModule() {
         </div>
       </div>
 
-      <div className="border p-6 space-y-4" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
+      <div className="border p-4 space-y-4 sm:p-6" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
         <div>
           <p className="text-primary font-bold tracking-[0.3em] text-[10px] mb-1">MÓDULO DE ENTRADAS</p>
           <h3 className="text-xl font-black tracking-tight">ASSINATURAS RECENTES</h3>
         </div>
 
-        <div className="w-full border overflow-y-auto max-h-72 custom-scrollbar" style={{ borderColor: 'var(--border)' }}>
-          <table className="w-full text-left border-collapse relative">
+        <div className="w-full border overflow-auto max-h-72 custom-scrollbar" style={{ borderColor: 'var(--border)' }}>
+          <table className="min-w-[620px] w-full text-left border-collapse relative">
             <thead className="sticky top-0 bg-[var(--background-secondary)] z-10 shadow-[0_1px_0_0_var(--border)]">
               <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
                 {['EMPRESA', 'PLANO', 'MENSALIDADE', 'STATUS FINANCEIRO'].map(h => (

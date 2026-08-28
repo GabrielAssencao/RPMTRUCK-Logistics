@@ -142,8 +142,12 @@ export default function AdminRequestsAndResets() {
       ) : (
         <AnimatePresence mode="wait">
           {subTab === 'contas' ? (
-            <motion.div key="contas-table" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-              <table className="w-full text-left border-collapse">
+            <motion.div key="contas-table" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="border overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
+              <div className="space-y-3 p-3 md:hidden">
+                {contasFiltradas.length === 0 && <p className="p-6 text-center text-xs text-foreground-muted">Nenhuma solicitação encontrada.</p>}
+                {contasFiltradas.map(c => <article key={c.id} className="border p-4" style={{borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)'}}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="break-words font-black uppercase">{c.nome_empresa || c.empresa}</p><p className="mt-1 break-all text-[10px] text-foreground-muted">{c.email}</p></div><span className={`shrink-0 border px-2 py-1 text-[9px] font-black ${c.status === 'PENDENTE' ? 'text-yellow-500' : c.status === 'APROVADO' ? 'text-green-500' : 'text-red-500'}`}>{c.status}</span></div><p className="mt-3 text-[10px] uppercase text-foreground-muted">Contato: {c.contato || c.responsavel} · Plano {c.plano_escolhido || c.plano}</p>{c.status === 'PENDENTE' && <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => handleAprovarConta(c.id)} className="min-h-11 border border-green-500/30 text-[10px] font-black uppercase text-green-500"><Check size={14} className="mr-1 inline" />Aprovar</button><button type="button" onClick={() => handleRejeitarConta(c.id)} className="min-h-11 border border-red-500/30 text-[10px] font-black uppercase text-red-500"><X size={14} className="mr-1 inline" />Rejeitar</button></div>}</article>)}
+              </div>
+              <table className="hidden min-w-[760px] w-full text-left border-collapse md:table">
                 <thead className="bg-background-secondary border-b" style={{ borderColor: 'var(--border)' }}>
                   <tr>
                     {['EMPRESA / SOLICITANTE', 'E-mail', 'PLANO PRETENDIDO', 'STATUS LOG', 'AÇÕES'].map(h => (
@@ -179,8 +183,12 @@ export default function AdminRequestsAndResets() {
               </table>
             </motion.div>
           ) : (
-            <motion.div key="resets-table" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-              <table className="w-full text-left border-collapse">
+            <motion.div key="resets-table" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="border overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
+              <div className="space-y-3 p-3 md:hidden">
+                {resetsFiltrados.length === 0 && <p className="p-6 text-center text-xs text-foreground-muted">Nenhum reset encontrado.</p>}
+                {resetsFiltrados.map(r => <article key={r.id} className="border p-4" style={{borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)'}}><div className="flex items-start justify-between gap-3"><p className="min-w-0 break-all font-mono text-xs font-bold">{r.email}</p><span className={`shrink-0 border px-2 py-1 text-[9px] font-black ${r.status === 'PENDENTE' ? 'text-yellow-500' : 'text-green-500'}`}>{r.status}</span></div><p className="mt-2 text-[10px] text-foreground-muted">Pedido em {new Date(r.criado_em || r.created_at).toLocaleDateString('pt-BR')}</p>{generatedKey.id === r.id && <button type="button" onClick={() => handleCopyToClipboard(generatedKey.key)} className="mt-3 w-full break-all border border-dashed p-3 font-mono text-xs" style={{color: primary}}>{generatedKey.key} <Copy size={12} className="ml-1 inline" /></button>}{r.status === 'PENDENTE' && <button type="button" onClick={() => handleGerarSenhaTemporaria(r.id)} className="mt-4 min-h-11 w-full border text-[10px] font-black uppercase" style={{color: primary, borderColor: primary}}>Gerar código de uso único</button>}</article>)}
+              </div>
+              <table className="hidden min-w-[760px] w-full text-left border-collapse md:table">
                 <thead className="bg-background-secondary border-b" style={{ borderColor: 'var(--border)' }}>
                   <tr>
                     {['USUÁRIO SOLICITANTE', 'DATA DO PEDIDO', 'STATUS LOG', 'CÓDIGO DE USO ÚNICO', 'AÇÕES'].map(h => (

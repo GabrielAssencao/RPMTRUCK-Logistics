@@ -202,7 +202,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
         
         {/* CORREÇÃO DO Z-INDEX DO HEADER: Passou de z-10 para z-40 */}
         <header 
-          className="h-16 border-b flex items-center justify-between px-6 z-40"
+          className="h-16 border-b flex items-center justify-between px-3 sm:px-6 z-40"
           style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}
         >
           <button onClick={() => setMobileOpen(true)} className="md:hidden text-foreground-muted hover:text-foreground">
@@ -226,7 +226,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-8 custom-scrollbar">
           {children}
         </main>
       </div>

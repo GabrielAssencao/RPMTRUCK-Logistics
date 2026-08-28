@@ -8,6 +8,7 @@ import { textoOperacional, valorMonetarioSchema } from '@/lib/domainValidation'
 import { obterPlanoComercial } from '@/lib/planosComerciais'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { obterModulosPadrao } from '@/utils/planos'
+import { sincronizarCobrancaEmpresa } from '@/lib/faturamentoAdmin'
 
 const decidirSchema = z.object({
   decisao: z.enum(['APROVAR', 'REJEITAR']),
@@ -155,6 +156,20 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/ad
               usuarios_adicionais: solicitacao.usuariosAdicionaisSolicitados,
               veiculos_adicionais: solicitacao.veiculosAdicionaisSolicitados,
             },
+          })
+        }
+
+        if (solicitacao.tipo !== 'NEGOCIAR_PAGAMENTO') {
+          await sincronizarCobrancaEmpresa(tx, {
+            empresaId: solicitacao.empresaId,
+            planoAnterior: solicitacao.empresa.plano,
+            plano: planoDestino,
+            usuariosAdicionais: solicitacao.tipo === 'ALTERAR_COTAS'
+              ? solicitacao.usuariosAdicionaisSolicitados
+              : solicitacao.empresa.usuarios_adicionais,
+            veiculosAdicionais: solicitacao.tipo === 'ALTERAR_COTAS'
+              ? solicitacao.veiculosAdicionaisSolicitados
+              : solicitacao.empresa.veiculos_adicionais,
           })
         }
 

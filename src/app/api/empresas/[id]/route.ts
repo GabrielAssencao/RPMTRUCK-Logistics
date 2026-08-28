@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireAdminAuth } from '@/lib/auth'
@@ -12,7 +13,7 @@ import {
   PLANOS,
   STATUS_EMPRESA,
 } from '@/utils/planos'
-import { calcularMensalidadePersistida } from '@/lib/planosComerciais'
+import { sincronizarCobrancaEmpresa } from '@/lib/faturamentoAdmin'
 
 const atualizarEmpresaSchema = z.object({
   plano: z.enum(PLANOS).optional(),
@@ -57,19 +58,31 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     const usuariosAdicionais = parsed.data.usuarios_adicionais ?? empresaAtual.usuarios_adicionais
     const veiculosAdicionais = parsed.data.veiculos_adicionais ?? empresaAtual.veiculos_adicionais
 
-    const empresa = await executarComAuditoria({ usuarioId: auth.session!.userId, origem: 'SUPERADMIN' }, (tx) => tx.empresa.update({
-      where: { id: params.id },
-      data: {
+    const resultado = await executarComAuditoria({ usuarioId: auth.session!.userId, origem: 'SUPERADMIN' }, async (tx) => {
+      const empresa = await tx.empresa.update({
+        where: { id: params.id },
+        data: {
+          plano,
+          status,
+          modulos,
+          usuarios_adicionais: usuariosAdicionais,
+          veiculos_adicionais: veiculosAdicionais,
+          status_motivo: status === 'ATIVO' ? null : parsed.data.status_motivo,
+          status_alterado_em: mudouControleAcesso ? new Date() : empresaAtual.status_alterado_em,
+          status_alterado_por_id: mudouControleAcesso ? auth.session!.userId : empresaAtual.status_alterado_por_id,
+        },
+      })
+      const cobranca = await sincronizarCobrancaEmpresa(tx, {
+        empresaId: empresa.id,
+        planoAnterior: empresaAtual.plano,
         plano,
-        status,
-        modulos,
-        usuarios_adicionais: usuariosAdicionais,
-        veiculos_adicionais: veiculosAdicionais,
-        status_motivo: status === 'ATIVO' ? null : parsed.data.status_motivo,
-        status_alterado_em: mudouControleAcesso ? new Date() : empresaAtual.status_alterado_em,
-        status_alterado_por_id: mudouControleAcesso ? auth.session!.userId : empresaAtual.status_alterado_por_id,
-      },
-    }))
+        usuariosAdicionais,
+        veiculosAdicionais,
+      })
+      const faturas = await tx.fatura.findMany({ where: { empresaId: empresa.id }, orderBy: [{ ano: 'desc' }, { criado_em: 'desc' }] })
+      return { empresa, cobranca, faturas }
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+    const { empresa } = resultado
 
     const alteracoes = [
       plano !== empresaAtual.plano ? `plano ${empresaAtual.plano} → ${plano}` : null,
@@ -87,11 +100,12 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
       })
     }
 
-    const mensalidade = await calcularMensalidadePersistida(plano, usuariosAdicionais, veiculosAdicionais)
     return NextResponse.json({
       sucesso: true,
       empresa,
-      mensalidade,
+      mensalidade: resultado.cobranca.mensalidade,
+      taxaImplantacao: resultado.cobranca.taxaImplantacao,
+      faturas: resultado.faturas,
     })
   } catch (error) {
     console.error('Erro ao atualizar plano da empresa:', error)

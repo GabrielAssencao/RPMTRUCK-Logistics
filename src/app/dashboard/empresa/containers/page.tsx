@@ -296,7 +296,7 @@ export default function ContainersPage() {
       {/* ─── CABEÇALHO ─── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b pb-4" style={{ borderColor: 'var(--border)' }}>
         <div>
-          <h1 className="text-3xl font-black uppercase tracking-tight font-rajdhani" style={{ color: 'var(--foreground)' }}>
+          <h1 className="text-2xl font-black uppercase tracking-tight font-rajdhani sm:text-3xl" style={{ color: 'var(--foreground)' }}>
             Controle de <span style={{ color: primary }}>Containers 3D</span>
           </h1>
           <p className="text-sm mt-1 text-foreground-muted">
@@ -307,7 +307,7 @@ export default function ContainersPage() {
         <motion.button
           whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
           onClick={handleAbrirNovo}
-          className="flex items-center gap-2 px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all text-black font-extrabold shrink-0 cursor-pointer"
+          className="flex w-full items-center justify-center gap-2 px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all text-black font-extrabold shrink-0 cursor-pointer md:w-auto"
           style={{
             backgroundColor: primary,
             clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))'
@@ -437,7 +437,7 @@ export default function ContainersPage() {
       </div>
 
       {/* ─── CARDS DE RESUMO ─── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <CardResumo titulo="CONTAINERS NO PERÍODO" valor={String(totalContainersPeriodo)} primary={primary} icone={<ContainerIcon size={20} />} />
         <CardResumo titulo="EM TRÂNSITO AGORA" valor={String(totalEmTransito)} primary={primary} icone={<ArrowRightLeft size={20} />} destaque />
         <CardResumo
@@ -455,13 +455,13 @@ export default function ContainersPage() {
       </div>
 
       {/* ─── PÁTIO DE CONTAINERS 3D GAMIFICADO (SELEÇÃO ESTILO JOGO) ─── */}
-      <div className="border p-6 relative overflow-hidden" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
+      <div className="border p-3 relative overflow-hidden sm:p-6" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
         
         <div className="flex items-center justify-between mb-4">
           <span className="font-bold text-xs uppercase flex items-center gap-2">
             <Box size={18} style={{ color: primary }} /> Pátio Virtual 3D & Inspecção
           </span>
-          <span className="text-[10px] text-foreground-muted">
+          <span className="hidden text-[10px] text-foreground-muted sm:block">
             Clique em um bloco para inspecionar ou desloque o carrossel para alternar
           </span>
         </div>
@@ -783,7 +783,7 @@ export default function ContainersPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap font-mono">
+          <table className="min-w-[1180px] w-full text-left text-sm whitespace-nowrap font-mono">
             <thead style={{ backgroundColor: 'var(--background)', color: 'var(--foreground-muted)' }}>
               <tr className="text-[10px] uppercase tracking-widest border-b" style={{ borderColor: 'var(--border)' }}>
                 <th className="px-4 py-4 text-center">Sel</th>
@@ -932,7 +932,7 @@ export default function ContainersPage() {
           <p className="p-4 text-xs text-red-500" role="alert">{erroHistorico}</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full whitespace-nowrap text-left text-xs">
+            <table className="min-w-[720px] w-full whitespace-nowrap text-left text-xs">
               <thead style={{ backgroundColor: 'var(--background)', color: 'var(--foreground-muted)' }}>
                 <tr className="border-b text-[10px] uppercase tracking-widest" style={{ borderColor: 'var(--border)' }}>
                   <th className="px-5 py-3">Data</th>
@@ -980,7 +980,7 @@ export default function ContainersPage() {
           <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-lg border p-6 font-mono space-y-4 max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-lg border p-4 font-mono space-y-4 max-h-[92dvh] overflow-y-auto sm:p-6"
               style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}
             >
               <div className="flex justify-between items-center border-b pb-3" style={{ borderColor: 'var(--border)' }}>
@@ -996,7 +996,7 @@ export default function ContainersPage() {
               </div>
 
               <form onSubmit={handleSalvar} className="space-y-3 text-xs">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="block text-[10px] uppercase font-bold mb-1">Data *</label>
                     <input
@@ -1023,7 +1023,7 @@ export default function ContainersPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="block text-[10px] uppercase font-bold mb-1">Tipo *</label>
                     <select
@@ -1055,7 +1055,7 @@ export default function ContainersPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="block text-[10px] uppercase font-bold mb-1">Terminal Início *</label>
                     <input
