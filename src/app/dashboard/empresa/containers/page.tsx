@@ -98,7 +98,12 @@ export default function ContainersPage() {
   // ─── CONTROLE TEMPORAL ──────────────────────────────────────────────────
   const hoje = new Date()
   const anoAtual = hoje.getFullYear()
-  const [anosDisponiveis] = useState([anoAtual, anoAtual - 1, anoAtual - 2])
+  const anosDisponiveis = Array.from(new Set([
+    anoAtual,
+    anoAtual - 1,
+    anoAtual - 2,
+    ...containers.map((container) => Number(container.data.slice(0, 4))),
+  ])).filter(Number.isFinite).sort((anoA, anoB) => anoB - anoA)
   const [anoSelecionado, setAnoSelecionado] = useState(anoAtual)
   const [mesSelecionadoIndex, setMesSelecionadoIndex] = useState(hoje.getMonth())
   const [semanaSelecionada, setSemanaSelecionada] = useState<'TODAS' | 1 | 2 | 3 | 4>('TODAS')
@@ -278,6 +283,10 @@ export default function ContainersPage() {
 
     if (!salvo) return
 
+    const dataSalva = new Date(`${form.data}T12:00:00`)
+    setAnoSelecionado(dataSalva.getFullYear())
+    setMesSelecionadoIndex(dataSalva.getMonth())
+    setSemanaSelecionada('TODAS')
     setRevisaoHistorico((revisao) => revisao + 1)
     setModalOpen(false)
     setForm({ ...FORM_INICIAL, duplaId: duplas[0]?.id ?? '' })
@@ -1021,8 +1030,9 @@ export default function ContainersPage() {
                     <input
                       type="text" required
                       placeholder="Ex: MSCU 734521-0"
-                      pattern="[A-Za-z]{4}[ -]?[0-9]{6}[ -]?[0-9]"
                       maxLength={15}
+                      autoCapitalize="characters"
+                      spellCheck={false}
                       title="Use quatro letras e sete números, por exemplo MSCU 734521-0."
                       value={form.codigo}
                       onChange={e => setForm({ ...form, codigo: e.target.value.toUpperCase() })}

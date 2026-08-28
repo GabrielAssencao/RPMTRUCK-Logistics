@@ -73,14 +73,23 @@ test('ordenação e filtro de operadores possuem estados distintos e opções te
 })
 
 test('edição de container mantém o registro operacional e versiona o espelho arquivado', () => {
+  const page = read('src/app/dashboard/empresa/containers/page.tsx')
   const route = read('src/app/api/containers/[id]/route.ts')
   const migration = read('prisma/migrations/20260828040000_fluxos_operacionais_e_senhas/migration.sql')
+  const repairMigration = read('prisma/migrations/20260830010000_restaurar_movimentacoes_operacionais_orfas/migration.sql')
 
+  assert.doesNotMatch(page, /pattern="\[A-Za-z\]\{4\}/)
+  assert.match(page, /setAnoSelecionado\(dataSalva\.getFullYear\(\)\)/)
+  assert.match(page, /setMesSelecionadoIndex\(dataSalva\.getMonth\(\)\)/)
   assert.match(route, /relatorioArquivoId: atual\.relatorioArquivoId \? null : undefined/)
   assert.match(route, /registro_atual: false/)
   assert.match(route, /versao: espelhoAtual\.versao \+ 1/)
   assert.doesNotMatch(route.match(/export async function PATCH[\s\S]*?export async function DELETE/)?.[0] ?? '', /bloqueada porque já foi incluída/)
   assert.match(migration, /WHERE "registro_atual" = true/)
+  assert.match(repairMigration, /"relatorioArquivoId" IS NULL/)
+  assert.match(repairMigration, /"detalhes_purgados_em" IS NULL/)
+  assert.match(repairMigration, /"auditoria_logs"/)
+  assert.match(repairMigration, /ON CONFLICT DO NOTHING/)
 })
 
 test('detalhes do alerta exibem a observação completa em diálogo acessível', () => {
