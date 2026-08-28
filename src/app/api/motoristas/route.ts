@@ -13,15 +13,16 @@ import { prisma } from '@/lib/prisma'
 import { dataIsoSchema, nomePessoa } from '@/lib/domainValidation'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { encryptionConfigured, exposeMotorista, protectMotorista } from '@/lib/fieldEncryption'
+import { cpfValido, normalizarDocumentoIdentidade, normalizarRegistroCNH, somenteNumeros } from '@/utils/documentos'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const schema = z.object({
   nome: nomePessoa(3, 120),
-  cpf: z.string().trim().regex(/^\d{11}$/, 'O CPF deve ter 11 números.').nullable(),
-  rg: z.string().trim().regex(/^\d{9}$/, 'O RG deve ter 9 números.').nullable(),
-  cnh: z.string().trim().regex(/^\d{11}$/, 'A CNH deve ter 11 números.'),
+  cpf: z.string().trim().regex(/^\d{11}$/, 'O CPF deve ter 11 números.').refine(cpfValido, 'Informe um CPF válido.').nullable(),
+  rg: z.string().trim().regex(/^[A-Z0-9]{7,14}$/, 'O RG/CIN deve ter de 7 a 14 letras ou números.').nullable(),
+  cnh: z.string().trim().regex(/^\d{9,11}$/, 'Informe de 9 a 11 números do registro apresentado.'),
   categoria: z.enum(['A', 'B', 'C', 'D', 'E', 'AB', 'AC', 'AD', 'AE']),
   validade: dataIsoSchema,
   status: z.enum(['DISPONIVEL', 'EM_ROTA', 'ALERTA', 'FERIAS']).default('DISPONIVEL'),
@@ -42,6 +43,11 @@ function valorDocumentoNumericoOpcional(formData: FormData, campo: string) {
   const valor = valorTexto(formData, campo).trim()
   if (!valor) return null
   return /^[\d.-]+$/.test(valor) ? valor.replace(/\D/g, '') : valor
+}
+
+function valorDocumentoIdentidadeOpcional(formData: FormData, campo: string) {
+  const valor = valorTexto(formData, campo).trim()
+  return valor ? normalizarDocumentoIdentidade(valor) : null
 }
 
 function podeGerenciarMotoristas(role: string) {
@@ -98,15 +104,15 @@ export async function POST(request: NextRequest) {
   const parsed = schema.safeParse({
     nome: valorTexto(formData, 'nome'),
     cpf: valorDocumentoNumericoOpcional(formData, 'cpf'),
-    rg: valorDocumentoNumericoOpcional(formData, 'rg'),
-    cnh: valorTexto(formData, 'cnh'),
+    rg: valorDocumentoIdentidadeOpcional(formData, 'rg'),
+    cnh: normalizarRegistroCNH(valorTexto(formData, 'cnh')),
     categoria: valorTexto(formData, 'categoria'),
     validade: valorTexto(formData, 'validade'),
     status: valorTexto(formData, 'status') || 'DISPONIVEL',
     veiculoId: valorOpcional(formData, 'veiculoId'),
   })
   if (!parsed.success) {
-    return NextResponse.json({ erro: 'Revise os dados cadastrais do motorista.' }, { status: 400 })
+    return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? 'Revise os dados cadastrais do motorista.' }, { status: 400 })
   }
 
   const validade = new Date(`${parsed.data.validade}T12:00:00`)
@@ -135,12 +141,12 @@ export async function POST(request: NextRequest) {
         where: { empresaId },
         select: { empresaId: true, cpf: true, rg: true, cnh: true },
       })
-      const cpfNovo = parsed.data.cpf?.replace(/\D/g, '') || null
-      const cnhNova = parsed.data.cnh.replace(/\D/g, '')
+      const cpfNovo = parsed.data.cpf ? somenteNumeros(parsed.data.cpf) : null
+      const cnhNova = normalizarRegistroCNH(parsed.data.cnh)
       const duplicado = existentes.some((item) => {
         const exposto = exposeMotorista(item)
-        return (cpfNovo && exposto.cpf?.replace(/\D/g, '') === cpfNovo)
-          || exposto.cnh.replace(/\D/g, '') === cnhNova
+        return (cpfNovo && somenteNumeros(exposto.cpf ?? '') === cpfNovo)
+          || normalizarRegistroCNH(exposto.cnh) === cnhNova
       })
       if (duplicado) return NextResponse.json({ erro: 'CPF ou CNH já cadastrado para esta empresa.' }, { status: 409 })
     }

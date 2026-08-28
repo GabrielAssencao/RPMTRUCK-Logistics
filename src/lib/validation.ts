@@ -43,7 +43,7 @@ export type CriarUsuarioInput = z.infer<typeof criarUsuarioSchema>;
 export const criarMotoristaSchema = z.object({
   nomeAbreviado: z.string().min(3).max(100),
   cpf: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, 'CPF inválido'),
-  cnh: z.string().min(11).max(11),
+  cnh: z.string().regex(/^\d{9,11}$/),
   categoria: z.enum(['A', 'B', 'C', 'D', 'E']),
   validadeCNH: z.string().datetime('Data de validade inválida'),
   empresaId: z.string().uuid(),

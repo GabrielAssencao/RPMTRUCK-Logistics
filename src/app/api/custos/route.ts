@@ -11,14 +11,14 @@ const schema = z.object({
   veiculoId: z.string().uuid(),
   motoristaId: z.string().uuid().optional().nullable(),
   data: dataIsoSchema,
-  categoria: z.enum(['COMBUSTIVEL', 'MANUTENCAO', 'PEDAGIO', 'ALIMENTACAO', 'DIARIA_MOTORISTA', 'SEGURO', 'OUTROS']),
+  categoria: z.enum(['COMBUSTIVEL', 'MANUTENCAO', 'PEDAGIO', 'ALIMENTACAO', 'DIARIA_MOTORISTA', 'SEGURO', 'SALARIO', 'OUTROS']),
   descricao: textoOperacional(3, 500),
   valor: valorMonetarioSchema.positive(),
   formaPagamento: nomeOperacional(2, 80),
   status: z.enum(['PAGO', 'PENDENTE']),
 }).strict()
 
-type CustoSerializavel = Pick<Custo, 'id' | 'veiculoId' | 'motoristaId' | 'data' | 'ano' | 'mesIndex' | 'semanaIndex' | 'categoria' | 'descricao' | 'valor' | 'formaPagamento' | 'status' | 'relatorioArquivoId'>
+type CustoSerializavel = Pick<Custo, 'id' | 'veiculoId' | 'motoristaId' | 'data' | 'ano' | 'mesIndex' | 'semanaIndex' | 'categoria' | 'descricao' | 'valor' | 'formaPagamento' | 'status' | 'relatorioArquivoId' | 'contaPagarId'>
 
 const serializar = (custo: CustoSerializavel) => ({
   id: custo.id,
@@ -35,6 +35,7 @@ const serializar = (custo: CustoSerializavel) => ({
   formaPagamento: custo.formaPagamento,
   status: custo.status,
   arquivado: Boolean(custo.relatorioArquivoId),
+  origemContaPagar: Boolean(custo.contaPagarId),
 })
 
 export async function GET(request: NextRequest) {
@@ -69,6 +70,7 @@ export async function GET(request: NextRequest) {
       formaPagamento: true,
       status: true,
       relatorioArquivoId: true,
+      contaPagarId: true,
     },
     orderBy: { data: 'desc' },
     take: 5000,

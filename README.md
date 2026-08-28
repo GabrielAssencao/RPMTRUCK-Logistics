@@ -19,8 +19,8 @@ organizacionais aplicáveis.
 - isolamento por empresa derivado da sessão, sem confiar em IDs do cliente;
 - gestão de empresas, usuários, planos, cotas e solicitações de assinatura;
 - frota, motoristas, localizações, manutenção, custos e containers;
-- contas a pagar com alertas de vencimento, leitura local de PDFs, linha
-  digitável criptografada e baixa manual com comprovante;
+- contas a pagar com alertas de vencimento, leitura local de texto e código de
+  barras, integração com despesas e baixa manual com comprovante;
 - tarefas, notificações direcionadas e indicadores operacionais;
 - geração e guarda de relatórios em bucket privado;
 - fotos de motoristas normalizadas e armazenadas de forma privada;
@@ -256,13 +256,20 @@ navegador pelo SDK do Supabase.
 
 O bucket `contas-pagar` aceita PDF, JPG, PNG e WebP de até 5 MB. O banco guarda
 somente os caminhos internos; boletos e comprovantes são liberados pelo backend
-por URLs assinadas de 60 segundos. A leitura automática usa apenas a camada de
-texto do PDF no dispositivo do usuário, pode ser desativada por preferência e
-sempre exige ateste humano explícito. A categoria opcional `MANUTENCAO` cria, em
-uma única transação, a conta e uma manutenção pendente do veículo da mesma
-empresa. PDFs sem camada de texto permanecem no fluxo manual para não adicionar
-um motor OCR pesado ao carregamento móvel. O RPMTRUCK não inicia nem autoriza
-transações bancárias.
+por URLs assinadas de 60 segundos. A leitura automática ocorre no dispositivo,
+prioriza a camada de texto e tenta reconhecer códigos ITF/Code 128 nas três
+primeiras páginas. O leitor alternativo é carregado apenas durante o upload para
+não aumentar o carregamento inicial do dashboard. A automação pode ser
+desativada e sempre exige ateste humano explícito.
+
+Quando uma categoria financeira é escolhida, a conta cria também uma despesa
+pendente em `Custos & Despesas`; a baixa do boleto sincroniza o status. Salários,
+diárias, alimentação, seguros e outras despesas podem ser gerais, sem veículo.
+Combustível, pedágio e manutenção exigem vínculo com a frota. Manutenção cria
+ainda o agendamento pendente na mesma transação e sempre respeita o `empresaId`.
+O reconhecimento visual não é OCR de texto: beneficiário e demais campos que
+não estejam na camada textual continuam sujeitos a preenchimento manual. O
+RPMTRUCK não inicia nem autoriza transações bancárias.
 
 `relatorios-privados` aceita PDF, XLS, XLSX ou CSV de até 10 MB. Arquivos gerados
 recebem checksum SHA-256, período, tamanho e ciclo de retenção. Downloads usam

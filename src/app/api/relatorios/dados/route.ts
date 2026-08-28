@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
     mesAtual.custo += custo.valor
     meses.set(chaveMes, mesAtual)
 
-    if (custo.categoria === 'COMBUSTIVEL' || custo.categoria === 'MANUTENCAO') {
+    if (custo.veiculoId && (custo.categoria === 'COMBUSTIVEL' || custo.categoria === 'MANUTENCAO')) {
       const totais = custosPorVeiculo.get(custo.veiculoId) ?? { combustivel: 0, manutencao: 0 }
       if (custo.categoria === 'COMBUSTIVEL') totais.combustivel += custo.valor
       if (custo.categoria === 'MANUTENCAO') totais.manutencao += custo.valor

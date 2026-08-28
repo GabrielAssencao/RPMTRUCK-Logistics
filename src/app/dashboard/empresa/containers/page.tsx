@@ -55,6 +55,8 @@ interface MovimentacaoPermanente {
   origem: string
   destino: string
   data: string
+  versao: number
+  registroAtual: boolean
   checksumArquivo: string | null
   arquivadoEm: string | null
   detalhesPurgadosEm: string | null
@@ -111,6 +113,7 @@ export default function ContainersPage() {
   const [totalPaginasHistorico, setTotalPaginasHistorico] = useState(1)
   const [carregandoHistorico, setCarregandoHistorico] = useState(true)
   const [erroHistorico, setErroHistorico] = useState('')
+  const [revisaoHistorico, setRevisaoHistorico] = useState(0)
 
   // Modal Lançamento / Edição
   const [modalOpen, setModalOpen] = useState(false)
@@ -144,7 +147,7 @@ export default function ContainersPage() {
       controller.abort()
       window.clearTimeout(timeout)
     }
-  }, [buscaHistorico, paginaHistorico])
+  }, [buscaHistorico, paginaHistorico, revisaoHistorico])
 
   // ─── FILTRAGEM DE DADOS ─────────────────────────────────────────────────
   const containersFiltrados = containers.filter(c => {
@@ -275,6 +278,7 @@ export default function ContainersPage() {
 
     if (!salvo) return
 
+    setRevisaoHistorico((revisao) => revisao + 1)
     setModalOpen(false)
     setForm({ ...FORM_INICIAL, duplaId: duplas[0]?.id ?? '' })
     setContainerEditandoId(null)
@@ -950,11 +954,16 @@ export default function ContainersPage() {
                 ) : historicoPermanente.map((registro) => (
                   <tr key={registro.id}>
                     <td className="px-5 py-3 font-bold">{new Date(`${registro.data}T12:00:00`).toLocaleDateString('pt-BR')}</td>
-                    <td className="px-5 py-3 font-mono font-black" style={{ color: primary }}>{registro.codigo}</td>
+                    <td className="px-5 py-3 font-mono font-black" style={{ color: primary }}>
+                      {registro.codigo}
+                      <span className="ml-2 text-[9px] font-normal text-foreground-muted">v{registro.versao}</span>
+                    </td>
                     <td className="px-5 py-3">{registro.origem}</td>
                     <td className="px-5 py-3">{registro.destino}</td>
                     <td className="px-5 py-3 text-[10px] text-foreground-muted">
-                      {registro.detalhesPurgadosEm
+                      {registro.registroAtual && !registro.detalhesPurgadosEm
+                        ? 'Espelho da movimentação ativa'
+                        : registro.detalhesPurgadosEm
                         ? 'Detalhes limpos · registro permanente'
                         : registro.arquivadoEm
                           ? `Arquivado · ${registro.checksumArquivo?.slice(0, 10) ?? 'sem checksum'}…`

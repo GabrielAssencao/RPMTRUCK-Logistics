@@ -60,9 +60,11 @@ test('primeiro acesso exige troca atômica de senha temporária', () => {
   const approval = read('src/app/api/solicitacoes/[id]/aprovar/route.ts')
   const login = read('src/app/api/auth/login/route.ts')
   const migration = read('prisma/migrations/20260827010000_primeiro_acesso_seguro/migration.sql')
+  const temporaryPassword = read('src/lib/temporaryPassword.ts')
 
   assert.match(approval, /exigeTrocaSenha: true/)
-  assert.match(approval, /72 \* 60 \* 60 \* 1000/)
+  assert.match(approval, /TEMPORARY_PASSWORD_TTL_MS/)
+  assert.match(temporaryPassword, /72 \* 60 \* 60 \* 1000/)
   assert.match(login, /trocaSenhaObrigatoria: true/)
   assert.match(login, /senhaTemporariaExpiraEm: \{ gt: agora \}/)
   assert.match(login, /if \(troca\.count !== 1\)/)
@@ -78,6 +80,20 @@ test('troca de senha autenticada revoga todas as sessões', () => {
   assert.match(route, /sessaoVersao: \{ increment: 1 \}/)
   assert.match(route, /sessaoUsuario\.updateMany/)
   assert.match(route, /revogadaEm: agora/)
+  assert.match(route, /senhaAlteradaEm: agora/)
+})
+
+test('gestor redefine apenas operadores do próprio tenant e revoga sessões', () => {
+  const route = read('src/app/api/empresa/usuarios/[id]/redefinir-senha/route.ts')
+  const page = read('src/app/dashboard/empresa/usuarios/page.tsx')
+
+  assert.match(route, /requireEmpresaAuth\(request\)/)
+  assert.match(route, /where: \{ id, empresaId: auth\.session\.empresaId \}/)
+  assert.match(route, /usuario\.role === 'GESTOR_EMPRESA'/)
+  assert.match(route, /exigeTrocaSenha: true/)
+  assert.match(route, /sessaoUsuario\.updateMany/)
+  assert.match(route, /Cache-Control': 'no-store'/)
+  assert.doesNotMatch(page, /fetch\('\/api\/auth\/reset-request'/)
 })
 
 test('CSP usa nonce e não permite scripts inline em produção', () => {

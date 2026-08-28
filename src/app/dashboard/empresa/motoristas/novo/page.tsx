@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useTheme } from '@/contexts/ThemeContext'
-import { formatarCPF, formatarRG, somenteNumeros } from '@/utils/documentos'
+import { formatarCPF, formatarRG, normalizarDocumentoIdentidade, normalizarRegistroCNH, somenteNumeros } from '@/utils/documentos'
 import { ArrowLeft, Upload, CheckCircle2, User, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -100,8 +100,8 @@ export default function NovoMotoristaPage() {
     const formData = new FormData()
     formData.set('nome', nomeCompleto)
     formData.set('cpf', somenteNumeros(cpf, 11))
-    formData.set('rg', somenteNumeros(rg, 9))
-    formData.set('cnh', cnh)
+    formData.set('rg', normalizarDocumentoIdentidade(rg))
+    formData.set('cnh', normalizarRegistroCNH(cnh))
     formData.set('categoria', categoriaCNH)
     formData.set('validade', validadeCNH)
     formData.set('status', 'DISPONIVEL')
@@ -154,7 +154,7 @@ export default function NovoMotoristaPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-[10px] uppercase font-bold mb-1">CPF *</label>
               <input 
@@ -173,38 +173,42 @@ export default function NovoMotoristaPage() {
               <p id="ajuda-cpf" className="mt-1 text-[9px] text-foreground-muted">11 números • pontos e traço são adicionados automaticamente</p>
             </div>
             <div>
-              <label className="block text-[10px] uppercase font-bold mb-1">RG (Opcional)</label>
+              <label className="block text-[10px] uppercase font-bold mb-1">RG / CIN (Opcional)</label>
               <input 
                 type="text"
-                inputMode="numeric"
-                pattern="[0-9]{2}[.][0-9]{3}[.][0-9]{3}-[0-9]"
-                maxLength={12}
-                placeholder="00.000.000-0"
+                inputMode="text"
+                pattern="[A-Za-z0-9]{7,14}"
+                minLength={7}
+                maxLength={14}
+                placeholder="Somente letras e números"
                 value={rg}
                 onChange={(e) => setRg(formatarRG(e.target.value))}
                 aria-describedby="ajuda-rg"
                 className="w-full p-2.5 border bg-transparent outline-none text-xs"
                 style={{ borderColor: 'var(--border)' }}
               />
-              <p id="ajuda-rg" className="mt-1 text-[9px] text-foreground-muted">9 números • formatação automática</p>
+              <p id="ajuda-rg" className="mt-1 text-[9px] text-foreground-muted">7 a 14 caracteres • aceita X; para a CIN, informe o CPF</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="col-span-1">
               <label className="block text-[10px] uppercase font-bold mb-1">Nº CNH *</label>
               <input 
                 type="text" 
                 required
                 inputMode="numeric"
-                pattern="[0-9]{11}"
+                pattern="[0-9]{9,11}"
+                minLength={9}
                 maxLength={11}
-                placeholder="12345678900"
+                placeholder="9 a 11 números"
                 value={cnh}
-                onChange={(e) => setCnh(e.target.value)}
+                onChange={(e) => setCnh(normalizarRegistroCNH(e.target.value))}
+                aria-describedby="ajuda-cnh"
                 className="w-full p-2.5 border bg-transparent outline-none text-xs"
                 style={{ borderColor: 'var(--border)' }}
               />
+              <p id="ajuda-cnh" className="mt-1 text-[9px] text-foreground-muted">O número de registro oficial possui 11 dígitos. O cadastro aceita de 9 a 11 para não bloquear a operação; confirme o número no documento apresentado.</p>
             </div>
             <div>
               <label className="block text-[10px] uppercase font-bold mb-1">Categoria *</label>

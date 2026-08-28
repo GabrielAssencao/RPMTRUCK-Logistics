@@ -68,7 +68,14 @@ enum StatusContaPagar {
 }
 
 enum CategoriaContaPagar {
+  COMBUSTIVEL
   MANUTENCAO
+  PEDAGIO
+  ALIMENTACAO
+  DIARIA_MOTORISTA
+  SEGURO
+  SALARIO
+  OUTROS
 }
 
 enum OrigemLeituraBoleto {
@@ -103,6 +110,7 @@ enum CategoriaCusto {
   ALIMENTACAO
   DIARIA_MOTORISTA
   SEGURO
+  SALARIO
   OUTROS
 }
 
@@ -225,6 +233,7 @@ model Usuario {
   sessaoVersao            Int       @default(0) @map("sessao_versao")
   exigeTrocaSenha         Boolean   @default(false) @map("exige_troca_senha")
   senhaTemporariaExpiraEm DateTime? @map("senha_temporaria_expira_em")
+  senhaAlteradaEm         DateTime  @default(now()) @map("senha_alterada_em")
 
   // Se for nulo, indica que o usuário é da equipe interna RPMTruck (Geral Admin)
   empresaId String?
@@ -359,7 +368,8 @@ model HistoricoVeiculo {
 
   relatorioArquivoId String?
   relatorioArquivo   RelatorioArquivo? @relation(fields: [relatorioArquivoId], references: [id], onDelete: Restrict)
-  contaPagar         ContaPagar?
+
+  contaPagar ContaPagar?
 
   criado_em DateTime @default(now())
 
@@ -401,8 +411,8 @@ model Custo {
   formaPagamento String         @default("CARTÃO CORPORATIVO")
   status         StatusCusto    @default(PAGO)
 
-  veiculoId String
-  veiculo   Veiculo @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
+  veiculoId String?
+  veiculo   Veiculo? @relation(fields: [veiculoId], references: [id], onDelete: SetNull)
 
   motoristaId String?
   motorista   Motorista? @relation(fields: [motoristaId], references: [id], onDelete: SetNull)
@@ -413,12 +423,16 @@ model Custo {
   relatorioArquivoId String?
   relatorioArquivo   RelatorioArquivo? @relation(fields: [relatorioArquivoId], references: [id], onDelete: Restrict)
 
+  contaPagarId String?     @unique @map("conta_pagar_id")
+  contaPagar   ContaPagar? @relation(fields: [contaPagarId], references: [id], onDelete: SetNull)
+
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
 
   @@index([empresaId, data])
   @@index([veiculoId, data])
   @@index([relatorioArquivoId])
+  @@index([empresaId, categoria, data])
   @@map("custos")
 }
 
@@ -516,7 +530,9 @@ model Container {
 
 model MovimentacaoContainerPermanente {
   id                  String   @id @default(uuid())
-  container_origem_id String   @unique
+  container_origem_id String
+  versao              Int      @default(1)
+  registro_atual      Boolean  @default(true)
   codigo_container    String
   terminal_origem     String
   terminal_destino    String
@@ -537,6 +553,7 @@ model MovimentacaoContainerPermanente {
   @@index([empresaId, codigo_container])
   @@index([empresaId, data_operacao])
   @@index([relatorioArquivoId])
+  @@unique([container_origem_id, versao], map: "mov_container_origem_versao_key")
   @@map("movimentacoes_container_permanentes")
 }
 
@@ -601,6 +618,8 @@ model ContaPagar {
 
   historicoVeiculoId String?           @unique @map("historico_veiculo_id")
   historicoVeiculo   HistoricoVeiculo? @relation(fields: [historicoVeiculoId], references: [id], onDelete: SetNull)
+
+  custo Custo?
 
   @@index([empresaId, status, vencimento])
   @@index([empresaId, criado_em])

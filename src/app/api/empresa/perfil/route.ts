@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
         email: usuario.email,
         role: usuario.role,
         acessoDashboardGeral: usuario.acessoDashboardGeral,
+        senhaAlteradaEm: usuario.senhaAlteradaEm,
       },
       empresa: auth.empresa,
     },

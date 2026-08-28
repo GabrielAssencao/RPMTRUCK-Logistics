@@ -28,3 +28,10 @@ A leitura local da camada de texto de boletos em PDF usa o
 [PDF.js](https://github.com/mozilla/pdf.js), Copyright Mozilla Foundation e
 colaboradores, distribuído sob a
 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+## ZXing for JavaScript
+
+O fallback de leitura local de códigos de barras usa o
+[@zxing/browser](https://github.com/zxing-js/browser), Copyright ZXing for JS,
+sob licença MIT, e o [@zxing/library](https://github.com/zxing-js/library),
+distribuído sob a [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).

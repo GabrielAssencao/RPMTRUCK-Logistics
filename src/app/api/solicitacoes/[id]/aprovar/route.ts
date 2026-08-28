@@ -6,9 +6,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PLANOS_CONFIG as PLANOS_PADRONIZADOS } from '@/utils/planos';
 import { obterPlanoComercial } from '@/lib/financeiro/planosComerciais';
-import { randomBytes } from 'crypto';
 import { executarComAuditoria } from '@/lib/auditoria';
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
+import { gerarSenhaTemporaria, TEMPORARY_PASSWORD_TTL_MS } from '@/lib/temporaryPassword';
 
 class SolicitacaoJaProcessadaError extends Error {
   constructor() {
@@ -46,9 +46,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const anoReferencia = dataAtual.getFullYear();
 
     // Gerando uma senha padrão temporária inicial forte para o cliente
-    const senhaProvisoria = `RPM@${randomBytes(6).toString('base64url')}`;
+    const senhaProvisoria = gerarSenhaTemporaria();
     const senhaHash = await hashPassword(senhaProvisoria);
-    const senhaTemporariaExpiraEm = new Date(Date.now() + 72 * 60 * 60 * 1000);
+    const senhaTemporariaExpiraEm = new Date(Date.now() + TEMPORARY_PASSWORD_TTL_MS);
 
     // 2. Executa a TRANSACTION (Garante que se um passo falhar, nenhum dado corrompido é gravado)
     const resultado = await executarComAuditoria({ usuarioId: auth.session.userId, origem: 'SUPERADMIN' }, async (tx) => {

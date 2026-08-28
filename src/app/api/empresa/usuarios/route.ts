@@ -10,6 +10,7 @@ import {
   criarUsuarioEmpresaComLimite,
   LimiteUsuariosError,
 } from '@/lib/usuariosEmpresa'
+import { TEMPORARY_PASSWORD_TTL_MS } from '@/lib/temporaryPassword'
 
 const criarOperadorSchema = z.object({
   nome: nomePessoa(3, 100),
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
       senhaHash: await hashPassword(senha),
       role,
       acessoDashboardGeral,
+      senhaTemporariaExpiraEm: new Date(Date.now() + TEMPORARY_PASSWORD_TTL_MS),
       criadoPorId: session.userId,
     })
     await criarNotificacao({ titulo: 'Acesso criado', mensagem: 'Seu usuário foi adicionado à empresa. Revise suas tarefas e notificações no painel.', modulo: 'USUARIOS', empresaId: session.empresaId, usuarioId: usuario.id })

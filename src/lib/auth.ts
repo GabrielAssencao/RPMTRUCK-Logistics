@@ -57,6 +57,7 @@ export interface AuthResult {
     empresaId: string | null
     acessoDashboardGeral: boolean
     sessaoVersao: number
+    senhaAlteradaEm: Date
   }
 }
 
@@ -76,6 +77,7 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
     empresaId: true,
     acessoDashboardGeral: true,
     sessaoVersao: true,
+    senhaAlteradaEm: true,
   } as const
   const usuario = tokenSession.sessionId
     ? (await prisma.sessaoUsuario.findFirst({

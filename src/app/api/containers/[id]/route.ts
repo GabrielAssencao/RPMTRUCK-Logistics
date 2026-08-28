@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import { executarComAuditoria } from '@/lib/auditoria'
-import type { Container } from '@prisma/client'
+import { Prisma, type Container } from '@prisma/client'
 import {
   calcularComissao,
   codigoContainerSchema,
@@ -64,10 +64,6 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     where: { id: params.id, empresaId: auth.session.empresaId },
   })
   if (!atual) return NextResponse.json({ erro: 'Container não encontrado.' }, { status: 404 })
-  if (atual.relatorioArquivoId) {
-    return NextResponse.json({ erro: 'Esta operação está bloqueada porque já foi incluída em um arquivo de auditoria.' }, { status: 409 })
-  }
-
   const parsed = schema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? 'Alteração inválida.' }, { status: 400 })
   const dados = parsed.data
@@ -79,48 +75,83 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   const frete = dados.frete ?? atual.frete
   const percentualComissao = dados.percentualComissao ?? atual.percentual_comissao
 
-  const container = await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
-    const atualizado = await tx.container.update({
-      where: { id: atual.id },
-      data: {
-        data: dados.data ? new Date(`${dados.data}T12:00:00`) : undefined,
-        codigo: dados.codigo,
-        tipo: dados.tipo,
-        terminal_inicio: dados.terminalInicio,
-        terminal_fim: dados.terminalFim,
-        frete: dados.frete,
-        comissao: dados.frete !== undefined || dados.percentualComissao !== undefined
-          ? calcularComissao(frete, percentualComissao)
-          : undefined,
-        percentual_comissao: dados.percentualComissao,
-        status: dados.status,
-        observacoes: dados.observacoes,
-        itens_conteudo: dados.itensConteudo,
-        veiculoId: dados.veiculoId,
-        motoristaId: dados.motoristaId,
-      },
-    })
-    await tx.movimentacaoContainerPermanente.upsert({
-      where: { container_origem_id: atualizado.id },
-      create: {
-        container_origem_id: atualizado.id,
-        codigo_container: atualizado.codigo,
-        terminal_origem: atualizado.terminal_inicio,
-        terminal_destino: atualizado.terminal_fim,
-        data_operacao: atualizado.data,
-        empresaId: atualizado.empresaId,
-      },
-      update: {
-        codigo_container: atualizado.codigo,
-        terminal_origem: atualizado.terminal_inicio,
-        terminal_destino: atualizado.terminal_fim,
-        data_operacao: atualizado.data,
-      },
-    })
-    return atualizado
-  })
+  try {
+    const container = await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
+      const espelhoAtual = await tx.movimentacaoContainerPermanente.findFirst({
+        where: { container_origem_id: atual.id, registro_atual: true },
+        orderBy: { versao: 'desc' },
+      })
+      const atualizado = await tx.container.update({
+        where: { id: atual.id },
+        data: {
+          data: dados.data ? new Date(`${dados.data}T12:00:00`) : undefined,
+          codigo: dados.codigo,
+          tipo: dados.tipo,
+          terminal_inicio: dados.terminalInicio,
+          terminal_fim: dados.terminalFim,
+          frete: dados.frete,
+          comissao: dados.frete !== undefined || dados.percentualComissao !== undefined
+            ? calcularComissao(frete, percentualComissao)
+            : undefined,
+          percentual_comissao: dados.percentualComissao,
+          status: dados.status,
+          observacoes: dados.observacoes,
+          itens_conteudo: dados.itensConteudo,
+          veiculoId: dados.veiculoId,
+          motoristaId: dados.motoristaId,
+          // Um relatório é um retrato imutável. A edição inicia uma nova revisão
+          // operacional, que volta a ficar elegível para o próximo backup.
+          relatorioArquivoId: atual.relatorioArquivoId ? null : undefined,
+        },
+      })
 
-  return NextResponse.json(serializar(container))
+      const dadosEspelho = {
+        codigo_container: atualizado.codigo,
+        terminal_origem: atualizado.terminal_inicio,
+        terminal_destino: atualizado.terminal_fim,
+        data_operacao: atualizado.data,
+      }
+      if (!espelhoAtual) {
+        await tx.movimentacaoContainerPermanente.create({
+          data: {
+            container_origem_id: atualizado.id,
+            versao: 1,
+            registro_atual: true,
+            ...dadosEspelho,
+            empresaId: atualizado.empresaId,
+          },
+        })
+      } else if (!espelhoAtual.relatorioArquivoId) {
+        await tx.movimentacaoContainerPermanente.update({
+          where: { id: espelhoAtual.id },
+          data: dadosEspelho,
+        })
+      } else {
+        await tx.movimentacaoContainerPermanente.update({
+          where: { id: espelhoAtual.id },
+          data: { registro_atual: false },
+        })
+        await tx.movimentacaoContainerPermanente.create({
+          data: {
+            container_origem_id: atualizado.id,
+            versao: espelhoAtual.versao + 1,
+            registro_atual: true,
+            ...dadosEspelho,
+            empresaId: atualizado.empresaId,
+          },
+        })
+      }
+      return atualizado
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+
+    return NextResponse.json(serializar(container))
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2002', 'P2034'].includes(error.code)) {
+      return NextResponse.json({ erro: 'A movimentação foi alterada em outra sessão. Recarregue e tente novamente.' }, { status: 409 })
+    }
+    console.error('Erro ao atualizar container:', error)
+    return NextResponse.json({ erro: 'Não foi possível atualizar a movimentação.' }, { status: 500 })
+  }
 }
 
 export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -139,7 +170,14 @@ export async function DELETE(request: NextRequest, props: { params: Promise<{ id
     return NextResponse.json({ erro: 'Esta operação está bloqueada porque já foi incluída em um arquivo de auditoria.' }, { status: 409 })
   }
 
-  // O registro mínimo da movimentação permanece por exigência de auditoria.
-  await executarComAuditoria({ usuarioId: auth.session.userId }, (tx) => tx.container.delete({ where: { id: atual.id } }))
+  // O registro mínimo da movimentação permanece por exigência de auditoria,
+  // mas deixa de ser apresentado como espelho de uma movimentação ativa.
+  await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
+    await tx.container.delete({ where: { id: atual.id } })
+    await tx.movimentacaoContainerPermanente.updateMany({
+      where: { container_origem_id: atual.id, registro_atual: true },
+      data: { registro_atual: false },
+    })
+  })
   return NextResponse.json({ sucesso: true })
 }

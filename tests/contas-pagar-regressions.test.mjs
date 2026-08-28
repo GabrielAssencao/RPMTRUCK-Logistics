@@ -96,6 +96,39 @@ test('leitura automática exige ateste no servidor e integração de manutençã
   assert.match(route, /TransactionIsolationLevel\.Serializable/)
 })
 
+test('PDF usa texto e leitura visual com fallback para código de barras', () => {
+  const reader = read('src/app/dashboard/empresa/contas-pagar/_utils/leituraBoletoPdf.ts')
+  const page = read('src/app/dashboard/empresa/contas-pagar/page.tsx')
+  const pkg = read('package.json')
+
+  assert.match(reader, /BarcodeDetector/)
+  assert.match(reader, /import\('@zxing\/browser'\)/)
+  assert.match(reader, /pagina\.render/)
+  assert.match(reader, /codigoBarrasLido/)
+  assert.match(reader, /origemLeitura: codigoVisual \? 'CODIGO_BARRAS' : 'PDF_TEXTO'/)
+  assert.match(page, /dados\.origemLeitura/)
+  assert.match(pkg, /"@zxing\/browser"/)
+})
+
+test('categorias de boleto alimentam custos, incluindo salários, e acompanham a baixa', () => {
+  const schema = read('prisma/schema.prisma')
+  const collection = read('src/app/api/contas-pagar/route.ts')
+  const item = read('src/app/api/contas-pagar/[id]/route.ts')
+  const categories = read('src/lib/financeiro/categoriasContaPagar.ts')
+  const migration = read('prisma/migrations/20260828030000_boletos_custos_e_codigo_barras/migration.sql')
+
+  assert.match(schema, /enum CategoriaContaPagar[\s\S]*COMBUSTIVEL[\s\S]*MANUTENCAO[\s\S]*SALARIO[\s\S]*OUTROS/)
+  assert.match(schema, /contaPagarId String\?[\s\S]*@unique/)
+  assert.match(categories, /Pagamento de salário/)
+  assert.match(categories, /requerVeiculo: true/)
+  assert.match(collection, /tx\.custo\.create/)
+  assert.match(collection, /contaPagarId: contaCriada\.id/)
+  assert.match(item, /tx\.custo\.updateMany/)
+  assert.match(item, /tx\.custo\.deleteMany/)
+  assert.match(migration, /ALTER COLUMN "veiculoId" DROP NOT NULL/)
+  assert.match(migration, /INSERT INTO "custos"[\s\S]*WHERE conta\."categoria" = 'MANUTENCAO'/)
+})
+
 test('exclusão da empresa exige backup assinado, reautenticação e limpeza recuperável', () => {
   const deletion = read('src/app/api/empresa/exclusao-conta/route.ts')
   const exportRoute = read('src/app/api/empresa/exclusao-conta/exportar/route.ts')

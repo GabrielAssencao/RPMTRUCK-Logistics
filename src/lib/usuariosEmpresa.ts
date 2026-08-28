@@ -16,6 +16,7 @@ interface CriarUsuarioEmpresaInput {
   senhaHash: string
   role: Role
   acessoDashboardGeral?: boolean
+  senhaTemporariaExpiraEm?: Date
   criadoPorId: string
 }
 
@@ -45,6 +46,8 @@ export async function criarUsuarioEmpresaComLimite(input: CriarUsuarioEmpresaInp
         senha_hash: input.senhaHash,
         role: input.role,
         acessoDashboardGeral: input.acessoDashboardGeral ?? false,
+        exigeTrocaSenha: Boolean(input.senhaTemporariaExpiraEm),
+        senhaTemporariaExpiraEm: input.senhaTemporariaExpiraEm,
         empresaId: input.empresaId,
       },
       select: {

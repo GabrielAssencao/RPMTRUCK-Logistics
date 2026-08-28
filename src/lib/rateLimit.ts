@@ -121,6 +121,7 @@ export const RATE_LIMITS = {
   PUBLIC_SIGNUP: { limit: 3, windowMs: 60 * 60 * 1000 },
   PASSWORD_RESET_IP: { limit: 8, windowMs: 60 * 60 * 1000 },
   PASSWORD_RESET_ACCOUNT: { limit: 3, windowMs: 60 * 60 * 1000 },
+  OPERATOR_PASSWORD_RESET: { limit: 6, windowMs: 60 * 60 * 1000 },
   REPORT_GENERATE: { limit: 5, windowMs: 60 * 60 * 1000 },
   REPORT_READ: { limit: 30, windowMs: 60 * 1000 },
   REPORT_DOWNLOAD: { limit: 20, windowMs: 60 * 1000 },

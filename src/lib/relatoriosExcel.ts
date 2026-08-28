@@ -38,7 +38,7 @@ interface CustoRelatorio {
   valor: number
   formaPagamento: string
   status: string
-  veiculo: { placa: string; modelo: string }
+  veiculo: { placa: string; modelo: string } | null
   motorista: { nome: string } | null
 }
 
@@ -329,7 +329,7 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
   ], CORES.amarelo)
   abastecimentos.forEach((custo) => combustivel.addRow({
     data: custo.data,
-    veiculo: `${custo.veiculo.modelo} (${custo.veiculo.placa})`,
+    veiculo: custo.veiculo ? `${custo.veiculo.modelo} (${custo.veiculo.placa})` : 'Despesa geral da empresa',
     motorista: custo.motorista?.nome || 'Não vinculado',
     descricao: custo.descricao,
     valor: custo.valor,
@@ -381,7 +381,7 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
   dados.custos.forEach((custo) => custos.addRow({
     data: custo.data,
     categoria: custo.categoria,
-    veiculo: `${custo.veiculo.modelo} (${custo.veiculo.placa})`,
+    veiculo: custo.veiculo ? `${custo.veiculo.modelo} (${custo.veiculo.placa})` : 'Despesa geral da empresa',
     motorista: custo.motorista?.nome || 'Não vinculado',
     descricao: custo.descricao,
     valor: custo.valor,

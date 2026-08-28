@@ -42,7 +42,7 @@ test('delegação de alertas de motoristas é aceita pelo contrato de tarefas', 
   assert.match(route, /z\.enum\(\[[^\]]*'MOTORISTAS'/)
 })
 
-test('CPF e RG usam máscara visual, limites brasileiros e envio somente numérico', () => {
+test('CPF, RG/CIN e CNH usam contratos compatíveis com os documentos apresentados', () => {
   const page = read('src/app/dashboard/empresa/motoristas/novo/page.tsx')
   const route = read('src/app/api/motoristas/route.ts')
   const documentos = read('src/utils/documentos.ts')
@@ -50,13 +50,37 @@ test('CPF e RG usam máscara visual, limites brasileiros e envio somente numéri
   assert.match(page, /setCpf\(formatarCPF\(e\.target\.value\)\)/)
   assert.match(page, /setRg\(formatarRG\(e\.target\.value\)\)/)
   assert.match(page, /formData\.set\('cpf', somenteNumeros\(cpf, 11\)\)/)
-  assert.match(page, /formData\.set\('rg', somenteNumeros\(rg, 9\)\)/)
+  assert.match(page, /formData\.set\('rg', normalizarDocumentoIdentidade\(rg\)\)/)
+  assert.match(page, /formData\.set\('cnh', normalizarRegistroCNH\(cnh\)\)/)
   assert.match(documentos, /somenteNumeros\(valor, 11\)/)
-  assert.match(documentos, /somenteNumeros\(valor, 9\)/)
+  assert.match(documentos, /normalizarDocumentoIdentidade/)
+  assert.match(documentos, /normalizarRegistroCNH/)
+  assert.match(documentos, /cpfValido/)
   assert.match(route, /cpf: z\.string\(\)\.trim\(\)\.regex\(\/\^\\d\{11\}\$\//)
-  assert.match(route, /rg: z\.string\(\)\.trim\(\)\.regex\(\/\^\\d\{9\}\$\//)
+  assert.match(route, /rg: z\.string\(\)\.trim\(\)\.regex\(\/\^\[A-Z0-9\]\{7,14\}\$\//)
+  assert.match(route, /cnh: z\.string\(\)\.trim\(\)\.regex\(\/\^\\d\{9,11\}\$\//)
   assert.match(route, /valorDocumentoNumericoOpcional\(formData, 'cpf'\)/)
-  assert.match(route, /valorDocumentoNumericoOpcional\(formData, 'rg'\)/)
+  assert.match(route, /valorDocumentoIdentidadeOpcional\(formData, 'rg'\)/)
+})
+
+test('ordenação e filtro de operadores possuem estados distintos e opções temáticas', () => {
+  const page = read('src/app/dashboard/empresa/usuarios/page.tsx')
+
+  assert.match(page, /filtroFuncao === 'TODOS' \|\| usuario\.role === filtroFuncao/)
+  assert.match(page, /ordenacao === 'NOME_DESC'/)
+  assert.match(page, /ordenacao === 'CADASTRO_ANTIGO'/)
+  assert.match(page, /style=\{OPTION_STYLE\}/)
+})
+
+test('edição de container mantém o registro operacional e versiona o espelho arquivado', () => {
+  const route = read('src/app/api/containers/[id]/route.ts')
+  const migration = read('prisma/migrations/20260828040000_fluxos_operacionais_e_senhas/migration.sql')
+
+  assert.match(route, /relatorioArquivoId: atual\.relatorioArquivoId \? null : undefined/)
+  assert.match(route, /registro_atual: false/)
+  assert.match(route, /versao: espelhoAtual\.versao \+ 1/)
+  assert.doesNotMatch(route.match(/export async function PATCH[\s\S]*?export async function DELETE/)?.[0] ?? '', /bloqueada porque já foi incluída/)
+  assert.match(migration, /WHERE "registro_atual" = true/)
 })
 
 test('detalhes do alerta exibem a observação completa em diálogo acessível', () => {

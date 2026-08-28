@@ -122,6 +122,7 @@ export async function POST(request: NextRequest) {
             senha_hash: novoHash,
             exigeTrocaSenha: false,
             senhaTemporariaExpiraEm: null,
+            senhaAlteradaEm: agora,
             sessaoVersao: { increment: 1 },
           },
         });

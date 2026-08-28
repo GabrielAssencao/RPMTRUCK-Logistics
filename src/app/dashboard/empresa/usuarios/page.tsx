@@ -14,7 +14,9 @@ import {
   Eye,
   User,
   Loader2,
-  ArrowUpDown
+  ArrowUpDown,
+  Copy,
+  X,
 } from 'lucide-react'
 import GenericDrawer, { FieldConfig } from '@/components/dashboard/GenericDrawer'
 
@@ -28,7 +30,15 @@ interface UsuarioLocal {
   criadoEm: string
 }
 
-type OrdenacaoOperadores = 'HIERARQUIA' | 'NOME' | 'FUNCAO' | 'CADASTRO'
+type OrdenacaoOperadores = 'HIERARQUIA' | 'NOME_ASC' | 'NOME_DESC' | 'CADASTRO_RECENTE' | 'CADASTRO_ANTIGO'
+type FiltroFuncao = 'TODOS' | UsuarioLocal['role']
+
+interface CredencialTemporaria {
+  nome: string
+  email: string
+  senha: string
+  expiraEm: string
+}
 
 const PESO_HIERARQUIA: Record<UsuarioLocal['role'], number> = {
   GESTOR_EMPRESA: 3,
@@ -53,7 +63,7 @@ const CAMPOS_USUARIO: FieldConfig[] = [
   },
   { 
     name: 'senha', 
-    label: 'Senha Inicial de Acesso', 
+    label: 'Senha Inicial (troca obrigatória no primeiro acesso)',
     type: 'password',
     placeholder: 'Mínimo de 8 caracteres',
     required: true,
@@ -83,16 +93,19 @@ const CAMPOS_USUARIO: FieldConfig[] = [
 ]
 
 export default function UsuariosPage() {
-  const { primary } = useTheme()
+  const { primary, isLight } = useTheme()
   const [montado, setMontado] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [busca, setBusca] = useState('')
   const [ordenacao, setOrdenacao] = useState<OrdenacaoOperadores>('HIERARQUIA')
+  const [filtroFuncao, setFiltroFuncao] = useState<FiltroFuncao>('TODOS')
   const [loading, setLoading] = useState(true)
 
   const [usuarios, setUsuarios] = useState<UsuarioLocal[]>([])
   const [usuarioLogadoId, setUsuarioLogadoId] = useState('')
   const [salvandoPermissaoId, setSalvandoPermissaoId] = useState<string | null>(null)
+  const [redefinindoId, setRedefinindoId] = useState<string | null>(null)
+  const [credencialTemporaria, setCredencialTemporaria] = useState<CredencialTemporaria | null>(null)
   
   const [perfilLogado, setPerfilLogado] = useState<'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'>('VISUALIZADOR')
 
@@ -134,18 +147,21 @@ export default function UsuariosPage() {
 
   const usuariosFiltrados = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase('pt-BR')
-    const filtrados = usuarios.filter((usuario) =>
+    const filtrados = usuarios.filter((usuario) => (
+      filtroFuncao === 'TODOS' || usuario.role === filtroFuncao
+    ) && (
       usuario.nome.toLocaleLowerCase('pt-BR').includes(termo) ||
       usuario.email.toLocaleLowerCase('pt-BR').includes(termo)
-    )
+    ))
 
     return [...filtrados].sort((a, b) => {
-      if (ordenacao === 'NOME') return a.nome.localeCompare(b.nome, 'pt-BR')
-      if (ordenacao === 'FUNCAO') return a.role.localeCompare(b.role, 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR')
-      if (ordenacao === 'CADASTRO') return b.criadoEm.localeCompare(a.criadoEm) || a.nome.localeCompare(b.nome, 'pt-BR')
+      if (ordenacao === 'NOME_ASC') return a.nome.localeCompare(b.nome, 'pt-BR')
+      if (ordenacao === 'NOME_DESC') return b.nome.localeCompare(a.nome, 'pt-BR')
+      if (ordenacao === 'CADASTRO_RECENTE') return b.criadoEm.localeCompare(a.criadoEm) || a.nome.localeCompare(b.nome, 'pt-BR')
+      if (ordenacao === 'CADASTRO_ANTIGO') return a.criadoEm.localeCompare(b.criadoEm) || a.nome.localeCompare(b.nome, 'pt-BR')
       return PESO_HIERARQUIA[b.role] - PESO_HIERARQUIA[a.role] || a.nome.localeCompare(b.nome, 'pt-BR')
     })
-  }, [busca, ordenacao, usuarios])
+  }, [busca, filtroFuncao, ordenacao, usuarios])
 
   if (!montado) return null
 
@@ -228,23 +244,25 @@ export default function UsuariosPage() {
     }
   }
 
-  const solicitarReset = async (usuario: UsuarioLocal) => {
-    const proprioAcesso = usuario.id === usuarioLogadoId
-    const mensagem = proprioAcesso
-      ? 'Enviar sua solicitação de redefinição ao SuperAdmin?'
-      : `Enviar ao SuperAdmin uma solicitação de redefinição para ${usuario.nome}?`
-    if (!window.confirm(mensagem)) return
+  const redefinirAcesso = async (usuario: UsuarioLocal) => {
+    if (usuario.id === usuarioLogadoId || usuario.role === 'GESTOR_EMPRESA') {
+      alert('A senha do gestor só pode ser alterada em Configurações > Segurança.')
+      return
+    }
+    if (!window.confirm(`Gerar uma nova senha temporária para ${usuario.nome}? As sessões atuais serão encerradas.`)) return
 
+    setRedefinindoId(usuario.id)
     try {
-      const response = await fetch('/api/auth/reset-request', {
+      const response = await fetch(`/api/empresa/usuarios/${usuario.id}/redefinir-senha`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: usuario.email }),
       })
       const data = await response.json()
-      alert(response.ok ? data.mensagem : data.erro || 'Não foi possível solicitar a redefinição.')
+      if (!response.ok) return alert(data.erro || 'Não foi possível redefinir o acesso.')
+      setCredencialTemporaria(data.credencialTemporaria)
     } catch {
-      alert('Erro de conexão ao solicitar a redefinição.')
+      alert('Erro de conexão ao redefinir o acesso.')
+    } finally {
+      setRedefinindoId(null)
     }
   }
 
@@ -278,7 +296,7 @@ export default function UsuariosPage() {
       </div>
 
       {/* ─── BARRA DE PESQUISA ─── */}
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem_18rem]">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none" style={{ color: 'var(--foreground-muted)' }}>
             <Search size={16} />
@@ -300,18 +318,34 @@ export default function UsuariosPage() {
           />
         </div>
         <label className="relative flex items-center border" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
+          <ShieldCheck size={15} className="pointer-events-none absolute left-3" style={{ color: primary }} />
+          <span className="sr-only">Filtrar por função</span>
+          <select
+            value={filtroFuncao}
+            onChange={(event) => setFiltroFuncao(event.target.value as FiltroFuncao)}
+            className="min-h-11 w-full appearance-none bg-transparent py-3 pl-10 pr-4 text-xs font-bold uppercase tracking-wider outline-none"
+            style={{ color: 'var(--foreground)', colorScheme: isLight ? 'light' : 'dark' }}
+          >
+            <option value="TODOS" style={OPTION_STYLE}>Todas as funções</option>
+            <option value="GESTOR_EMPRESA" style={OPTION_STYLE}>Gestor</option>
+            <option value="OPERADOR" style={OPTION_STYLE}>Operador</option>
+            <option value="VISUALIZADOR" style={OPTION_STYLE}>Visualizador</option>
+          </select>
+        </label>
+        <label className="relative flex items-center border" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
           <ArrowUpDown size={15} className="pointer-events-none absolute left-3" style={{ color: primary }} />
           <span className="sr-only">Ordenar operadores</span>
           <select
             value={ordenacao}
             onChange={(event) => setOrdenacao(event.target.value as OrdenacaoOperadores)}
             className="min-h-11 w-full appearance-none bg-transparent py-3 pl-10 pr-4 text-xs font-bold uppercase tracking-wider outline-none"
-            style={{ color: 'var(--foreground)' }}
+            style={{ color: 'var(--foreground)', colorScheme: isLight ? 'light' : 'dark' }}
           >
-            <option value="HIERARQUIA">Hierarquia (maior primeiro)</option>
-            <option value="NOME">Nome (A–Z)</option>
-            <option value="FUNCAO">Função / cargo</option>
-            <option value="CADASTRO">Cadastro (mais recente)</option>
+            <option value="HIERARQUIA" style={OPTION_STYLE}>Hierarquia (maior primeiro)</option>
+            <option value="NOME_ASC" style={OPTION_STYLE}>Nome (A–Z)</option>
+            <option value="NOME_DESC" style={OPTION_STYLE}>Nome (Z–A)</option>
+            <option value="CADASTRO_RECENTE" style={OPTION_STYLE}>Cadastro (mais recente)</option>
+            <option value="CADASTRO_ANTIGO" style={OPTION_STYLE}>Cadastro (mais antigo)</option>
           </select>
         </label>
       </div>
@@ -412,13 +446,18 @@ export default function UsuariosPage() {
 
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button 
-                            title={u.id === usuarioLogadoId ? 'Solicitar meu reset ao SuperAdmin' : 'Solicitar reset ao SuperAdmin'}
-                            onClick={() => void solicitarReset(u)}
-                            className="p-2 text-foreground-muted hover:text-foreground transition-colors rounded hover:bg-white/5"
-                          >
-                            <Lock size={14} />
-                          </button>
+                          {u.id !== usuarioLogadoId && u.role !== 'GESTOR_EMPRESA' && (
+                            <button
+                              type="button"
+                              title="Gerar senha temporária"
+                              aria-label={`Redefinir acesso de ${u.nome}`}
+                              disabled={redefinindoId === u.id}
+                              onClick={() => void redefinirAcesso(u)}
+                              className="p-2 text-foreground-muted hover:text-foreground transition-colors rounded hover:bg-white/5 disabled:opacity-50"
+                            >
+                              {redefinindoId === u.id ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
+                            </button>
+                          )}
                           {u.id !== usuarioLogadoId && u.role !== 'GESTOR_EMPRESA' && (
                             <button
                               title="Remover Operador"
@@ -448,6 +487,32 @@ export default function UsuariosPage() {
         campos={CAMPOS_USUARIO}
         onSubmit={handleCriarUsuario}
       />
+
+      {credencialTemporaria && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="presentation">
+          <div role="dialog" aria-modal="true" aria-labelledby="titulo-credencial-temporaria" className="w-full max-w-lg border p-5" style={{ backgroundColor: 'var(--background)', borderColor: primary }}>
+            <div className="flex items-start justify-between gap-4 border-b pb-3" style={{ borderColor: 'var(--border)' }}>
+              <div>
+                <h2 id="titulo-credencial-temporaria" className="text-base font-black uppercase">Senha temporária gerada</h2>
+                <p className="mt-1 text-xs text-foreground-muted">Copie agora. Por segurança, ela não será exibida novamente.</p>
+              </div>
+              <button type="button" aria-label="Fechar" onClick={() => setCredencialTemporaria(null)} className="p-2 text-foreground-muted hover:text-foreground"><X size={16} /></button>
+            </div>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div><dt className="text-[10px] font-bold uppercase text-foreground-muted">Operador</dt><dd>{credencialTemporaria.nome} · {credencialTemporaria.email}</dd></div>
+              <div>
+                <dt className="text-[10px] font-bold uppercase text-foreground-muted">Senha temporária</dt>
+                <dd className="mt-1 flex items-center justify-between gap-3 border p-3 font-mono" style={{ borderColor: 'var(--border)' }}>
+                  <span className="break-all">{credencialTemporaria.senha}</span>
+                  <button type="button" aria-label="Copiar senha temporária" onClick={() => void navigator.clipboard.writeText(credencialTemporaria.senha)} className="shrink-0 p-2" style={{ color: primary }}><Copy size={16} /></button>
+                </dd>
+              </div>
+              <div><dt className="text-[10px] font-bold uppercase text-foreground-muted">Validade</dt><dd>{new Date(credencialTemporaria.expiraEm).toLocaleString('pt-BR')}</dd></div>
+            </dl>
+            <p className="mt-4 border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-400">No próximo acesso, o operador deverá criar uma senha pessoal. As sessões anteriores já foram encerradas.</p>
+          </div>
+        </div>
+      )}
 
     </div>
   )
@@ -484,3 +549,5 @@ interface UsuarioApi {
   acessoDashboardGeral: boolean
   criado_em: string
 }
+
+const OPTION_STYLE = { backgroundColor: 'var(--background)', color: 'var(--foreground)' }

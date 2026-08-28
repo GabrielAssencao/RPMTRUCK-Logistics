@@ -16,6 +16,7 @@ import {
   somenteDigitosBoleto,
 } from '@/lib/financeiro/contasPagar'
 import { ArquivoContaPagarError, removerArquivosContaPagar, salvarArquivoContaPagar } from '@/lib/financeiro/contasPagarStorage'
+import { categoriaContaPagarRequerVeiculo, VALORES_CATEGORIA_CONTA_PAGAR } from '@/lib/financeiro/categoriasContaPagar'
 
 const schema = z.object({
   descricao: z.string().trim().min(3).max(160),
@@ -25,7 +26,7 @@ const schema = z.object({
   linhaDigitavel: z.string().trim().max(80).optional(),
   origemLeitura: z.enum(['MANUAL', 'PDF_TEXTO', 'CODIGO_BARRAS']).default('MANUAL'),
   revisado: z.enum(['true', 'false']).default('false').transform((valor) => valor === 'true'),
-  categoria: z.enum(['MANUTENCAO']).optional(),
+  categoria: z.enum(VALORES_CATEGORIA_CONTA_PAGAR).optional(),
   veiculoId: z.string().uuid().optional(),
 }).strict()
 
@@ -40,6 +41,7 @@ function serializar(conta: {
   linha_digitavel: string | null; origem_leitura: string; boleto_path: string | null; boleto_nome: string | null
   comprovante_path: string | null; comprovante_nome: string | null; pago_em: Date | null; criado_em: Date; atualizado_em: Date
   categoria: string | null; veiculoId: string | null; historicoVeiculoId: string | null
+  custo?: { id: string } | null
   veiculo?: { id: string; placa: string; modelo: string } | null
 }, empresaId: string) {
   const linha = decryptSensitive(conta.linha_digitavel, empresaId, 'contaPagar.linhaDigitavel') ?? ''
@@ -56,6 +58,7 @@ function serializar(conta: {
     categoria: conta.categoria,
     veiculo: conta.veiculo ?? null,
     manutencaoId: conta.historicoVeiculoId,
+    custoId: conta.custo?.id ?? null,
     possuiBoleto: Boolean(conta.boleto_path),
     boletoNome: conta.boleto_nome,
     possuiComprovante: Boolean(conta.comprovante_path),
@@ -82,11 +85,18 @@ export async function GET(request: NextRequest) {
     },
     orderBy: [{ status: 'asc' }, { vencimento: 'asc' }, { criado_em: 'desc' }],
     take: 500,
-    include: { veiculo: { select: { id: true, placa: true, modelo: true } } },
+    include: {
+      veiculo: { select: { id: true, placa: true, modelo: true } },
+      custo: { select: { id: true } },
+    },
   })
   return NextResponse.json({
     contas: contas.map((conta) => serializar(conta, auth.empresaId!)),
     capacidades: CAPACIDADES_CONTAS_PAGAR[auth.empresa.plano],
+    integracoes: {
+      custos: auth.empresa.modulos.includes('GESTAO'),
+      frota: auth.empresa.modulos.includes('FROTA'),
+    },
     portalFinanceiro: auth.empresa.portal_financeiro_url
       ? { nome: auth.empresa.portal_financeiro_nome || 'Portal financeiro', url: auth.empresa.portal_financeiro_url }
       : null,
@@ -120,8 +130,11 @@ export async function POST(request: NextRequest) {
     if (parsed.data.origemLeitura !== 'MANUAL' && !parsed.data.revisado) {
       return NextResponse.json({ erro: 'Ateste a conferência dos dados extraídos antes de salvar.' }, { status: 422 })
     }
-    if (parsed.data.categoria === 'MANUTENCAO' && !parsed.data.veiculoId) {
-      return NextResponse.json({ erro: 'Selecione o veículo relacionado à manutenção.' }, { status: 400 })
+    if (parsed.data.categoria && !auth.empresa.modulos.includes('GESTAO')) {
+      return NextResponse.json({ erro: 'O módulo Controle & Gestão precisa estar ativo para integrar a despesa.' }, { status: 403 })
+    }
+    if (categoriaContaPagarRequerVeiculo(parsed.data.categoria) && !parsed.data.veiculoId) {
+      return NextResponse.json({ erro: 'Selecione o veículo relacionado à despesa operacional.' }, { status: 400 })
     }
     if (parsed.data.categoria === 'MANUTENCAO' && !auth.empresa.modulos.includes('FROTA')) {
       return NextResponse.json({ erro: 'O módulo Frota precisa estar ativo para integrar uma manutenção.' }, { status: 403 })
@@ -140,6 +153,7 @@ export async function POST(request: NextRequest) {
     }
 
     const id = randomUUID()
+    const vencimento = dataLocal(parsed.data.vencimento)
     const arquivo = form.get('boleto')
     const boleto = arquivo instanceof File && arquivo.size > 0
       ? await salvarArquivoContaPagar(auth.empresaId!, id, 'boleto', arquivo)
@@ -149,7 +163,7 @@ export async function POST(request: NextRequest) {
       const manutencao = parsed.data.categoria === 'MANUTENCAO' && veiculo
         ? await tx.historicoVeiculo.create({
             data: {
-              data_agendada: dataLocal(parsed.data.vencimento),
+              data_agendada: vencimento,
               tipo: 'CORRETIVA',
               descricao: `Conta a pagar: ${parsed.data.descricao}`,
               custo: parsed.data.valor,
@@ -162,12 +176,12 @@ export async function POST(request: NextRequest) {
           })
         : null
 
-      return tx.contaPagar.create({
+      const contaCriada = await tx.contaPagar.create({
         data: {
           id,
           descricao: parsed.data.descricao,
           fornecedor: parsed.data.fornecedor || null,
-          vencimento: dataLocal(parsed.data.vencimento),
+          vencimento,
           valor: parsed.data.valor,
           linha_digitavel: linha ? encryptSensitive(linha, auth.empresaId!, 'contaPagar.linhaDigitavel') : null,
           origem_leitura: parsed.data.origemLeitura,
@@ -181,7 +195,33 @@ export async function POST(request: NextRequest) {
           empresaId: auth.empresaId!,
           criadoPorId: auth.session.userId,
         },
-        include: { veiculo: { select: { id: true, placa: true, modelo: true } } },
+      })
+
+      if (parsed.data.categoria) {
+        await tx.custo.create({
+          data: {
+            data: vencimento,
+            ano: vencimento.getUTCFullYear(),
+            mesIndex: vencimento.getUTCMonth(),
+            semanaIndex: Math.min(4, Math.floor((vencimento.getUTCDate() - 1) / 7) + 1),
+            categoria: parsed.data.categoria,
+            descricao: `Boleto: ${parsed.data.descricao}`,
+            valor: parsed.data.valor,
+            formaPagamento: 'BOLETO',
+            status: 'PENDENTE',
+            veiculoId: veiculo?.id ?? null,
+            empresaId: auth.empresaId!,
+            contaPagarId: contaCriada.id,
+          },
+        })
+      }
+
+      return tx.contaPagar.findUniqueOrThrow({
+        where: { id: contaCriada.id },
+        include: {
+          veiculo: { select: { id: true, placa: true, modelo: true } },
+          custo: { select: { id: true } },
+        },
       })
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
     return NextResponse.json({ conta: serializar(conta, auth.empresaId!), aviso: 'Confirme beneficiário, vencimento e valor no aplicativo do banco antes de pagar.' }, { status: 201 })

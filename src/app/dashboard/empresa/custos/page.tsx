@@ -34,11 +34,11 @@ import {
 } from 'lucide-react'
 
 // ─── TIPOS E DADOS ──────────────────────────────────────────────────────────
-type CategoriaCusto = 'COMBUSTIVEL' | 'MANUTENCAO' | 'PEDAGIO' | 'ALIMENTACAO' | 'DIARIA_MOTORISTA' | 'SEGURO' | 'OUTROS'
+type CategoriaCusto = 'COMBUSTIVEL' | 'MANUTENCAO' | 'PEDAGIO' | 'ALIMENTACAO' | 'DIARIA_MOTORISTA' | 'SEGURO' | 'SALARIO' | 'OUTROS'
 
 interface RegistroCusto {
   id: string
-  duplaId: string
+  duplaId: string | null
   data: string // YYYY-MM-DD
   ano: number
   mesIndex: number // 0 a 11
@@ -49,6 +49,7 @@ interface RegistroCusto {
   formaPagamento: string
   status: 'PAGO' | 'PENDENTE'
   arquivado: boolean
+  origemContaPagar: boolean
 }
 
 // Linha "achatada" usada só pra renderizar a tabela — une lançamentos
@@ -56,7 +57,7 @@ interface RegistroCusto {
 // sem misturar os dois modelos de dados.
 interface LinhaExibicao {
   id: string
-  duplaId: string
+  duplaId: string | null
   veiculoModelo: string
   veiculoPlaca: string
   motoristaNome: string
@@ -66,7 +67,7 @@ interface LinhaExibicao {
   formaPagamento: string
   valor: number
   status: 'PAGO' | 'PENDENTE'
-  origem: 'MANUAL' | 'CONTAINER_AUTO'
+  origem: 'MANUAL' | 'CONTA_PAGAR' | 'CONTAINER_AUTO'
   arquivado: boolean
 }
 
@@ -156,6 +157,10 @@ export default function CustosPage() {
 
     return pertenceADupla && mesmoAno && mesmoMes && mesmaSemana && matchBusca && matchCategoria
   })
+  const despesasGerais = custos
+    .filter((custo) => !custo.duplaId && custo.ano === anoSelecionado && custo.mesIndex === mesSelecionadoIndex && custo.semanaIndex === semanaSelecionada)
+    .sort((a, b) => b.data.localeCompare(a.data))
+  const totalDespesasGerais = despesasGerais.reduce((total, custo) => total + custo.valor, 0)
 
   // ─── COMISSÕES AUTOMÁTICAS DE CONTAINERS (NOVO) ────────────────────────
   // Regra: container CANCELADO não gera custo. ENTREGUE = comissão PAGA.
@@ -206,7 +211,7 @@ export default function CustosPage() {
     formaPagamento: c.formaPagamento,
     valor: c.valor,
     status: c.status,
-    origem: 'MANUAL',
+    origem: c.origemContaPagar ? 'CONTA_PAGAR' : 'MANUAL',
     arquivado: c.arquivado,
   }))
 
@@ -243,7 +248,7 @@ export default function CustosPage() {
   const linhasCombinadas = [...linhasManual, ...linhasComissaoContainer].sort((a, b) => b.data.localeCompare(a.data))
   const periodoFiltroDia = obterAnoMesSemana(dataFiltroDia || new Date().toISOString().split('T')[0])
   const termoBusca = busca.trim().toLowerCase()
-  const duplaCorrespondeAoCaminhao = (duplaId: string) => {
+  const duplaCorrespondeAoCaminhao = (duplaId: string | null) => {
     if (placaFiltroDia === 'TODOS') return true
     return duplas.some(dupla => dupla.id === duplaId && dupla.veiculoPlaca === placaFiltroDia)
   }
@@ -268,7 +273,7 @@ export default function CustosPage() {
         formaPagamento: custo.formaPagamento,
         valor: custo.valor,
         status: custo.status,
-        origem: 'MANUAL' as const,
+        origem: custo.origemContaPagar ? 'CONTA_PAGAR' as const : 'MANUAL' as const,
         arquivado: custo.arquivado,
       }
     })
@@ -308,6 +313,10 @@ export default function CustosPage() {
   // 🔄 ALTERAÇÃO RÁPIDA DE STATUS DO LANÇAMENTO (só afeta lançamentos manuais)
   const handleAlterarStatusRapido = async (id: string, novoStatus: 'PAGO' | 'PENDENTE') => {
     const custoAtual = custos.find((custo) => custo.id === id)
+    if (custoAtual?.origemContaPagar) {
+      setErroFormulario('Altere o status pela baixa do boleto em Contas a Pagar.')
+      return
+    }
     if (custoAtual?.arquivado) {
       setErroFormulario('Este custo faz parte de um relatório de auditoria e permanece somente para consulta.')
       return
@@ -390,6 +399,11 @@ export default function CustosPage() {
 
   const handleConfirmarExclusao = async (id: string) => {
     const custoAtual = custos.find((custo) => custo.id === id)
+    if (custoAtual?.origemContaPagar) {
+      setExcluindoId(null)
+      setErroFormulario('A despesa vinculada deve ser gerenciada em Contas a Pagar.')
+      return
+    }
     if (custoAtual?.arquivado) {
       setExcluindoId(null)
       setErroFormulario('Este custo faz parte de um relatório de auditoria e não pode ser excluído.')
@@ -480,6 +494,30 @@ export default function CustosPage() {
           <span className="text-[9px] text-foreground-muted whitespace-nowrap">Data define o período automaticamente</span>
         </div>
       </div>
+
+      {despesasGerais.length > 0 && (
+        <section className="border" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+          <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)' }}>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest">Despesas gerais da empresa</p>
+              <p className="mt-1 text-[10px] text-foreground-muted">Sem vínculo obrigatório com veículo · {MESES[mesSelecionadoIndex]} · Semana {semanaSelecionada}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <strong className="font-rajdhani text-xl">{totalDespesasGerais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>
+              <Link href="/dashboard/empresa/contas-pagar" className="border px-3 py-2 text-[9px] font-bold uppercase" style={{ borderColor: primary, color: primary }}>Abrir contas a pagar</Link>
+            </div>
+          </div>
+          <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+            {despesasGerais.slice(0, 8).map((custo) => (
+              <div key={custo.id} className="grid gap-2 p-3 text-[10px] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+                <div className="min-w-0"><strong className="block truncate uppercase">{custo.descricao}</strong><span className="text-foreground-muted">{custo.categoria.replaceAll('_', ' ')} · {new Date(`${custo.data}T12:00:00`).toLocaleDateString('pt-BR')}</span></div>
+                <span className="font-bold">{custo.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                <span className="border px-2 py-1 text-center font-bold" style={{ borderColor: custo.status === 'PAGO' ? '#22c55e55' : '#f59e0b55', color: custo.status === 'PAGO' ? '#22c55e' : '#f59e0b' }}>{custo.status}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ─── 1. SELETOR DE ALOCAÇÃO (VEÍCULO + MOTORISTA) ─── */}
       <div className="border p-4 relative" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
@@ -720,7 +758,7 @@ export default function CustosPage() {
         </div>
 
         <div className="flex overflow-x-auto hide-scrollbar gap-2">
-          {['TODOS', 'COMBUSTIVEL', 'MANUTENCAO', 'PEDAGIO', 'ALIMENTACAO', 'DIARIA_MOTORISTA', 'SEGURO', 'COMISSAO_TRANSPORTE'].map((cat) => (
+          {['TODOS', 'COMBUSTIVEL', 'MANUTENCAO', 'PEDAGIO', 'ALIMENTACAO', 'DIARIA_MOTORISTA', 'SEGURO', 'SALARIO', 'COMISSAO_TRANSPORTE'].map((cat) => (
             <button
               key={cat}
               onClick={() => setFiltroCategoria(cat)}
@@ -795,6 +833,9 @@ export default function CustosPage() {
                               AUTOMÁTICO
                             </span>
                           )}
+                          {linha.origem === 'CONTA_PAGAR' && (
+                            <span className="shrink-0 border px-1.5 py-0.5 text-[8px] font-black" style={{ borderColor: `${primary}55`, color: primary }}>VIA BOLETO</span>
+                          )}
                           {linha.arquivado && (
                             <span className="inline-flex shrink-0 items-center gap-1 border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-black text-amber-500" title="Registro preservado em relatório de auditoria">
                               <Lock size={9} /> ARQUIVADO
@@ -829,7 +870,7 @@ export default function CustosPage() {
                               borderColor: linha.status === 'PAGO' ? '#22c55e' : '#eab308',
                               color: linha.status === 'PAGO' ? '#22c55e' : '#eab308'
                             }}
-                            title={linha.arquivado ? 'Custo arquivado: disponível somente para consulta' : 'Editado no módulo Containers, mudando o status da movimentação'}
+                            title={linha.arquivado ? 'Custo arquivado: disponível somente para consulta' : linha.origem === 'CONTA_PAGAR' ? 'Status controlado pela baixa em Contas a Pagar' : 'Editado no módulo Containers, mudando o status da movimentação'}
                           >
                             {linha.status}
                           </span>
@@ -868,6 +909,15 @@ export default function CustosPage() {
                               </button>
                             )}
                           </div>
+                        ) : linha.origem === 'CONTA_PAGAR' ? (
+                          <Link
+                            href="/dashboard/empresa/contas-pagar"
+                            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase hover:underline"
+                            style={{ color: primary }}
+                            title="Gerenciar esta despesa pelo boleto de origem"
+                          >
+                            Ver boleto <ExternalLink size={11} />
+                          </Link>
                         ) : (
                           <Link
                             href="/dashboard/empresa/containers"
@@ -922,7 +972,7 @@ export default function CustosPage() {
               <fieldset>
                 <legend className="text-[10px] uppercase font-bold mb-2">Categoria da despesa</legend>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {(['COMBUSTIVEL', 'PEDAGIO', 'MANUTENCAO', 'ALIMENTACAO', 'DIARIA_MOTORISTA', 'SEGURO', 'OUTROS'] as CategoriaCusto[]).map(categoria => (
+                  {(['COMBUSTIVEL', 'PEDAGIO', 'MANUTENCAO', 'ALIMENTACAO', 'DIARIA_MOTORISTA', 'SEGURO', 'SALARIO', 'OUTROS'] as CategoriaCusto[]).map(categoria => (
                     <button
                       type="button"
                       key={categoria}
@@ -962,6 +1012,7 @@ export default function CustosPage() {
                     <option value="ALIMENTACAO" style={{ backgroundColor: 'var(--background)' }}>Alimentação Motorista</option>
                     <option value="DIARIA_MOTORISTA" style={{ backgroundColor: 'var(--background)' }}>Diária Motorista</option>
                     <option value="SEGURO" style={{ backgroundColor: 'var(--background)' }}>Seguro / Proteção</option>
+                    <option value="SALARIO" style={{ backgroundColor: 'var(--background)' }}>Salários / Folha</option>
                     <option value="OUTROS" style={{ backgroundColor: 'var(--background)' }}>Outros Custos</option>
                   </select>
                 </div>

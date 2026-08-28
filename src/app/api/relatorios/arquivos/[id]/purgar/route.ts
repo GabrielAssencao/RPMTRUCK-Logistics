@@ -68,7 +68,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       const agora = new Date()
       await tx.movimentacaoContainerPermanente.updateMany({
         where: { empresaId: auth.empresaId!, relatorioArquivoId: arquivo.id },
-        data: { detalhes_purgados_em: agora },
+        data: { detalhes_purgados_em: agora, registro_atual: false },
       })
       await tx.relatorioArquivo.update({
         where: { id: arquivo.id },

@@ -18,11 +18,17 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/co
     const form = await request.formData()
     const acao = form.get('acao')
     if (acao !== 'PAGAR' && acao !== 'CANCELAR') return NextResponse.json({ erro: 'Ação inválida.' }, { status: 400 })
-    const atual = await prisma.contaPagar.findFirst({ where: { id, empresaId: auth.empresaId! } })
+    const atual = await prisma.contaPagar.findFirst({
+      where: { id, empresaId: auth.empresaId! },
+      include: { custo: { select: { id: true, relatorioArquivoId: true } } },
+    })
     if (!atual) return NextResponse.json({ erro: 'Conta não encontrada.' }, { status: 404 })
     if (atual.status !== 'PENDENTE') return NextResponse.json({ erro: 'Esta conta já foi processada.' }, { status: 409 })
 
     if (acao === 'CANCELAR') {
+      if (atual.custo?.relatorioArquivoId) {
+        return NextResponse.json({ erro: 'A despesa já faz parte de um relatório de auditoria e não pode ser cancelada.' }, { status: 409 })
+      }
       await executarComAuditoria({ usuarioId: auth.session.userId, origem: 'API' }, async (tx) => {
         const resultado = await tx.contaPagar.updateMany({ where: { id, empresaId: auth.empresaId!, status: 'PENDENTE' }, data: { status: 'CANCELADO' } })
         if (resultado.count !== 1) throw new Error('JA_PROCESSADA')
@@ -32,6 +38,7 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/co
             data: { status: 'CANCELADA' },
           })
         }
+        await tx.custo.deleteMany({ where: { contaPagarId: id, empresaId: auth.empresaId!, relatorioArquivoId: null } })
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
       return NextResponse.json({ sucesso: true, status: 'CANCELADO' })
     }
@@ -51,6 +58,10 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/co
         },
       })
       if (resultado.count !== 1) throw new Error('JA_PROCESSADA')
+      await tx.custo.updateMany({
+        where: { contaPagarId: id, empresaId: auth.empresaId! },
+        data: { status: 'PAGO' },
+      })
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
     caminhoNovo = null
     return NextResponse.json({ sucesso: true, status: 'PAGO' })

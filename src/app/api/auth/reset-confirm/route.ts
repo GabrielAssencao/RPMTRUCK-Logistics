@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
           sessaoVersao: { increment: 1 },
           exigeTrocaSenha: false,
           senhaTemporariaExpiraEm: null,
+          senhaAlteradaEm: agora,
         },
       })
 
