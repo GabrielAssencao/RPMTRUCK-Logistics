@@ -12,7 +12,7 @@
 export interface BucketData {
   ano: number
   mesIndex: number // 0 a 11
-  semanaIndex: number // 1 a 4 — dias 29/30/31 caem na semana 4
+  semanaIndex: 1 | 2 | 3 | 4 // dias 29/30/31 caem na semana 4
 }
  
 export function obterAnoMesSemana(data: string): BucketData {
@@ -20,7 +20,7 @@ export function obterAnoMesSemana(data: string): BucketData {
   return {
     ano: d.getFullYear(),
     mesIndex: d.getMonth(),
-    semanaIndex: Math.min(4, Math.ceil(d.getDate() / 7))
+    semanaIndex: Math.min(4, Math.ceil(d.getDate() / 7)) as 1 | 2 | 3 | 4
   }
 }
  

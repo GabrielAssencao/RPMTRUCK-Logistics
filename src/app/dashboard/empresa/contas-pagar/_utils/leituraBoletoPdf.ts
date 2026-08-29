@@ -15,6 +15,13 @@ interface ResultadoCodigoBarras {
   rawValue: string
 }
 
+interface FragmentoTextoPdf {
+  texto: string
+  pagina: number
+  x: number
+  y: number
+}
+
 interface LeitorCodigoBarras {
   detect(fonte: CanvasImageSource): Promise<ResultadoCodigoBarras[]>
 }
@@ -75,8 +82,62 @@ function encontrarLinhaDigitavel(texto: string) {
     .find((item) => [44, 47, 48].includes(item.length) && linhaDigitavelValida(item)) ?? ''
 }
 
-function extrairCampos(texto: string, codigoVisual = '', leitorVisualDisponivel = false): DadosExtraidosBoleto {
-  const linhaTexto = encontrarLinhaDigitavel(texto)
+function encontrarLinhaDigitavelEmSegmentos(segmentos: string[]) {
+  for (const segmento of segmentos) {
+    const linha = encontrarLinhaDigitavel(segmento)
+    if (linha) return linha
+  }
+  return ''
+}
+
+function fornecedorPorPosicao(fragmentos: FragmentoTextoPdf[]) {
+  const candidatos: string[] = []
+  const cabecalhos = fragmentos.filter((fragmento) => /^(?:benefici[áa]rio|favorecido|cedente)\s*:?$/i.test(fragmento.texto))
+
+  for (const cabecalho of cabecalhos) {
+    const proximoCabecalho = fragmentos
+      .filter((fragmento) => fragmento.pagina === cabecalho.pagina && Math.abs(fragmento.y - cabecalho.y) < 2.5 && fragmento.x > cabecalho.x + 2)
+      .sort((itemA, itemB) => itemA.x - itemB.x)[0]
+    const limiteX = proximoCabecalho?.x ?? Number.POSITIVE_INFINITY
+    const abaixo = fragmentos
+      .filter((fragmento) => fragmento.pagina === cabecalho.pagina
+        && fragmento.y < cabecalho.y
+        && cabecalho.y - fragmento.y <= 20
+        && fragmento.x >= cabecalho.x - 2
+        && fragmento.x < limiteX - 2)
+      .sort((itemA, itemB) => itemB.y - itemA.y || itemA.x - itemB.x)
+    const primeiraLinhaY = abaixo[0]?.y
+    if (primeiraLinhaY === undefined) continue
+    const valor = abaixo
+      .filter((fragmento) => Math.abs(fragmento.y - primeiraLinhaY) < 2.5)
+      .map((fragmento) => fragmento.texto)
+      .find((texto) => /[A-Za-zÀ-ÿ]{3}/.test(texto))
+      ?.replace(/\s+/g, ' ')
+      .trim()
+    if (valor) candidatos.push(valor.slice(0, 160))
+  }
+
+  return candidatos.sort((valorA, valorB) => {
+    const pontuar = (valor: string) => {
+      let pontos = valor.replace(/[^A-Za-zÀ-ÿ]/g, '').length
+      if (/\b(?:ltda|s\/?a|eireli|associa|univers|faculdade|escola)\b/i.test(valor)) pontos += 30
+      if (/^(?:r\.?|rua|av\.?|avenida|rodovia|estrada|travessa|alameda)\s/i.test(valor) || /\d{5}[ -]?\d{3}/.test(valor)) pontos -= 60
+      return pontos
+    }
+    return pontuar(valorB) - pontuar(valorA)
+  })[0] ?? ''
+}
+
+function extrairCampos(
+  texto: string,
+  codigoVisual = '',
+  leitorVisualDisponivel = false,
+  segmentos: string[] = [],
+  fragmentos: FragmentoTextoPdf[] = [],
+): DadosExtraidosBoleto {
+  // PDF.js pode entregar o código do banco e a linha digitável em itens vizinhos.
+  // Avaliar cada item primeiro evita concatenar 237-2 com os 47 dígitos do boleto.
+  const linhaTexto = encontrarLinhaDigitavelEmSegmentos(segmentos) || encontrarLinhaDigitavel(texto)
   const linha = codigoVisual || linhaTexto
   const dataComRotulo = texto.match(/(?:vencimento|data\s+de\s+vencimento)\D{0,24}(0[1-9]|[12]\d|3[01])[\/.\-](0[1-9]|1[0-2])[\/.\-](20\d{2})/i)
   const datas = [...texto.matchAll(/\b(0[1-9]|[12]\d|3[01])[\/.\-](0[1-9]|1[0-2])[\/.\-](20\d{2})\b/g)]
@@ -84,15 +145,16 @@ function extrairCampos(texto: string, codigoVisual = '', leitorVisualDisponivel 
   const valorComRotulo = texto.match(/(?:valor\s+(?:do\s+)?documento|valor\s+cobrado|valor)\D{0,30}(\d{1,3}(?:\.\d{3})*,\d{2})/i)
   const fornecedorComRotulo = texto.match(/(?:benefici[áa]rio|favorecido|cedente)\s*:?\s*(.{3,160}?)(?=\s+(?:cpf|cnpj|pagador|sacado|vencimento|valor|ag[eê]ncia|c[oó]digo)\b|$)/i)
   const dadosCodigo = dadosDoCodigoBarras(linha)
+  const fornecedorPosicional = fornecedorPorPosicao(fragmentos)
 
   return {
     textoEncontrado: texto.trim().length > 0,
     codigoBarrasLido: Boolean(codigoVisual),
     leitorVisualDisponivel,
     linhaDigitavel: linha,
-    valor: valorComRotulo?.[1]?.replace(/\./g, '').replace(',', '.') ?? dadosCodigo.valor,
-    vencimento: data ? `${data[3]}-${data[2]}-${data[1]}` : dadosCodigo.vencimento,
-    fornecedor: fornecedorComRotulo?.[1]?.replace(/\s+/g, ' ').trim() ?? '',
+    valor: dadosCodigo.valor || valorComRotulo?.[1]?.replace(/\./g, '').replace(',', '.') || '',
+    vencimento: dadosCodigo.vencimento || (data ? `${data[3]}-${data[2]}-${data[1]}` : ''),
+    fornecedor: fornecedorPosicional || fornecedorComRotulo?.[1]?.replace(/\s+/g, ' ').trim() || '',
     origemLeitura: codigoVisual ? 'CODIGO_BARRAS' : 'PDF_TEXTO',
   }
 }
@@ -126,6 +188,8 @@ export async function lerBoletoPdfLocalmente(arquivo: File): Promise<DadosExtrai
   const tarefa = pdfjs.getDocument({ data: new Uint8Array(await arquivo.arrayBuffer()) })
   const pdf = await tarefa.promise
   const paginas: string[] = []
+  const segmentos: string[] = []
+  const fragmentos: FragmentoTextoPdf[] = []
   const leitor = obterLeitorCodigoBarras()
   let codigoVisual = ''
 
@@ -134,9 +198,15 @@ export async function lerBoletoPdfLocalmente(arquivo: File): Promise<DadosExtrai
     for (let numero = 1; numero <= limite; numero += 1) {
       const pagina = await pdf.getPage(numero)
       const conteudo = await pagina.getTextContent()
-      paginas.push(conteudo.items.map((item) => ('str' in item ? item.str : '')).join(' '))
+      const itensPagina = conteudo.items.flatMap((item) => {
+        if (!('str' in item) || !item.str.trim()) return []
+        return [{ texto: item.str.trim(), pagina: numero, x: item.transform[4], y: item.transform[5] }]
+      })
+      segmentos.push(...itensPagina.map((item) => item.texto))
+      fragmentos.push(...itensPagina)
+      paginas.push(itensPagina.map((item) => item.texto).join(' '))
 
-      const linhaJaEncontradaNoTexto = encontrarLinhaDigitavel(paginas.join(' '))
+      const linhaJaEncontradaNoTexto = encontrarLinhaDigitavelEmSegmentos(segmentos)
       if (!codigoVisual && !linhaJaEncontradaNoTexto && numero <= 3) {
         const viewport = pagina.getViewport({ scale: 2 })
         const canvas = document.createElement('canvas')
@@ -151,7 +221,7 @@ export async function lerBoletoPdfLocalmente(arquivo: File): Promise<DadosExtrai
         canvas.height = 1
       }
     }
-    return extrairCampos(paginas.join('\n'), codigoVisual, true)
+    return extrairCampos(paginas.join('\n'), codigoVisual, true, segmentos, fragmentos)
   } finally {
     await tarefa.destroy()
   }

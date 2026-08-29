@@ -83,7 +83,7 @@ export default function CustosPage() {
   const anoAtual = new Date().getFullYear()
   const [anoSelecionado, setAnoSelecionado] = useState(anoAtual)
   const [mesSelecionadoIndex, setMesSelecionadoIndex] = useState(new Date().getMonth())
-  const [semanaSelecionada, setSemanaSelecionada] = useState(1)
+  const [semanaSelecionada, setSemanaSelecionada] = useState<'ANO' | 'MES' | 1 | 2 | 3 | 4>(1)
 
   // Dupla Ativa Escolhida
   const [indexDupla, setIndexDupla] = useState(0)
@@ -149,8 +149,8 @@ export default function CustosPage() {
   const custosFiltrados = custos.filter(c => {
     const pertenceADupla = c.duplaId === duplaAtiva.id
     const mesmoAno = c.ano === anoSelecionado
-    const mesmoMes = c.mesIndex === mesSelecionadoIndex
-    const mesmaSemana = c.semanaIndex === semanaSelecionada
+    const mesmoMes = semanaSelecionada === 'ANO' || c.mesIndex === mesSelecionadoIndex
+    const mesmaSemana = semanaSelecionada === 'ANO' || semanaSelecionada === 'MES' || c.semanaIndex === semanaSelecionada
 
     const matchBusca = c.descricao.toLowerCase().includes(busca.toLowerCase()) || c.categoria.toLowerCase().includes(busca.toLowerCase())
     const matchCategoria = filtroCategoria === 'TODOS' || c.categoria === filtroCategoria
@@ -158,9 +158,25 @@ export default function CustosPage() {
     return pertenceADupla && mesmoAno && mesmoMes && mesmaSemana && matchBusca && matchCategoria
   })
   const despesasGerais = custos
-    .filter((custo) => !custo.duplaId && custo.ano === anoSelecionado && custo.mesIndex === mesSelecionadoIndex && custo.semanaIndex === semanaSelecionada)
+    .filter((custo) => !custo.duplaId
+      && custo.ano === anoSelecionado
+      && (semanaSelecionada === 'ANO' || custo.mesIndex === mesSelecionadoIndex)
+      && (semanaSelecionada === 'ANO' || semanaSelecionada === 'MES' || custo.semanaIndex === semanaSelecionada))
     .sort((a, b) => b.data.localeCompare(a.data))
   const totalDespesasGerais = despesasGerais.reduce((total, custo) => total + custo.valor, 0)
+  const itensDespesasGerais: Array<
+    | { tipo: 'MES'; mesIndex: number; quantidade: number; total: number }
+    | { tipo: 'CUSTO'; custo: RegistroCusto }
+  > = semanaSelecionada === 'ANO'
+    ? MESES.flatMap((_, mesIndex) => {
+        const custosMes = despesasGerais.filter((custo) => custo.mesIndex === mesIndex)
+        if (custosMes.length === 0) return []
+        return [
+          { tipo: 'MES' as const, mesIndex, quantidade: custosMes.length, total: custosMes.reduce((total, custo) => total + custo.valor, 0) },
+          ...custosMes.map((custo) => ({ tipo: 'CUSTO' as const, custo })),
+        ]
+      })
+    : despesasGerais.slice(0, 8).map((custo) => ({ tipo: 'CUSTO' as const, custo }))
 
   // ─── COMISSÕES AUTOMÁTICAS DE CONTAINERS (NOVO) ────────────────────────
   // Regra: container CANCELADO não gera custo. ENTREGUE = comissão PAGA.
@@ -175,7 +191,8 @@ export default function CustosPage() {
 
   const comissoesContainerSemana = comissoesContainerAno.filter(c => {
     const bucket = obterAnoMesSemana(c.data)
-    return bucket.mesIndex === mesSelecionadoIndex && bucket.semanaIndex === semanaSelecionada
+    return (semanaSelecionada === 'ANO' || bucket.mesIndex === mesSelecionadoIndex)
+      && (semanaSelecionada === 'ANO' || semanaSelecionada === 'MES' || bucket.semanaIndex === semanaSelecionada)
   })
 
   const totalComissaoContainerAno = comissoesContainerAno.reduce((acc, c) => acc + c.comissao, 0)
@@ -307,6 +324,21 @@ export default function CustosPage() {
   const linhasDia = [...linhasManualDia, ...linhasComissaoDia].sort((a, b) => b.valor - a.valor)
   const linhasExibidas = modoConsulta === 'DIA' ? linhasDia : linhasCombinadas
   const totalExibido = linhasExibidas.reduce((total, linha) => total + linha.valor, 0)
+  const itensTabelaCustos: Array<
+    | { tipo: 'MES'; mesIndex: number; quantidade: number; total: number }
+    | { tipo: 'LINHA'; linha: LinhaExibicao }
+  > = modoConsulta === 'SEMANA' && semanaSelecionada === 'ANO'
+    ? MESES.flatMap((_, mesIndex) => {
+        const linhasMes = linhasExibidas
+          .filter((linha) => obterAnoMesSemana(linha.data).mesIndex === mesIndex)
+          .sort((linhaA, linhaB) => linhaB.data.localeCompare(linhaA.data))
+        if (linhasMes.length === 0) return []
+        return [
+          { tipo: 'MES' as const, mesIndex, quantidade: linhasMes.length, total: linhasMes.reduce((total, linha) => total + linha.valor, 0) },
+          ...linhasMes.map((linha) => ({ tipo: 'LINHA' as const, linha })),
+        ]
+      })
+    : linhasExibidas.map((linha) => ({ tipo: 'LINHA' as const, linha }))
   const veiculosFiltroDia = duplas.filter((dupla, index, lista) => lista.findIndex(item => item.veiculoPlaca === dupla.veiculoPlaca) === index)
   const periodoFormulario = obterAnoMesSemana(formCusto.data || new Date().toISOString().split('T')[0])
 
@@ -500,7 +532,9 @@ export default function CustosPage() {
           <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)' }}>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest">Despesas gerais da empresa</p>
-              <p className="mt-1 text-[10px] text-foreground-muted">Sem vínculo obrigatório com veículo · {MESES[mesSelecionadoIndex]} · Semana {semanaSelecionada}</p>
+              <p className="mt-1 text-[10px] text-foreground-muted">
+                Sem vínculo obrigatório com veículo · {semanaSelecionada === 'ANO' ? `Ano todo de ${anoSelecionado}` : `${MESES[mesSelecionadoIndex]} · ${semanaSelecionada === 'MES' ? 'Mês inteiro' : `Semana ${semanaSelecionada}`}`}
+              </p>
             </div>
             <div className="flex items-center gap-3">
               <strong className="font-rajdhani text-xl">{totalDespesasGerais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>
@@ -508,13 +542,24 @@ export default function CustosPage() {
             </div>
           </div>
           <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-            {despesasGerais.slice(0, 8).map((custo) => (
-              <div key={custo.id} className="grid gap-2 p-3 text-[10px] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
-                <div className="min-w-0"><strong className="block truncate uppercase">{custo.descricao}</strong><span className="text-foreground-muted">{custo.categoria.replaceAll('_', ' ')} · {new Date(`${custo.data}T12:00:00`).toLocaleDateString('pt-BR')}</span></div>
-                <span className="font-bold">{custo.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                <span className="border px-2 py-1 text-center font-bold" style={{ borderColor: custo.status === 'PAGO' ? '#22c55e55' : '#f59e0b55', color: custo.status === 'PAGO' ? '#22c55e' : '#f59e0b' }}>{custo.status}</span>
-              </div>
-            ))}
+            {itensDespesasGerais.map((item) => {
+              if (item.tipo === 'MES') {
+                return (
+                  <div key={`despesas-mes-${item.mesIndex}`} className="flex items-center justify-between gap-4 px-4 py-2.5" style={{ backgroundColor: `${primary}0D` }}>
+                    <strong className="text-[10px] uppercase tracking-[0.18em]" style={{ color: primary }}>{MESES[item.mesIndex]}</strong>
+                    <span className="text-[9px] text-foreground-muted">{item.quantidade} registro(s) · {item.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                  </div>
+                )
+              }
+              const custo = item.custo
+              return (
+                <div key={custo.id} className="grid gap-2 p-3 text-[10px] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+                  <div className="min-w-0"><strong className="block truncate uppercase">{custo.descricao}</strong><span className="text-foreground-muted">{custo.categoria.replaceAll('_', ' ')} · {new Date(`${custo.data}T12:00:00`).toLocaleDateString('pt-BR')}</span></div>
+                  <span className="font-bold">{custo.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                  <span className="border px-2 py-1 text-center font-bold" style={{ borderColor: custo.status === 'PAGO' ? '#22c55e55' : '#f59e0b55', color: custo.status === 'PAGO' ? '#22c55e' : '#f59e0b' }}>{custo.status}</span>
+                </div>
+              )
+            })}
           </div>
         </section>
       )}
@@ -586,9 +631,9 @@ export default function CustosPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase font-bold text-foreground-muted">Recorte Semanal:</span>
-            {[1, 2, 3, 4].map(s => (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="text-[10px] uppercase font-bold text-foreground-muted">Recorte do período:</span>
+            {(['ANO', 'MES', 1, 2, 3, 4] as const).map(s => (
               <button
                 key={s}
                 onClick={() => setSemanaSelecionada(s)}
@@ -599,7 +644,7 @@ export default function CustosPage() {
                   color: semanaSelecionada === s ? primary : 'var(--foreground-muted)'
                 }}
               >
-                Semana {s}
+                {s === 'ANO' ? 'Ano todo' : s === 'MES' ? 'Mês inteiro' : `Semana ${s}`}
               </button>
             ))}
           </div>
@@ -608,11 +653,11 @@ export default function CustosPage() {
         {/* CARROSSEL DOS 12 MESES DO ANO */}
         <div className="flex overflow-x-auto hide-scrollbar gap-2 py-1">
           {MESES.map((mes, idx) => {
-            const estaAtivo = idx === mesSelecionadoIndex
+            const estaAtivo = semanaSelecionada !== 'ANO' && idx === mesSelecionadoIndex
             return (
               <button
                 key={mes}
-                onClick={() => setMesSelecionadoIndex(idx)}
+                onClick={() => { setMesSelecionadoIndex(idx); if (semanaSelecionada === 'ANO') setSemanaSelecionada('MES') }}
                 className="px-4 py-2 border text-[11px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer"
                 style={{
                   backgroundColor: estaAtivo ? primary : 'var(--background)',
@@ -638,7 +683,7 @@ export default function CustosPage() {
         />
 
         <CardResumo 
-          titulo={`TOTAL SEMANA ${semanaSelecionada} (${MESES[mesSelecionadoIndex]})`} 
+          titulo={semanaSelecionada === 'ANO' ? `TOTAL DO ANO (${anoSelecionado})` : semanaSelecionada === 'MES' ? `TOTAL DO MÊS (${MESES[mesSelecionadoIndex]})` : `TOTAL SEMANA ${semanaSelecionada} (${MESES[mesSelecionadoIndex]})`}
           valor={totalSemana} 
           primary={primary} 
           icone={<DollarSign size={20}/>} 
@@ -646,7 +691,7 @@ export default function CustosPage() {
         />
 
         <CardResumo 
-          titulo="COMBUSTÍVEL NA SEMANA" 
+          titulo={semanaSelecionada === 'ANO' ? 'COMBUSTÍVEL NO ANO' : semanaSelecionada === 'MES' ? 'COMBUSTÍVEL NO MÊS' : 'COMBUSTÍVEL NA SEMANA'}
           valor={totalCombustivelSemana} 
           primary={primary} 
           icone={<Fuel size={20}/>} 
@@ -660,7 +705,7 @@ export default function CustosPage() {
         />
 
         <CardResumo 
-          titulo="PENDENTES NA SEMANA" 
+          titulo={semanaSelecionada === 'ANO' ? 'PENDENTES NO ANO' : semanaSelecionada === 'MES' ? 'PENDENTES NO MÊS' : 'PENDENTES NA SEMANA'}
           valor={totalPendenteSemana} 
           primary={primary} 
           icone={<Clock size={20}/>} 
@@ -671,7 +716,7 @@ export default function CustosPage() {
       <div className="flex items-start gap-2 text-[10px] text-foreground-muted px-1">
         <Info size={13} className="shrink-0 mt-0.5" style={{ color: primary }} />
         <span>
-          O card “Comissão Containers (Auto)” já está somado dentro de “Total Semana” e “Total Acumulado” — não é um valor separado.
+          O card “Comissão Containers (Auto)” já está somado dentro do total do período e do total acumulado — não é um valor separado.
           Ele aparece isolado só pra você enxergar quanto do total veio de containers sem precisar abrir o outro módulo.
         </span>
       </div>
@@ -681,7 +726,7 @@ export default function CustosPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest">Consulta de lançamentos</p>
-            <p className="text-[10px] text-foreground-muted mt-1">Alterne entre o fechamento semanal da dupla e a auditoria geral por data.</p>
+            <p className="text-[10px] text-foreground-muted mt-1">Alterne entre o fechamento do período selecionado e a auditoria geral por data.</p>
           </div>
           <div className="inline-flex border p-1 self-start sm:self-auto" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
             <button
@@ -689,7 +734,7 @@ export default function CustosPage() {
               className="px-4 py-2 text-[10px] font-bold uppercase"
               style={{ backgroundColor: modoConsulta === 'SEMANA' ? primary : 'transparent', color: modoConsulta === 'SEMANA' ? '#000' : 'var(--foreground-muted)' }}
             >
-              Por semana
+              Por período
             </button>
             <button
               onClick={() => setModoConsulta('DIA')}
@@ -780,7 +825,9 @@ export default function CustosPage() {
           <span>
             {modoConsulta === 'DIA'
               ? `Lançamentos de ${new Date(`${dataFiltroDia}T00:00:00`).toLocaleDateString('pt-BR')} — ${placaFiltroDia === 'TODOS' ? 'Todos os caminhões' : placaFiltroDia}`
-              : `Lançamentos — ${duplaAtiva.veiculoModelo} (${duplaAtiva.veiculoPlaca}) com ${duplaAtiva.motoristaNome}`}
+              : semanaSelecionada === 'ANO'
+                ? `Lançamentos de todo o ano de ${anoSelecionado} — ${duplaAtiva.veiculoModelo} (${duplaAtiva.veiculoPlaca}) com ${duplaAtiva.motoristaNome}`
+                : `Lançamentos de ${MESES[mesSelecionadoIndex]} · ${semanaSelecionada === 'MES' ? 'mês inteiro' : `semana ${semanaSelecionada}`} — ${duplaAtiva.veiculoModelo} (${duplaAtiva.veiculoPlaca}) com ${duplaAtiva.motoristaNome}`}
           </span>
           <span className="text-[10px] text-foreground-muted">
             {linhasExibidas.length} registro(s) · {totalExibido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -808,11 +855,27 @@ export default function CustosPage() {
                     <td colSpan={8} className="px-6 py-12 text-center text-sm font-mono text-foreground-muted">
                       {modoConsulta === 'DIA'
                         ? 'Nenhum lançamento encontrado para a data e o caminhão selecionados.'
-                        : 'Nenhum lançamento de custo encontrado para esta semana no período selecionado.'}
+                        : `Nenhum lançamento de custo encontrado ${semanaSelecionada === 'ANO' ? 'neste ano' : semanaSelecionada === 'MES' ? 'neste mês' : 'nesta semana'}.`}
                     </td>
                   </tr>
                 ) : (
-                  linhasExibidas.map((linha) => (
+                  itensTabelaCustos.map((item) => {
+                    if (item.tipo === 'MES') {
+                      return (
+                        <tr key={`mes-${item.mesIndex}`} style={{ backgroundColor: `${primary}0D` }}>
+                          <td colSpan={8} className="px-6 py-3">
+                            <div className="flex items-center justify-between gap-4">
+                              <strong className="text-[11px] uppercase tracking-[0.18em]" style={{ color: primary }}>{MESES[item.mesIndex]}</strong>
+                              <span className="text-[10px] text-foreground-muted">
+                                {item.quantidade} registro(s) · {item.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    }
+                    const linha = item.linha
+                    return (
                     <tr key={linha.id} className="hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4 text-xs font-bold">{linha.data}</td>
                       <td className="px-6 py-4">
@@ -930,7 +993,8 @@ export default function CustosPage() {
                         )}
                       </td>
                     </tr>
-                  ))
+                    )
+                  })
                 )}
               </AnimatePresence>
             </tbody>

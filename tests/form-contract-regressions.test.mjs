@@ -111,3 +111,17 @@ test('central de notificações fica disponível na navegação sem regra de pla
   assert.match(central, /Limpar lidas/)
   assert.match(central, /notificacao\.lida \? 'Lida' : 'Não lida'/)
 })
+
+test('custos e containers permitem consolidar o mes ou o ano em grupos mensais', () => {
+  const custos = read('src/app/dashboard/empresa/custos/page.tsx')
+  const containers = read('src/app/dashboard/empresa/containers/page.tsx')
+
+  assert.match(custos, /useState<'ANO' \| 'MES' \| 1 \| 2 \| 3 \| 4>/)
+  assert.match(custos, /\(\['ANO', 'MES', 1, 2, 3, 4\] as const\)/)
+  assert.match(custos, /semanaSelecionada === 'ANO' \|\| c\.mesIndex === mesSelecionadoIndex/)
+  assert.match(custos, /itensTabelaCustos/)
+  assert.match(containers, /useState<'ANO' \| 'TODAS' \| 1 \| 2 \| 3 \| 4>/)
+  assert.match(containers, /semanaSelecionada === 'ANO' \|\| bucket\.mesIndex === mesSelecionadoIndex/)
+  assert.match(containers, /itensTabelaContainers/)
+  assert.match(containers, />\s*Ano todo\s*<\/button>/)
+})

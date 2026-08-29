@@ -20,8 +20,9 @@ interface Portal { nome: string; url: string }
 interface VeiculoResumo { id: string; modelo: string; placa: string }
 
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
-const hoje = new Date().toISOString().slice(0, 10)
-const estadoInicial = { descricao: '', fornecedor: '', vencimento: hoje, valor: '', linhaDigitavel: '', origemLeitura: 'MANUAL', revisado: false, categoria: '', veiculoId: '' }
+type OrigemLeituraFormulario = 'MANUAL' | 'PDF_TEXTO' | 'CODIGO_BARRAS'
+const criarEstadoInicial = () => ({ descricao: '', fornecedor: '', vencimento: new Date().toISOString().slice(0, 10), valor: '', linhaDigitavel: '', origemLeitura: 'MANUAL' as OrigemLeituraFormulario, revisado: false, categoria: '', veiculoId: '' })
+type EstadoFormulario = ReturnType<typeof criarEstadoInicial>
 
 export default function ContasPagarPage() {
   const { primary } = useTheme()
@@ -33,7 +34,7 @@ export default function ContasPagarPage() {
   const [feedback, setFeedback] = useState('')
   const [filtro, setFiltro] = useState<'PENDENTE' | 'PAGO' | 'TODOS'>('PENDENTE')
   const [abrirCadastro, setAbrirCadastro] = useState(false)
-  const [form, setForm] = useState(estadoInicial)
+  const [form, setForm] = useState<EstadoFormulario>(criarEstadoInicial)
   const [boleto, setBoleto] = useState<File | null>(null)
   const [preenchimentoAutomatico, setPreenchimentoAutomatico] = useState(true)
   const [veiculos, setVeiculos] = useState<VeiculoResumo[]>([])
@@ -44,6 +45,7 @@ export default function ContasPagarPage() {
   const [configurandoPortal, setConfigurandoPortal] = useState(false)
   const [portalForm, setPortalForm] = useState({ nome: '', url: '' })
   const submitRef = useRef(false)
+  const leituraArquivoRef = useRef(0)
 
   const carregar = useCallback(async () => {
     try {
@@ -81,7 +83,7 @@ export default function ContasPagarPage() {
     if (!ativado) setForm((atual) => ({ ...atual, origemLeitura: 'MANUAL', revisado: false }))
   }
 
-  const atualizarCampoAuditado = <K extends keyof typeof estadoInicial>(campo: K, valor: (typeof estadoInicial)[K]) => {
+  const atualizarCampoAuditado = <K extends keyof EstadoFormulario>(campo: K, valor: EstadoFormulario[K]) => {
     setForm((atual) => ({
       ...atual,
       [campo]: valor,
@@ -98,10 +100,38 @@ export default function ContasPagarPage() {
   }), [pendentes])
   const categoriaSelecionada = obterCategoriaContaPagar(form.categoria)
 
-  const selecionarBoleto = async (arquivo: File | null) => {
+  const limparCadastro = () => {
+    leituraArquivoRef.current += 1
+    setForm(criarEstadoInicial())
+    setBoleto(null)
+    setLendoArquivo(false)
+  }
+
+  const abrirFormularioCadastro = () => {
+    limparCadastro()
     setFeedback('')
-    if (!arquivo) return setBoleto(null)
-    if (arquivo.size > CONTA_PAGAR_MAX_FILE_BYTES) return setFeedback('O boleto deve ter no máximo 5 MB.')
+    setAbrirCadastro(true)
+  }
+
+  const fecharFormularioCadastro = () => {
+    if (enviando) return
+    limparCadastro()
+    setFeedback('')
+    setAbrirCadastro(false)
+  }
+
+  const selecionarBoleto = async (arquivo: File | null) => {
+    const leituraId = ++leituraArquivoRef.current
+    setFeedback('')
+    if (!arquivo) {
+      setBoleto(null)
+      return
+    }
+    if (arquivo.size > CONTA_PAGAR_MAX_FILE_BYTES) {
+      setBoleto(null)
+      setFeedback('O boleto deve ter no máximo 5 MB.')
+      return
+    }
     setBoleto(arquivo)
     const arquivoCompativel = arquivo.type === 'application/pdf' || arquivo.type.startsWith('image/')
     if (!arquivoCompativel || !capacidades?.leituraAutomatica || !preenchimentoAutomatico) return
@@ -110,6 +140,7 @@ export default function ContasPagarPage() {
       const dados = arquivo.type === 'application/pdf'
         ? await lerBoletoPdfLocalmente(arquivo)
         : await lerCodigoBarrasImagemLocalmente(arquivo)
+      if (leituraArquivoRef.current !== leituraId) return
       const encontrouDados = Boolean(dados.linhaDigitavel || dados.vencimento || dados.valor || dados.fornecedor)
       setForm((atual) => ({
         ...atual,
@@ -131,9 +162,10 @@ export default function ContasPagarPage() {
         setFeedback('Nenhum código válido foi reconhecido na imagem. Preencha os dados manualmente; o arquivo continuará anexado.')
       }
     } catch {
+      if (leituraArquivoRef.current !== leituraId) return
       setFeedback('Não foi possível analisar o arquivo. Preencha os dados manualmente; o documento continuará anexado.')
     } finally {
-      setLendoArquivo(false)
+      if (leituraArquivoRef.current === leituraId) setLendoArquivo(false)
     }
   }
 
@@ -152,7 +184,7 @@ export default function ContasPagarPage() {
       const response = await fetch('/api/contas-pagar', { method: 'POST', body })
       const data = await response.json()
       if (!response.ok) throw new Error(data.erro || 'Não foi possível cadastrar a conta.')
-      setForm(estadoInicial); setBoleto(null); setAbrirCadastro(false); setFeedback('Conta cadastrada com segurança.')
+      limparCadastro(); setAbrirCadastro(false); setFeedback('Conta cadastrada com segurança.')
       await carregar()
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Não foi possível cadastrar a conta.')
@@ -203,7 +235,7 @@ export default function ContasPagarPage() {
     <div className="mx-auto max-w-[1500px] space-y-5 overflow-hidden">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div><p className="mb-1 text-[10px] font-bold uppercase tracking-[0.3em]" style={{ color: primary }}>Inteligência financeira operacional</p><h1 className="font-rajdhani text-2xl font-black uppercase sm:text-3xl">Contas a <span style={{ color: primary }}>pagar</span></h1><p className="mt-1 max-w-2xl text-xs text-foreground-muted sm:text-sm">Organize vencimentos e comprovantes. A autorização do pagamento sempre acontece no ambiente seguro do seu banco.</p></div>
-        <div className="flex flex-col gap-2 min-[420px]:flex-row"><button type="button" onClick={() => setConfigurandoPortal(true)} className="min-h-11 border px-4 text-[10px] font-black uppercase" style={{ borderColor: 'var(--border)' }}><Building2 size={14} className="mr-2 inline" />Portal financeiro</button><button type="button" onClick={() => setAbrirCadastro(true)} className="min-h-11 px-4 text-[10px] font-black uppercase text-black" style={{ backgroundColor: primary }}><Plus size={14} className="mr-2 inline" />Nova conta</button></div>
+        <div className="flex flex-col gap-2 min-[420px]:flex-row"><button type="button" onClick={() => setConfigurandoPortal(true)} className="min-h-11 border px-4 text-[10px] font-black uppercase" style={{ borderColor: 'var(--border)' }}><Building2 size={14} className="mr-2 inline" />Portal financeiro</button><button type="button" onClick={abrirFormularioCadastro} className="min-h-11 px-4 text-[10px] font-black uppercase text-black" style={{ backgroundColor: primary }}><Plus size={14} className="mr-2 inline" />Nova conta</button></div>
       </header>
 
       {feedback && <p role="status" className="border p-3 text-xs" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>{feedback}</p>}
@@ -225,7 +257,7 @@ export default function ContasPagarPage() {
       )}
 
       {abrirCadastro && (
-        <Modal titulo="Cadastrar conta a pagar" onClose={() => !enviando && setAbrirCadastro(false)}>
+        <Modal titulo="Cadastrar conta a pagar" onClose={fecharFormularioCadastro}>
           <form onSubmit={cadastrar} className="space-y-4">
             {capacidades?.leituraAutomatica && (
               <label className="flex items-center justify-between gap-4 border p-3" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>

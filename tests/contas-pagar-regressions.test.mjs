@@ -106,8 +106,23 @@ test('PDF usa texto e leitura visual com fallback para código de barras', () =>
   assert.match(reader, /pagina\.render/)
   assert.match(reader, /codigoBarrasLido/)
   assert.match(reader, /origemLeitura: codigoVisual \? 'CODIGO_BARRAS' : 'PDF_TEXTO'/)
+  assert.match(reader, /encontrarLinhaDigitavelEmSegmentos/)
+  assert.match(reader, /fornecedorPorPosicao/)
+  assert.match(reader, /encontrarLinhaDigitavelEmSegmentos\(segmentos\)/)
   assert.match(page, /dados\.origemLeitura/)
   assert.match(pkg, /"@zxing\/browser"/)
+})
+
+test('formulario financeiro limpa dados e invalida leituras assincronas ao fechar', () => {
+  const page = read('src/app/dashboard/empresa/contas-pagar/page.tsx')
+  const styles = read('src/app/globals.css')
+
+  assert.match(page, /const fecharFormularioCadastro = \(\) =>/)
+  assert.match(page, /setForm\(criarEstadoInicial\(\)\)/)
+  assert.match(page, /leituraArquivoRef\.current \+= 1/)
+  assert.match(styles, /select\.input-financeiro option/)
+  assert.match(styles, /color-scheme: dark/)
+  assert.match(styles, /color-scheme: light/)
 })
 
 test('categorias de boleto alimentam custos, incluindo salários, e acompanham a baixa', () => {

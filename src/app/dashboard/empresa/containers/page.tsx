@@ -106,7 +106,7 @@ export default function ContainersPage() {
   ])).filter(Number.isFinite).sort((anoA, anoB) => anoB - anoA)
   const [anoSelecionado, setAnoSelecionado] = useState(anoAtual)
   const [mesSelecionadoIndex, setMesSelecionadoIndex] = useState(hoje.getMonth())
-  const [semanaSelecionada, setSemanaSelecionada] = useState<'TODAS' | 1 | 2 | 3 | 4>('TODAS')
+  const [semanaSelecionada, setSemanaSelecionada] = useState<'ANO' | 'TODAS' | 1 | 2 | 3 | 4>('TODAS')
 
   // Filtros
   const [busca, setBusca] = useState('')
@@ -158,8 +158,8 @@ export default function ContainersPage() {
   const containersFiltrados = containers.filter(c => {
     const bucket = obterAnoMesSemana(c.data)
     const matchAno = bucket.ano === anoSelecionado
-    const matchMes = bucket.mesIndex === mesSelecionadoIndex
-    const matchSemana = semanaSelecionada === 'TODAS' || bucket.semanaIndex === semanaSelecionada
+    const matchMes = semanaSelecionada === 'ANO' || bucket.mesIndex === mesSelecionadoIndex
+    const matchSemana = semanaSelecionada === 'ANO' || semanaSelecionada === 'TODAS' || bucket.semanaIndex === semanaSelecionada
 
     const termo = busca.toLowerCase()
     const matchBusca =
@@ -180,6 +180,27 @@ export default function ContainersPage() {
   const totalContainersPeriodo = containersFiltrados.length
   const totalFretePeriodo = containersFiltrados.reduce((acc, c) => acc + c.frete, 0)
   const totalComissaoPeriodo = containersFiltrados.reduce((acc, c) => acc + c.comissao, 0)
+  const itensTabelaContainers: Array<
+    | { tipo: 'MES'; mesIndex: number; quantidade: number; totalFrete: number; totalComissao: number }
+    | { tipo: 'LINHA'; container: RegistroContainer }
+  > = semanaSelecionada === 'ANO'
+    ? MESES.flatMap((_, mesIndex) => {
+        const registrosMes = containersFiltrados
+          .filter((container) => obterAnoMesSemana(container.data).mesIndex === mesIndex)
+          .sort((containerA, containerB) => containerB.data.localeCompare(containerA.data))
+        if (registrosMes.length === 0) return []
+        return [
+          {
+            tipo: 'MES' as const,
+            mesIndex,
+            quantidade: registrosMes.length,
+            totalFrete: registrosMes.reduce((total, container) => total + container.frete, 0),
+            totalComissao: registrosMes.reduce((total, container) => total + container.comissao, 0),
+          },
+          ...registrosMes.map((container) => ({ tipo: 'LINHA' as const, container })),
+        ]
+      })
+    : containersFiltrados.map((container) => ({ tipo: 'LINHA' as const, container }))
 
   // ─── AÇÕES EM LOTE ──────────────────────────────────────────────────────
   const handleToggleSelecionarTudo = () => {
@@ -396,8 +417,19 @@ export default function ContainersPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase font-bold text-foreground-muted">Recorte Semanal:</span>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="text-[10px] uppercase font-bold text-foreground-muted">Recorte do período:</span>
+            <button
+              onClick={() => { setSemanaSelecionada('ANO'); setContainerAtivoId(null) }}
+              className="px-3 py-1 text-[10px] font-bold border uppercase transition-all cursor-pointer"
+              style={{
+                backgroundColor: semanaSelecionada === 'ANO' ? `${primary}20` : 'var(--background)',
+                borderColor: semanaSelecionada === 'ANO' ? primary : 'var(--border)',
+                color: semanaSelecionada === 'ANO' ? primary : 'var(--foreground-muted)'
+              }}
+            >
+              Ano todo
+            </button>
             <button
               onClick={() => setSemanaSelecionada('TODAS')}
               className="px-3 py-1 text-[10px] font-bold border uppercase transition-all cursor-pointer"
@@ -429,11 +461,11 @@ export default function ContainersPage() {
         {/* CARROSSEL DOS MESES */}
         <div className="flex overflow-x-auto hide-scrollbar gap-2 py-1">
           {MESES.map((mes, idx) => {
-            const estaAtivo = idx === mesSelecionadoIndex
+            const estaAtivo = semanaSelecionada !== 'ANO' && idx === mesSelecionadoIndex
             return (
               <button
                 key={mes}
-                onClick={() => setMesSelecionadoIndex(idx)}
+                onClick={() => { setMesSelecionadoIndex(idx); if (semanaSelecionada === 'ANO') setSemanaSelecionada('TODAS') }}
                 className="px-4 py-2 border text-[11px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer"
                 style={{
                   backgroundColor: estaAtivo ? primary : 'var(--background)',
@@ -610,7 +642,11 @@ export default function ContainersPage() {
           {/* ── CARROSSEL DE BLOCOS 3D COM DOBRAS E EFECTO GLOSS ── */}
           <div className={`${activeContainer ? 'lg:col-span-8' : 'lg:col-span-12'} transition-all duration-500 overflow-hidden`}>
             <div className="flex gap-6 overflow-x-auto pb-6 pt-2 custom-scrollbar" style={{ perspective: '1200px' }}>
-              {containersFiltrados.map((container) => {
+              {semanaSelecionada === 'ANO' ? (
+                <div className="flex min-h-64 w-full items-center justify-center border border-dashed p-8 text-center text-xs text-foreground-muted" style={{ borderColor: 'var(--border)' }}>
+                  A visão anual está organizada na tabela por mês. Selecione um mês para abrir o pátio visual e inspecionar os containers.
+                </div>
+              ) : containersFiltrados.map((container) => {
                 const isSelected = containerAtivoId === container.id
                 const itens = container.itensConteudo as ItemConteudo[] | undefined
                 const porcentagemTotal = itens?.reduce((acc, i) => acc + i.porcentagem, 0) ?? 0
@@ -820,7 +856,22 @@ export default function ContainersPage() {
                     </td>
                   </tr>
                 ) : (
-                  containersFiltrados.map((c) => {
+                  itensTabelaContainers.map((item) => {
+                    if (item.tipo === 'MES') {
+                      return (
+                        <tr key={`mes-${item.mesIndex}`} style={{ backgroundColor: `${primary}0D` }}>
+                          <td colSpan={10} className="px-6 py-3">
+                            <div className="flex items-center justify-between gap-4">
+                              <strong className="text-[11px] uppercase tracking-[0.18em]" style={{ color: primary }}>{MESES[item.mesIndex]}</strong>
+                              <span className="text-[10px] text-foreground-muted">
+                                {item.quantidade} registro(s) · Frete {item.totalFrete.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · Comissão {item.totalComissao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    }
+                    const c = item.container
                     const dupla = encontrarDupla(c.duplaId)
                     const isChecked = selecionados.includes(c.id)
 
