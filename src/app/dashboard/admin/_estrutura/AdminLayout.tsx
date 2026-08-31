@@ -19,6 +19,7 @@ import {
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
 import { useSessionActivity } from '@/hooks/useSessionActivity'
+import { DashboardMotion } from '@/components/motion/DashboardMotion'
 
 // ─── Marcadores Operacionais do Super Admin ─────────────────────────────────
 const NAV_ADMIN = [
@@ -226,7 +227,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
         </header>
 
         <main className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-8 custom-scrollbar">
-          {children}
+          <DashboardMotion motionKey={activeTab}>{children}</DashboardMotion>
         </main>
       </div>
 

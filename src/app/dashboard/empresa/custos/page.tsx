@@ -7,6 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { useContainers } from '@/contexts/ContainersContext'
 import { obterAnoMesSemana, MESES } from '@/lib/dataUtils'
 import { PLANOS_CONFIG, type PlanoTipo } from '@/utils/planos'
+import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { 
   DollarSign, 
   Search, 
@@ -490,7 +491,7 @@ export default function CustosPage() {
       )}
 
       {erroFormulario && !modalRegistroOpen && (
-        <div className="flex items-start gap-2 border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-500" role="alert">
+        <div data-action-feedback className="flex items-start gap-2 border px-4 py-3 text-xs" style={{ borderColor: 'color-mix(in srgb, var(--status-warning) 45%, transparent)', backgroundColor: 'color-mix(in srgb, var(--status-warning) 10%, transparent)', color: 'var(--status-warning)' }} role="alert">
           <Info size={15} className="mt-0.5 shrink-0" />
           <span>{erroFormulario}</span>
           <button type="button" onClick={() => setErroFormulario('')} className="ml-auto p-0.5" aria-label="Fechar aviso">
@@ -1016,9 +1017,7 @@ export default function CustosPage() {
 
             <form onSubmit={handleSalvarDespesa} className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
               {erroFormulario && (
-                <div className="border border-red-500/40 bg-red-500/10 px-3 py-2.5 text-red-400 text-[10px] font-bold" role="alert">
-                  {erroFormulario}
-                </div>
+                <ActionFeedback message={erroFormulario} tone="error" className="text-[10px] font-bold" />
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 border" style={{ borderColor: `${primary}45`, backgroundColor: `${primary}08` }}>
                 <div>

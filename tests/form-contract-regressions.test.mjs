@@ -112,6 +112,27 @@ test('central de notificações fica disponível na navegação sem regra de pla
   assert.match(central, /notificacao\.lida \? 'Lida' : 'Não lida'/)
 })
 
+test('personalização da sidebar é visual, persistente por usuário e posterior à autorização', () => {
+  const layout = read('src/app/dashboard/empresa/layout.tsx')
+
+  assert.match(layout, /const itensPermitidos = NAV_EMPRESA\.filter\(itemPermitido\)/)
+  assert.match(layout, /const itensVisiveis = itensPermitidos\.filter/)
+  assert.match(layout, /Atalhos compactos/)
+  assert.match(layout, /Apenas visual: permissões e acesso permanecem iguais/)
+  assert.match(layout, /usuario\.id \|\| usuario\.email/)
+})
+
+test('tema vermelho separa marca, criticidade e atenção nas manutenções', () => {
+  const temas = read('src/data/temasELogos.ts')
+  const manutencao = read('src/app/dashboard/empresa/frota/manutencao/page.tsx')
+
+  assert.match(temas, /temaPrimarioEhVermelho/)
+  assert.match(temas, /danger: '#fbbf24'/)
+  assert.match(temas, /warning: '#38bdf8'/)
+  assert.match(manutencao, /stroke: semanticColors\.danger/)
+  assert.match(manutencao, /stroke: semanticColors\.warning/)
+})
+
 test('custos e containers permitem consolidar o mes ou o ano em grupos mensais', () => {
   const custos = read('src/app/dashboard/empresa/custos/page.tsx')
   const containers = read('src/app/dashboard/empresa/containers/page.tsx')

@@ -24,11 +24,14 @@ import {
   Container as ContainerIcon,
   type LucideIcon,
   ReceiptText,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
 import { normalizarModulos, type ModuloCodigo } from '@/utils/planos'
 import { useSessionActivity } from '@/hooks/useSessionActivity'
+import { DashboardMotion } from '@/components/motion/DashboardMotion'
 
 // ─── Marcadores Operacionais do Cliente (Empresa) ─────────────────────────────
 interface NavEmpresaItem {
@@ -65,6 +68,17 @@ const NOTIFICACOES_ITEM: NavEmpresaItem = { path: '/dashboard/empresa/notificaco
 // Larguras da sidebar recolhida (só ícones) e expandida (ícones + texto)
 const LARGURA_RECOLHIDA = '72px'
 const LARGURA_EXPANDIDA = '16rem'
+const SIDEBAR_HIDDEN_MODULES_KEY = '@rpmtruck:sidebar-hidden-modules'
+
+function obterChavePreferenciaSidebar() {
+  try {
+    const usuario = JSON.parse(localStorage.getItem('@rpmtruck:user') || '{}')
+    const identidade = usuario.id || usuario.email || 'local'
+    return `${SIDEBAR_HIDDEN_MODULES_KEY}:${encodeURIComponent(String(identidade))}`
+  } catch {
+    return `${SIDEBAR_HIDDEN_MODULES_KEY}:local`
+  }
+}
 
 export default function EmpresaLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -80,7 +94,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
 
 function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
   useSessionActivity()
-  const { primary, isLight, themeReady } = useTheme()
+  const { primary, isLight, themeReady, semanticColors } = useTheme()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarExpandida, setSidebarExpandida] = useState(false)
@@ -89,6 +103,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
   const [perfilUsuario, setPerfilUsuario] = useState<PerfilEmpresaUsuario | null>(null)
   const [pendenciasPorModulo, setPendenciasPorModulo] = useState<Record<string, number>>({})
   const [acessoCarregado, setAcessoCarregado] = useState(false)
+  const [modulosOcultos, setModulosOcultos] = useState<string[]>([])
 
   // Resgata os dados da sessão guardada no login
   useEffect(() => {
@@ -123,6 +138,33 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
       })
       .finally(() => setAcessoCarregado(true))
   }, [])
+
+  useEffect(() => {
+    try {
+      const salvos: unknown = JSON.parse(localStorage.getItem(obterChavePreferenciaSidebar()) || '[]')
+      if (!Array.isArray(salvos)) return
+      const rotasValidas = new Set(NAV_EMPRESA.map((item) => item.path))
+      queueMicrotask(() => setModulosOcultos(
+        salvos.filter((path): path is string => typeof path === 'string' && rotasValidas.has(path)),
+      ))
+    } catch {
+      localStorage.removeItem(obterChavePreferenciaSidebar())
+    }
+  }, [])
+
+  const atualizarModuloOculto = (path: string, ocultar: boolean) => {
+    setModulosOcultos((atuais) => {
+      const proximos = ocultar
+        ? Array.from(new Set([...atuais, path]))
+        : atuais.filter((item) => item !== path)
+      try {
+        localStorage.setItem(obterChavePreferenciaSidebar(), JSON.stringify(proximos))
+      } catch {
+        // A preferência permanece na sessão se o navegador bloquear o storage.
+      }
+      return proximos
+    })
+  }
 
   const eGestor = perfilUsuario?.role === 'GESTOR_EMPRESA'
   const itemPermitido = useCallback((item: NavEmpresaItem) => {
@@ -164,9 +206,12 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
   const renderSidebarContent = (expandida: boolean) => {
     const totalNotificacoes = Object.values(pendenciasPorModulo).reduce((total, quantidade) => total + quantidade, 0)
     const notificacoesAtivas = pathname === NOTIFICACOES_ITEM.path
+    const itensPermitidos = NAV_EMPRESA.filter(itemPermitido)
+    const itensVisiveis = itensPermitidos.filter((item) => !modulosOcultos.includes(item.path))
+    const itensOcultos = itensPermitidos.filter((item) => modulosOcultos.includes(item.path))
     return (
       <div className="flex flex-col h-full justify-between p-4 font-mono">
-        <div>
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1 custom-scrollbar">
           {/* Header da Sidebar com Logo Ajustada */}
           <div className="mb-6 py-3 border-b border-white/10 flex items-center justify-center min-h-[64px]">
             {expandida ? (
@@ -198,16 +243,24 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Links de Navegação */}
-          <nav className="space-y-1">
-            {NAV_EMPRESA.filter(itemPermitido).map((item) => {
-              const active = pathname === item.path
+          <nav className="space-y-1" aria-label="Módulos da empresa">
+            <AnimatePresence initial={false}>
+            {itensVisiveis.map((item) => {
+              const active = pathname === item.path || pathname.startsWith(`${item.path}/`)
               const Icon = item.icon
               const totalPendencias = pendenciasPorModulo[item.notificacaoModulo] ?? 0
               const mostrarIndicador = totalPendencias > 0
 
               return (
+                <motion.div
+                  layout
+                  key={item.path}
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
+                >
                 <Link 
-                  key={item.path} 
                   href={item.path}
                   onClick={() => setMobileOpen(false)}
                   title={!expandida ? item.label : undefined}
@@ -226,7 +279,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
                     {!expandida && mostrarIndicador && (
                       <span
                         className="absolute -top-1 -right-1.5 w-2.5 h-2.5 rounded-full border border-black animate-pulse"
-                        style={{ backgroundColor: primary }}
+                        style={{ backgroundColor: semanticColors.warning }}
                       />
                     )}
                   </span>
@@ -241,8 +294,76 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
                     </span>
                   )}
                 </Link>
+                </motion.div>
               )
             })}
+            </AnimatePresence>
+
+            {expandida && itensOcultos.length > 0 && (
+              <motion.div layout className="mt-4 border-t pt-3" style={{ borderColor: 'var(--border)' }}>
+                <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                  <span className="text-[8px] font-bold uppercase tracking-[0.16em] text-foreground-muted">Atalhos compactos</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModulosOcultos([])
+                      try { localStorage.setItem(obterChavePreferenciaSidebar(), '[]') } catch {}
+                    }}
+                    className="inline-flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider hover:underline"
+                    style={{ color: primary }}
+                  >
+                    <Eye size={10} /> Exibir todos
+                  </button>
+                </div>
+                <div className="grid grid-cols-4 gap-1">
+                  {itensOcultos.map((item) => {
+                    const Icon = item.icon
+                    const active = pathname === item.path || pathname.startsWith(`${item.path}/`)
+                    return (
+                      <Link
+                        key={item.path}
+                        href={item.path}
+                        onClick={() => setMobileOpen(false)}
+                        title={item.label}
+                        aria-label={item.label}
+                        className="relative flex h-9 items-center justify-center border"
+                        style={{ color: active ? primary : 'var(--foreground-muted)', borderColor: active ? primary : 'var(--border)' }}
+                      >
+                        <Icon size={15} />
+                        {(pendenciasPorModulo[item.notificacaoModulo] ?? 0) > 0 && (
+                          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'var(--status-warning)' }} />
+                        )}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </motion.div>
+            )}
+
+            {expandida && (
+              <details className="group mt-3 border-t pt-2" style={{ borderColor: 'var(--border)' }}>
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-1 py-2 text-[9px] font-bold uppercase tracking-wider text-foreground-muted hover:text-foreground">
+                  <EyeOff size={12} /> Personalizar módulos
+                </summary>
+                <div className="space-y-1 border p-2" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+                  {itensPermitidos.map((item) => {
+                    const oculto = modulosOcultos.includes(item.path)
+                    return (
+                      <label key={item.path} className="flex cursor-pointer items-center gap-2 py-1 text-[9px] uppercase text-foreground-muted">
+                        <input
+                          type="checkbox"
+                          checked={!oculto}
+                          onChange={(event) => atualizarModuloOculto(item.path, !event.target.checked)}
+                          style={{ accentColor: primary }}
+                        />
+                        <span className="truncate">{item.label}</span>
+                      </label>
+                    )
+                  })}
+                  <p className="pt-1 text-[8px] leading-relaxed text-foreground-muted">Apenas visual: permissões e acesso permanecem iguais.</p>
+                </div>
+              </details>
+            )}
           </nav>
         </div>
 
@@ -264,7 +385,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
           >
             <span className="relative flex w-5 shrink-0 items-center justify-center">
               <Bell size={18} className={notificacoesAtivas ? 'text-black' : 'text-foreground-muted'} />
-              {!expandida && totalNotificacoes > 0 && <span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full border border-black" style={{ backgroundColor: primary }} />}
+              {!expandida && totalNotificacoes > 0 && <span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full border border-black" style={{ backgroundColor: semanticColors.warning }} />}
             </span>
             {expandida && <span className="flex-1 truncate">{NOTIFICACOES_ITEM.label}</span>}
             {expandida && totalNotificacoes > 0 && <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black" style={{ backgroundColor: notificacoesAtivas ? '#000' : primary, color: notificacoesAtivas ? primary : '#000' }}>{totalNotificacoes > 99 ? '99+' : totalNotificacoes}</span>}
@@ -355,7 +476,9 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
 
         {/* ÁREA DE RENDERIZAÇÃO DA PÁGINA INTERNA */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-8">
-          {rotaAtualPermitida ? children : <div className="py-16 text-center text-xs font-mono text-foreground-muted">Validando permissões...</div>}
+          <DashboardMotion>
+            {rotaAtualPermitida ? children : <div className="py-16 text-center text-xs font-mono text-foreground-muted">Validando permissões...</div>}
+          </DashboardMotion>
         </main>
       </div>
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Bell, Check, CheckCheck, ChevronLeft, ChevronRight, Inbox, Trash2 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { NOTIFICACOES_ATUALIZADAS_EVENT, type Notificacao } from '@/hooks/useNotificacoes'
+import { ActionFeedback } from '@/components/motion/DashboardMotion'
 
 type FiltroLeitura = 'todas' | 'nao_lidas' | 'lidas'
 
@@ -33,7 +34,7 @@ const CORES_MODULO: Record<string, string> = {
 }
 
 export default function CentralNotificacoesPage() {
-  const { primary } = useTheme()
+  const { primary, semanticColors } = useTheme()
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([])
   const [filtro, setFiltro] = useState<FiltroLeitura>('todas')
   const [pagina, setPagina] = useState(1)
@@ -165,17 +166,17 @@ export default function CentralNotificacoesPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={naoLidas === 0 || Boolean(processando)} onClick={() => void marcarTodasComoLidas()} className="flex items-center gap-2 border px-4 py-2 text-[10px] font-bold uppercase disabled:opacity-40" style={{ borderColor: primary, color: primary }}><CheckCheck size={14} /> Marcar todas como lidas</button>
-          <button type="button" disabled={Boolean(processando)} onClick={() => void limparLidas()} className="flex items-center gap-2 border border-red-500/40 px-4 py-2 text-[10px] font-bold uppercase text-red-500 disabled:opacity-40"><Trash2 size={14} /> Limpar lidas</button>
+          <button type="button" disabled={Boolean(processando)} onClick={() => void limparLidas()} className="flex items-center gap-2 border px-4 py-2 text-[10px] font-bold uppercase disabled:opacity-40" style={{ borderColor: `${semanticColors.danger}66`, color: semanticColors.danger }}><Trash2 size={14} /> Limpar lidas</button>
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <ResumoCard label="Não lidas" valor={naoLidas} destaque={primary} />
+        <ResumoCard label="Não lidas" valor={naoLidas} destaque={semanticColors.warning} />
         <ResumoCard label="Neste filtro" valor={total} />
         <ResumoCard label="Página atual" valor={`${pagina} / ${totalPaginas}`} />
       </div>
 
-      {(erro || feedback) && <div role={erro ? 'alert' : 'status'} className={`border p-3 text-xs ${erro ? 'border-red-500/40 text-red-500' : ''}`} style={erro ? undefined : { borderColor: primary, color: primary }}>{erro || feedback}</div>}
+      {(erro || feedback) && <ActionFeedback message={erro || feedback} tone={erro ? 'error' : 'success'} className="text-xs" />}
 
       <section className="overflow-hidden border" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
         <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)' }}>
@@ -196,14 +197,16 @@ export default function CentralNotificacoesPage() {
           ) : (
             <div className="divide-y [&>article]:border-[var(--border)]">
               {notificacoes.map(notificacao => {
-                const corModulo = CORES_MODULO[notificacao.modulo] || primary
+                const corModulo = notificacao.modulo === 'SEGURANÇA'
+                  ? semanticColors.danger
+                  : CORES_MODULO[notificacao.modulo] || primary
                 return (
                   <article key={notificacao.id} className="group grid gap-4 border-t-0 p-4 transition-colors hover:bg-white/[0.03] sm:grid-cols-[auto_1fr_auto]" style={{ backgroundColor: notificacao.lida ? 'transparent' : `${primary}08` }}>
                     <span className="mt-1 h-3 w-3 border" style={{ borderColor: corModulo, backgroundColor: notificacao.lida ? 'transparent' : corModulo }} aria-hidden="true" />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest" style={{ borderColor: `${corModulo}88`, color: corModulo }}>{notificacao.modulo}</span>
-                        <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: notificacao.lida ? 'var(--foreground-muted)' : primary }}>{notificacao.lida ? 'Lida' : 'Não lida'}</span>
+                        <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: notificacao.lida ? 'var(--foreground-muted)' : semanticColors.warning }}>{notificacao.lida ? 'Lida' : 'Não lida'}</span>
                       </div>
                       <h3 className="mt-2 break-words text-sm font-bold">{notificacao.titulo}</h3>
                       <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-foreground-muted">{notificacao.mensagem}</p>
@@ -212,7 +215,7 @@ export default function CentralNotificacoesPage() {
                     </div>
                     <div className="flex items-start gap-1 sm:justify-end">
                       {!notificacao.lida && <button type="button" disabled={Boolean(processando)} onClick={() => void marcarComoLida(notificacao)} className="p-2 text-foreground-muted transition-colors hover:text-foreground disabled:opacity-40" title="Marcar como lida" aria-label={`Marcar “${notificacao.titulo}” como lida`}><Check size={15} /></button>}
-                      <button type="button" disabled={Boolean(processando)} onClick={() => void excluirNotificacao(notificacao)} className="p-2 text-foreground-muted transition-colors hover:text-red-500 disabled:opacity-40" title="Excluir notificação" aria-label={`Excluir “${notificacao.titulo}”`}><Trash2 size={15} /></button>
+                      <button type="button" disabled={Boolean(processando)} onClick={() => void excluirNotificacao(notificacao)} className="p-2 transition-opacity hover:opacity-75 disabled:opacity-40" style={{ color: semanticColors.danger }} title="Excluir notificação" aria-label={`Excluir “${notificacao.titulo}”`}><Trash2 size={15} /></button>
                     </div>
                   </article>
                 )

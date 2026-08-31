@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { CORES_E_LOGOS } from '@/data/temasELogos'
 import SubscriptionManagement from './_componentes/SubscriptionManagement'
+import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { 
   Building2, 
   Palette, 
@@ -30,7 +30,6 @@ import {
 
 export default function ConfiguracoesPage() {
   const { primary, setPrimary, isLight, setIsLight } = useTheme()
-  const router = useRouter()
   const [montado, setMontado] = useState(false)
   const [tabAtiva, setTabAtiva] = useState<'PERFIL' | 'APARENCIA' | 'SEGURANCA' | 'ASSINATURA'>('APARENCIA')
 
@@ -40,8 +39,7 @@ export default function ConfiguracoesPage() {
   const [salvando, setSalvando] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [diasDesdeAlteracao, setDiasDesdeAlteracao] = useState<number | null>(null)
-  const [formSenha, setFormSenha] = useState({ senhaAtual: '', novaSenha: '', confirmarSenha: '' })
-  const [alterandoSenha, setAlterandoSenha] = useState(false)
+  const [solicitandoReset, setSolicitandoReset] = useState(false)
   const [feedbackSenha, setFeedbackSenha] = useState('')
 
   useEffect(() => {
@@ -56,33 +54,23 @@ export default function ConfiguracoesPage() {
     setFeedback(response.ok ? 'Dados da empresa salvos com sucesso.' : data.erro || 'Não foi possível salvar o perfil.')
   }
 
-  const alterarSenha = async (event: React.FormEvent) => {
-    event.preventDefault()
+  const solicitarAlteracaoSenha = async () => {
     setFeedbackSenha('')
-    if (formSenha.novaSenha !== formSenha.confirmarSenha) {
-      setFeedbackSenha('A confirmação não corresponde à nova senha.')
-      return
-    }
-
-    setAlterandoSenha(true)
+    setSolicitandoReset(true)
     try {
-      const response = await fetch('/api/auth/change-password', {
+      const response = await fetch('/api/auth/change-password/request', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ senhaAtual: formSenha.senhaAtual, novaSenha: formSenha.novaSenha }),
       })
       const data = await response.json()
       if (!response.ok) {
-        setFeedbackSenha(data.erro || 'Não foi possível alterar a senha.')
+        setFeedbackSenha(data.erro || 'Não foi possível enviar a solicitação.')
         return
       }
       setFeedbackSenha(data.mensagem)
-      setFormSenha({ senhaAtual: '', novaSenha: '', confirmarSenha: '' })
-      window.setTimeout(() => router.replace('/auth/login'), 1200)
     } catch {
-      setFeedbackSenha('Falha de conexão ao alterar a senha.')
+      setFeedbackSenha('Falha de conexão ao enviar a solicitação.')
     } finally {
-      setAlterandoSenha(false)
+      setSolicitandoReset(false)
     }
   }
 
@@ -90,7 +78,7 @@ export default function ConfiguracoesPage() {
 
   return (
     <div className="space-y-6 max-w-[1200px] mx-auto">
-      {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
+      {feedback && <ActionFeedback message={feedback} tone={feedback.includes('sucesso') ? 'success' : 'error'} />}
       
       {/* ─── CABEÇALHO ─── */}
       <div className="mb-8">
@@ -240,18 +228,29 @@ export default function ConfiguracoesPage() {
                       ? 'Carregando a data da última alteração da senha…'
                       : `A sua senha atual foi definida há ${diasDesdeAlteracao} dia${diasDesdeAlteracao === 1 ? '' : 's'}. Recomendamos revisar a credencial periodicamente.`}
                   </p>
-                  <form onSubmit={alterarSenha} className="space-y-4" aria-describedby="requisitos-nova-senha">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <PasswordField label="Senha atual" value={formSenha.senhaAtual} onChange={(senhaAtual) => setFormSenha((atual) => ({ ...atual, senhaAtual }))} autoComplete="current-password" />
-                      <PasswordField label="Nova senha" value={formSenha.novaSenha} onChange={(novaSenha) => setFormSenha((atual) => ({ ...atual, novaSenha }))} autoComplete="new-password" />
-                      <PasswordField label="Confirmar nova senha" value={formSenha.confirmarSenha} onChange={(confirmarSenha) => setFormSenha((atual) => ({ ...atual, confirmarSenha }))} autoComplete="new-password" />
+                  <div className="space-y-4" aria-describedby="fluxo-alteracao-senha">
+                    <div id="fluxo-alteracao-senha" className="border p-4 text-xs leading-relaxed text-foreground-muted" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+                      <span className="mb-1 block font-mono text-[10px] font-bold uppercase tracking-widest" style={{ color: primary }}>Fluxo protegido</span>
+                      A alteração não é feita diretamente neste painel. A solicitação entra na fila do superadmin; após a aprovação, você recebe um código de uso único e define a nova senha na recuperação de acesso.
                     </div>
-                    <p id="requisitos-nova-senha" className="text-[10px] text-foreground-muted">Use no mínimo 12 caracteres, com maiúscula, minúscula, número e caractere especial.</p>
-                    {feedbackSenha && <p role="status" aria-live="polite" className="border p-3 text-xs" style={{ borderColor: feedbackSenha.startsWith('Senha alterada') ? primary : '#ef4444', color: feedbackSenha.startsWith('Senha alterada') ? primary : '#ef4444' }}>{feedbackSenha}</p>}
-                    <button type="submit" disabled={alterandoSenha} className="inline-flex min-h-11 items-center gap-2 border px-4 text-xs font-mono font-bold uppercase tracking-widest transition-colors hover:bg-white/5 disabled:opacity-50" style={{ borderColor: primary, color: primary }}>
-                      <KeyRound size={15} /> {alterandoSenha ? 'Alterando…' : 'Alterar minha senha'}
+                    {feedbackSenha && (
+                      <ActionFeedback
+                        message={feedbackSenha}
+                        tone={feedbackSenha.startsWith('Solicitação enviada') ? 'success' : 'error'}
+                        className="text-xs"
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void solicitarAlteracaoSenha()}
+                      disabled={solicitandoReset || feedbackSenha.startsWith('Solicitação enviada')}
+                      className="interactive-control inline-flex min-h-11 items-center gap-2 border px-4 text-xs font-mono font-bold uppercase tracking-widest transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ borderColor: primary, color: primary }}
+                    >
+                      <KeyRound size={15} /> {solicitandoReset ? 'Enviando solicitação…' : 'Solicitar alteração ao superadmin'}
                     </button>
-                  </form>
+                    <p className="text-[10px] text-foreground-muted">Nenhuma senha é enviada ou armazenada nesta etapa.</p>
+                  </div>
                 </div>
 
                 <div className="border border-red-500/30 bg-red-500/5 p-6">
@@ -312,24 +311,5 @@ function InputField({ label, valor, onChange, primary }: { label: string, valor:
         onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
       />
     </div>
-  )
-}
-
-function PasswordField({ label, value, onChange, autoComplete }: { label: string; value: string; onChange: (value: string) => void; autoComplete: string }) {
-  return (
-    <label className="block text-[10px] font-bold uppercase tracking-widest text-foreground-muted">
-      {label}
-      <input
-        type="password"
-        required
-        minLength={label === 'Senha atual' ? 1 : 12}
-        maxLength={128}
-        autoComplete={autoComplete}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full border bg-transparent px-4 py-3 text-sm text-foreground outline-none focus:border-current"
-        style={{ borderColor: 'var(--border)' }}
-      />
-    </label>
   )
 }

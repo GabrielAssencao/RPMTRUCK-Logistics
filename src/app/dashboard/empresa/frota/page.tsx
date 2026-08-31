@@ -22,6 +22,7 @@ import {
   Filter
 } from 'lucide-react'
 import GenericDrawer, { FieldConfig } from '@/components/dashboard/GenericDrawer'
+import { ActionFeedback } from '@/components/motion/DashboardMotion'
 
 type StatusVeiculo = 'OPERACIONAL' | 'OFICINA' | 'INATIVO'
 
@@ -68,6 +69,12 @@ export default function FrotaPage() {
   const [listaLocalizacoes, setListaLocalizacoes] = useState<Array<{ id: string; nome: string }>>([])
   const [veiculos, setVeiculos] = useState<VeiculoCompleto[]>([])
   const [feedback, setFeedback] = useState('')
+  const [feedbackTone, setFeedbackTone] = useState<'success' | 'error' | 'warning' | 'info'>('info')
+
+  const mostrarFeedback = (mensagem: string, tone: typeof feedbackTone) => {
+    setFeedbackTone(tone)
+    setFeedback(mensagem)
+  }
 
   const normalizarVeiculo = (veiculo: VeiculoApi): VeiculoCompleto => ({
     id: veiculo.id, modelo: veiculo.modelo, placa: veiculo.placa, tipo: veiculo.tipo,
@@ -84,7 +91,10 @@ export default function FrotaPage() {
     ]).then(([dadosVeiculos, localizacoes]) => {
       setVeiculos(dadosVeiculos.map(normalizarVeiculo))
       setListaLocalizacoes(localizacoes)
-    }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar a frota.'))
+    }).catch(error => {
+      setFeedbackTone('error')
+      setFeedback(error instanceof Error ? error.message : 'Falha ao carregar a frota.')
+    })
   }, [])
 
   if (!montado) return null
@@ -141,8 +151,9 @@ export default function FrotaPage() {
   const handleAlterarStatusRapido = async (id: string, novoStatus: StatusVeiculo) => {
     const response = await fetch(`/api/veiculos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: novoStatus }) })
     const data = await response.json()
-    if (!response.ok) return setFeedback(data.erro || 'Falha ao alterar status.')
+    if (!response.ok) return mostrarFeedback(data.erro || 'Falha ao alterar status.', 'error')
     setVeiculos(prev => prev.map(v => v.id === id ? normalizarVeiculo(data) : v))
+    mostrarFeedback('Status do veículo atualizado.', 'success')
   }
 
   // ✅ SELEÇÃO MÚLTIPLA
@@ -174,10 +185,11 @@ export default function FrotaPage() {
       body: JSON.stringify({ ids, status: novoStatus }),
     })
     const data = await response.json()
-    if (!response.ok) return setFeedback(data.erro || 'A atualização em lote não pôde ser concluída.')
+    if (!response.ok) return mostrarFeedback(data.erro || 'A atualização em lote não pôde ser concluída.', 'error')
     setVeiculos(prev => prev.map(v => selecionados.has(v.id) ? { ...v, status: novoStatus } : v))
     setSelecionados(new Set())
     setNovoStatusEmLote(null)
+    mostrarFeedback(`Status de ${ids.length} veículo(s) atualizado.`, 'success')
   }
 
   // 🗑️ EXCLUIR EM LOTE
@@ -190,12 +202,13 @@ export default function FrotaPage() {
     })
     const data = await response.json()
     if (!response.ok) {
-      setFeedback(data.erro || 'A exclusão em lote não pôde ser concluída.')
+      mostrarFeedback(data.erro || 'A exclusão em lote não pôde ser concluída.', 'error')
       return
     }
     const removidos = Array.isArray(data.removidos) ? data.removidos as string[] : []
     setVeiculos(prev => prev.filter(v => !removidos.includes(v.id)))
-    if (data.falhas?.length) setFeedback('Alguns veículos possuem histórico e não puderam ser removidos.')
+    if (data.falhas?.length) mostrarFeedback('Alguns veículos possuem histórico e não puderam ser removidos.', 'warning')
+    else mostrarFeedback(`${removidos.length} veículo(s) removido(s).`, 'success')
     setSelecionados(new Set())
     setConfirmandoExclusaoEmLote(false)
   }
@@ -233,11 +246,12 @@ export default function FrotaPage() {
     })
     const data = await response.json()
     if (!response.ok) {
-      setFeedback(data.erro || 'Não foi possível salvar o veículo.')
+      mostrarFeedback(data.erro || 'Não foi possível salvar o veículo.', 'error')
       return false
     }
     const salvo = normalizarVeiculo(data)
     setVeiculos(prev => veiculoParaEditar ? prev.map(v => v.id === salvo.id ? salvo : v) : [salvo, ...prev])
+    mostrarFeedback(veiculoParaEditar ? 'Veículo atualizado com sucesso.' : 'Veículo adicionado à frota.', 'success')
 
     return true
   }
@@ -246,15 +260,16 @@ export default function FrotaPage() {
   const handleConfirmarExclusao = async (id: string) => {
     const response = await fetch(`/api/veiculos/${id}`, { method: 'DELETE' })
     const data = await response.json()
-    if (!response.ok) return setFeedback(data.erro || 'Não foi possível remover o veículo.')
+    if (!response.ok) return mostrarFeedback(data.erro || 'Não foi possível remover o veículo.', 'error')
     setVeiculos(prev => prev.filter(v => v.id !== id))
     setExcluindoId(null)
     setMenuAcoesAberto(null)
+    mostrarFeedback('Veículo removido da frota.', 'success')
   }
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
-      {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
+      {feedback && <ActionFeedback message={feedback} tone={feedbackTone} />}
       
       {/* ─── CABEÇALHO COM AÇÕES HOMOGENEIZADAS ─── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">

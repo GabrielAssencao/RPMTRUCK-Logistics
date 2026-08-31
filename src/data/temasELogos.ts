@@ -21,6 +21,14 @@ export const CORES_E_LOGOS: TemaCor[] = [
 
 export const COR_TEMA_PADRAO = CORES_E_LOGOS[0].value
 export const LOGO_PADRAO = CORES_E_LOGOS[0].logoName
+export const COR_TEMA_VERMELHA = '#ef4444'
+
+export interface CoresSemanticas {
+  danger: string
+  warning: string
+  success: string
+  info: string
+}
 
 const CORES_LEGADAS: Record<string, string> = {
   '#10b981': '#22c55e',
@@ -43,6 +51,33 @@ export function normalizarCorTema(cor: string | null | undefined): string {
 export function obterLogoPorTema(primary: string): string {
   const cor = normalizarCorTema(primary)
   return CORES_E_LOGOS.find(c => c.value === cor)?.logoName || LOGO_PADRAO
+}
+
+export function temaPrimarioEhVermelho(primary: string): boolean {
+  return normalizarCorTema(primary) === COR_TEMA_VERMELHA
+}
+
+/**
+ * Mantém alertas distinguíveis da identidade visual. Quando vermelho é a cor
+ * da marca, crítico usa âmbar e atenção usa ciano para não repetir o mesmo
+ * vermelho em navegação, seleção e falha.
+ */
+export function obterCoresSemanticas(primary: string): CoresSemanticas {
+  if (temaPrimarioEhVermelho(primary)) {
+    return {
+      danger: '#fbbf24',
+      warning: '#38bdf8',
+      success: '#22c55e',
+      info: '#a78bfa',
+    }
+  }
+
+  return {
+    danger: '#ef4444',
+    warning: '#f59e0b',
+    success: '#22c55e',
+    info: '#38bdf8',
+  }
 }
 
 /** Retorna preto ou branco conforme o maior contraste WCAG com a cor de fundo. */

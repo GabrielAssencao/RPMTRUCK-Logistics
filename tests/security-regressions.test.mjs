@@ -76,11 +76,24 @@ test('troca de senha autenticada revoga todas as sessões', () => {
   const route = read('src/app/api/auth/change-password/route.ts')
 
   assert.match(route, /requireAuth\(request\)/)
+  assert.match(route, /auth\.session\.role === 'GESTOR_EMPRESA'/)
+  assert.match(route, /autorização prévia do superadmin/)
   assert.match(route, /verifyPassword\(parsed\.data\.senhaAtual/)
   assert.match(route, /sessaoVersao: \{ increment: 1 \}/)
   assert.match(route, /sessaoUsuario\.updateMany/)
   assert.match(route, /revogadaEm: agora/)
   assert.match(route, /senhaAlteradaEm: agora/)
+})
+
+test('gestor solicita redefinição ao superadmin sem confiar em email do cliente', () => {
+  const route = read('src/app/api/auth/change-password/request/route.ts')
+
+  assert.match(route, /requireAuth\(request\)/)
+  assert.match(route, /role !== 'GESTOR_EMPRESA'/)
+  assert.match(route, /auth\.usuario!\.email/)
+  assert.match(route, /criarSolicitacaoRedefinicaoSenha/)
+  assert.match(route, /notificarAdmins/)
+  assert.doesNotMatch(route, /request\.json\(/)
 })
 
 test('gestor redefine apenas operadores do próprio tenant e revoga sessões', () => {

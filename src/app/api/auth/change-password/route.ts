@@ -18,6 +18,12 @@ export async function POST(request: NextRequest) {
   if (auth.error || !auth.session) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
+  if (auth.session.role === 'GESTOR_EMPRESA') {
+    return NextResponse.json(
+      { erro: 'A alteração de senha do gestor exige autorização prévia do superadmin.' },
+      { status: 403 },
+    )
+  }
 
   const bloqueioIp = await applyRateLimit(
     request,

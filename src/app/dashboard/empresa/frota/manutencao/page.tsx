@@ -23,6 +23,7 @@ import {
   Lock,
 } from 'lucide-react'
 import Link from 'next/link'
+import { ActionFeedback } from '@/components/motion/DashboardMotion'
 
 type StatusManutencao = 'PENDENTE' | 'CONCLUIDA' | 'CANCELADA' | 'NAO_REALIZADA'
 type StatusDiagnostico = 'PASSIVO' | 'MONITORADO' | 'ALERTA' | 'CRITICO' | 'NORMAL'
@@ -52,7 +53,7 @@ interface RegistroManutencao {
 }
 
 function ManutencaoContent() {
-  const { primary } = useTheme()
+  const { primary, primaryIsRed, semanticColors } = useTheme()
   const searchParams = useSearchParams()
   const placaUrl = searchParams.get('placa')
 
@@ -73,6 +74,7 @@ function ManutencaoContent() {
 
   const [veiculos, setVeiculos] = useState<VeiculoSelecao[]>([])
   const [feedback, setFeedback] = useState('')
+  const [feedbackTone, setFeedbackTone] = useState<'success' | 'error' | 'warning' | 'info'>('info')
   const [salvandoAntecedencia, setSalvandoAntecedencia] = useState(false)
 
   const [indexSelecionado, setIndexSelecionado] = useState(0)
@@ -80,7 +82,7 @@ function ManutencaoContent() {
 
   useEffect(() => {
     queueMicrotask(() => setMontado(true))
-    fetch('/api/manutencoes', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setVeiculos(data.veiculos); setHistorico(data.historico); if (placaUrl) { const idx = data.veiculos.findIndex((v: VeiculoSelecao) => v.placa.toUpperCase() === placaUrl.toUpperCase()); if (idx !== -1) setIndexSelecionado(idx) } }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar manutenções.'))
+    fetch('/api/manutencoes', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setVeiculos(data.veiculos); setHistorico(data.historico); if (placaUrl) { const idx = data.veiculos.findIndex((v: VeiculoSelecao) => v.placa.toUpperCase() === placaUrl.toUpperCase()); if (idx !== -1) setIndexSelecionado(idx) } }).catch(error => { setFeedbackTone('error'); setFeedback(error instanceof Error ? error.message : 'Falha ao carregar manutenções.') })
   }, [placaUrl])
 
   if (!montado) return null
@@ -91,8 +93,6 @@ function ManutencaoContent() {
   const manutencoesOperacionaisDoVeiculo = manutencoesDoVeiculo.filter(h => !h.arquivado)
   const totalManutencoesArquivadas = manutencoesDoVeiculo.length - manutencoesOperacionaisDoVeiculo.length
   const custoTotalVeiculo = manutencoesDoVeiculo.filter(m => m.status === 'CONCLUIDA').reduce((acc, item) => acc + item.custo, 0)
-  const isTemaVermelho = primary === '#ef4444' || primary === '#ff0000'
-
   const handleAnterior = () => setIndexSelecionado(prev => (prev === 0 ? veiculos.length - 1 : prev - 1))
   const handleProximo = () => setIndexSelecionado(prev => (prev === veiculos.length - 1 ? 0 : prev + 1))
   const handleAtualizarDiasNotificacao = async (dias: number) => {
@@ -102,10 +102,12 @@ function ManutencaoContent() {
     setFeedback('')
     try {
       const response = await fetch(`/api/veiculos/${veiculoId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ diasAntecedenciaNotif: dias }) })
-      if (!response.ok) return setFeedback('Não foi possível atualizar a antecedência do alerta.')
+      if (!response.ok) { setFeedbackTone('error'); return setFeedback('Não foi possível atualizar a antecedência do alerta.') }
       setVeiculos(prev => prev.map(v => v.id === veiculoId ? { ...v, diasAntecedenciaNotificacao: dias } : v))
+      setFeedbackTone('success')
       setFeedback(`Alertas de ${veiculoAtivo.modelo} serão enviados com ${dias} dias de antecedência.`)
     } catch {
+      setFeedbackTone('error')
       setFeedback('Não foi possível conectar ao servidor para atualizar a antecedência do alerta.')
     } finally {
       setSalvandoAntecedencia(false)
@@ -116,37 +118,45 @@ function ManutencaoContent() {
     e.preventDefault()
     const response = await fetch('/api/manutencoes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ veiculoId: veiculoAtivo.id, ...formManutencao, custo: Number(formManutencao.custo) || 0, kmAtual: Number(formManutencao.kmAtual) || veiculoAtivo.kmAtual, origem: tipoInclusao }) })
     const novoRegistro = await response.json()
-    if (!response.ok) return setFeedback(novoRegistro.erro || 'Não foi possível salvar a manutenção.')
+    if (!response.ok) { setFeedbackTone('error'); return setFeedback(novoRegistro.erro || 'Não foi possível salvar a manutenção.') }
     setHistorico(prev => [novoRegistro, ...prev])
     setModalInclusaoOpen(false)
     setFormManutencao({ dataAgendada: dataHoje, tipo: 'PREVENTIVA', pecas: '', custo: '', kmAtual: '' })
+    setFeedbackTone('success')
+    setFeedback('Manutenção registrada e diagnóstico atualizado.')
   }
 
   const handleAlterarStatus = async (id: string, novoStatus: StatusManutencao) => {
     const manutencaoAtual = historico.find((item) => item.id === id)
     if (manutencaoAtual?.arquivado) {
+      setFeedbackTone('warning')
       setFeedback('Esta manutenção faz parte de um relatório de auditoria e permanece somente para consulta.')
       return
     }
     setFeedback('')
     const response = await fetch(`/api/manutencoes/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: novoStatus }) })
     const data = await response.json()
-    if (!response.ok) return setFeedback(data.erro || 'Não foi possível atualizar a manutenção.')
+    if (!response.ok) { setFeedbackTone('error'); return setFeedback(data.erro || 'Não foi possível atualizar a manutenção.') }
     setHistorico(prev => prev.map(item => item.id === id ? data : item))
+    setFeedbackTone('success')
+    setFeedback('Status da manutenção atualizado.')
   }
   const handleConfirmarExclusao = async (id: string) => {
     const manutencaoAtual = historico.find((item) => item.id === id)
     if (manutencaoAtual?.arquivado) {
       setExcluindoId(null)
+      setFeedbackTone('warning')
       setFeedback('Esta manutenção faz parte de um relatório de auditoria e não pode ser excluída.')
       return
     }
     setFeedback('')
     const response = await fetch(`/api/manutencoes/${id}`, { method: 'DELETE' })
     const data = await response.json()
-    if (!response.ok) return setFeedback(data.erro || 'Não foi possível excluir a manutenção.')
+    if (!response.ok) { setFeedbackTone('error'); return setFeedback(data.erro || 'Não foi possível excluir a manutenção.') }
     setHistorico(prev => prev.filter(h => h.id !== id))
     setExcluindoId(null)
+    setFeedbackTone('success')
+    setFeedback('Manutenção excluída do histórico operacional.')
   }
 
   // Combina a categoria geral com a descrição para apontar a peça mais específica
@@ -205,7 +215,7 @@ function ManutencaoContent() {
     switch (status) {
       case 'CRITICO':
         return { 
-          stroke: '#ef4444', 
+          stroke: semanticColors.danger,
           fill: 'url(#hatch-red)',
           opacity: 1,
           filter: 'url(#glow-red)',
@@ -213,7 +223,7 @@ function ManutencaoContent() {
         }
       case 'ALERTA':
         return { 
-          stroke: '#eab308', 
+          stroke: semanticColors.warning,
           fill: 'url(#hatch-yellow)',
           opacity: 1,
           filter: 'url(#glow-yellow)',
@@ -256,10 +266,15 @@ function ManutencaoContent() {
   const estiloRodas = aplicarEstiloPeca(obterStatusPeca('rodas'))
   const estiloFreios = aplicarEstiloPeca(obterStatusPeca('freios'))
   const estiloTransmissao = aplicarEstiloPeca(obterStatusPeca('transmissao'))
+  const corStatusManutencao = (status: StatusManutencao) => {
+    if (status === 'CONCLUIDA') return semanticColors.success
+    if (status === 'PENDENTE') return semanticColors.warning
+    return semanticColors.danger
+  }
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
-      {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
+      {feedback && <ActionFeedback message={feedback} tone={feedbackTone} />}
 
       {/* CABEÇALHO */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -330,7 +345,7 @@ function ManutencaoContent() {
             </div>
             <div>
               <div className="text-[10px] uppercase text-foreground-muted flex items-center gap-1"><DollarSign size={12} style={{ color: primary }} /> Total Gasto</div>
-              <div className={`mt-1 text-sm ${isTemaVermelho ? 'text-foreground font-black underline decoration-red-500' : 'text-red-500 font-bold'}`}>
+              <div className={`mt-1 text-sm ${primaryIsRed ? 'text-foreground font-black underline decoration-current' : 'font-bold'}`} style={{ color: primaryIsRed ? undefined : semanticColors.danger }}>
                 - {custoTotalVeiculo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </div>
             </div>
@@ -403,7 +418,7 @@ function ManutencaoContent() {
                           <div className="flex items-center gap-2">
                             <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: primary }}>{h.tipo}</div>
                             {h.arquivado && (
-                              <span className="inline-flex items-center gap-1 border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-black text-amber-500" title="Registro preservado em relatório de auditoria">
+                              <span className="inline-flex items-center gap-1 border px-1.5 py-0.5 text-[8px] font-black" style={{ borderColor: `${semanticColors.warning}55`, backgroundColor: `${semanticColors.warning}12`, color: semanticColors.warning }} title="Registro preservado em relatório de auditoria">
                                 <Lock size={9} /> ARQUIVADO
                               </span>
                             )}
@@ -411,7 +426,7 @@ function ManutencaoContent() {
                           <div className="text-[10px] text-foreground-muted truncate max-w-[200px]">{h.pecas}</div>
                         </td>
                         <td className="px-4 py-3 text-xs">{h.kmAtual.toLocaleString('pt-BR')} km</td>
-                        <td className={`px-4 py-3 text-xs font-bold ${isTemaVermelho ? 'text-foreground' : 'text-red-500'}`}>
+                        <td className={`px-4 py-3 text-xs font-bold ${primaryIsRed ? 'text-foreground' : ''}`} style={{ color: primaryIsRed ? undefined : semanticColors.danger }}>
                           - {h.custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </td>
                         <td className="px-4 py-3">
@@ -419,8 +434,8 @@ function ManutencaoContent() {
                             <span
                               className="inline-flex items-center gap-1 border px-2 py-1 text-[9px] font-bold uppercase"
                               style={{
-                                borderColor: h.status === 'CONCLUIDA' ? '#22c55e' : h.status === 'PENDENTE' ? '#eab308' : '#ef4444',
-                                color: h.status === 'CONCLUIDA' ? '#22c55e' : h.status === 'PENDENTE' ? '#eab308' : '#ef4444',
+                                borderColor: corStatusManutencao(h.status),
+                                color: corStatusManutencao(h.status),
                               }}
                               title="Manutenção arquivada: disponível somente para consulta"
                             >
@@ -432,29 +447,29 @@ function ManutencaoContent() {
                               onChange={(e) => handleAlterarStatus(h.id, e.target.value as StatusManutencao)}
                               className="px-2 py-1 text-[9px] font-bold uppercase border bg-transparent outline-none cursor-pointer"
                               style={{
-                                borderColor: h.status === 'CONCLUIDA' ? '#22c55e' : h.status === 'PENDENTE' ? '#eab308' : '#ef4444',
-                                color: h.status === 'CONCLUIDA' ? '#22c55e' : h.status === 'PENDENTE' ? '#eab308' : '#ef4444'
+                                borderColor: corStatusManutencao(h.status),
+                                color: corStatusManutencao(h.status)
                               }}
                             >
-                              <option value="PENDENTE" style={{ background: 'var(--background)', color: '#eab308' }}>PENDENTE</option>
-                              <option value="CONCLUIDA" style={{ background: 'var(--background)', color: '#22c55e' }}>CONCLUÍDA</option>
-                              <option value="CANCELADA" style={{ background: 'var(--background)', color: '#ef4444' }}>CANCELADA</option>
+                              <option value="PENDENTE" style={{ background: 'var(--background)', color: semanticColors.warning }}>PENDENTE</option>
+                              <option value="CONCLUIDA" style={{ background: 'var(--background)', color: semanticColors.success }}>CONCLUÍDA</option>
+                              <option value="CANCELADA" style={{ background: 'var(--background)', color: semanticColors.danger }}>CANCELADA</option>
                             </select>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
                           {h.arquivado ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 text-[9px] font-bold uppercase text-amber-500" title="Registros arquivados não podem ser alterados ou excluídos">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 text-[9px] font-bold uppercase" style={{ color: semanticColors.warning }} title="Registros arquivados não podem ser alterados ou excluídos">
                               <Lock size={12} /> Somente leitura
                             </span>
                           ) : excluindoId === h.id ? (
-                            <div className="inline-flex items-center gap-2 font-bold text-[10px] text-red-500 bg-red-500/10 px-2 py-1 rounded">
+                            <div className="inline-flex items-center gap-2 rounded px-2 py-1 text-[10px] font-bold" style={{ color: semanticColors.danger, backgroundColor: `${semanticColors.danger}12` }}>
                               <span>Excluir?</span>
-                              <button onClick={() => handleConfirmarExclusao(h.id)} className="hover:underline text-red-400">Sim</button>
+                              <button onClick={() => handleConfirmarExclusao(h.id)} className="hover:underline">Sim</button>
                               <button onClick={() => setExcluindoId(null)} className="text-foreground hover:underline">Não</button>
                             </div>
                           ) : (
-                            <button onClick={() => setExcluindoId(h.id)} className="p-1 text-foreground-muted hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                            <button onClick={() => setExcluindoId(h.id)} className="p-1 text-foreground-muted transition-colors hover:opacity-80" style={{ color: semanticColors.danger }}><Trash2 size={14} /></button>
                           )}
                         </td>
                       </motion.tr>
@@ -635,10 +650,10 @@ function ManutencaoContent() {
                 </filter>
                 {/* Padronagem (Hachura) para preenchimento de peças afetadas */}
                 <pattern id="hatch-red" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
-                  <line x1="0" y1="0" x2="0" y2="8" stroke="#ef4444" strokeWidth="2" opacity="0.3" />
+                  <line x1="0" y1="0" x2="0" y2="8" stroke={semanticColors.danger} strokeWidth="2" opacity="0.3" />
                 </pattern>
                 <pattern id="hatch-yellow" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
-                  <line x1="0" y1="0" x2="0" y2="8" stroke="#eab308" strokeWidth="2" opacity="0.3" />
+                  <line x1="0" y1="0" x2="0" y2="8" stroke={semanticColors.warning} strokeWidth="2" opacity="0.3" />
                 </pattern>
                 <pattern id="hatch-primary" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
                   <line x1="0" y1="0" x2="0" y2="8" stroke={primary} strokeWidth="2" opacity="0.3" />
@@ -827,8 +842,8 @@ function ManutencaoContent() {
                 )}
               </div>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] uppercase tracking-wider text-foreground-muted">
-                <span className="flex items-center gap-1"><i className="w-1.5 h-1.5 rounded-full bg-red-500" /> Crítico</span>
-                <span className="flex items-center gap-1"><i className="w-1.5 h-1.5 rounded-full bg-yellow-500" /> Alerta</span>
+                <span className="flex items-center gap-1"><i className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: semanticColors.danger }} /> Crítico</span>
+                <span className="flex items-center gap-1"><i className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: semanticColors.warning }} /> Alerta</span>
                 <span className="flex items-center gap-1"><i className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: primary }} /> Monitorado</span>
               </div>
             </div>
@@ -848,7 +863,7 @@ function ManutencaoContent() {
                   .sort((a, b) => a.dataAgendada.localeCompare(b.dataAgendada))
                   .map(item => {
                     const atrasada = item.dataAgendada < dataHoje
-                    const cor = atrasada ? '#ef4444' : '#eab308'
+                    const cor = atrasada ? semanticColors.danger : semanticColors.warning
                     return (
                       <div key={item.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 p-3 border bg-black/10" style={{ borderColor: `${cor}35` }}>
                         <div className="w-8 h-8 flex items-center justify-center border" style={{ color: cor, borderColor: `${cor}55`, backgroundColor: `${cor}0d` }}>

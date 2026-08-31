@@ -6,6 +6,7 @@ import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
 import { executarComAuditoria } from '@/lib/auditoria';
 import { verifyBotToken } from '@/lib/botProtection';
 import { recordSecurityEvent } from '@/lib/securityEvents';
+import { criarSolicitacaoRedefinicaoSenha } from '@/lib/passwordResetRequests';
 
 const schema = z.object({
   email: z.string().trim().email().max(254).toLowerCase(),
@@ -50,36 +51,10 @@ export async function POST(request: NextRequest) {
 
     // Conta existente e ausente percorrem a mesma fronteira transacional e as
     // mesmas consultas iniciais. Apenas uma conta real pode gerar persistência.
-    const solicitacaoCriada = await executarComAuditoria({ origem: 'PUBLIC_API' }, async (tx) => {
-      const [usuarioExistente, ativa] = await Promise.all([
-        tx.usuario.findUnique({ where: { email }, select: { id: true } }),
-        tx.resetSenha.findFirst({
-          where: { email, status: { in: ['PENDENTE', 'APROVADO'] } },
-          select: { id: true, status: true, token_expira_em: true },
-          orderBy: { atualizado_em: 'desc' },
-        }),
-      ]);
-      if (!usuarioExistente) return false;
-      if (ativa?.status === 'PENDENTE') return false;
-      if (
-        ativa?.status === 'APROVADO' &&
-        ativa.token_expira_em &&
-        ativa.token_expira_em > new Date()
-      ) {
-        return false;
-      }
-
-      await tx.resetSenha.updateMany({
-        where: { email, status: { in: ['PENDENTE', 'APROVADO'] } },
-        data: {
-          status: 'REJEITADO',
-          token_hash: null,
-          token_expira_em: null,
-        },
-      });
-      await tx.resetSenha.create({ data: { email, status: 'PENDENTE' } });
-      return true;
-    });
+    const solicitacaoCriada = await executarComAuditoria(
+      { origem: 'PUBLIC_API' },
+      (tx) => criarSolicitacaoRedefinicaoSenha(tx, email),
+    );
     if (solicitacaoCriada) {
       after(async () => {
         await notificarAdmins({

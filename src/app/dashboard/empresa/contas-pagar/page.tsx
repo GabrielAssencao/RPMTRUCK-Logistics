@@ -7,6 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel } from '@/lib/financeiro/contasPagar'
 import { CATEGORIAS_CONTA_PAGAR, descricaoContaPagarEhSugestao, obterCategoriaContaPagar } from '@/lib/financeiro/categoriasContaPagar'
 import { lerBoletoPdfLocalmente, lerCodigoBarrasImagemLocalmente } from './_utils/leituraBoletoPdf'
+import { ActionFeedback } from '@/components/motion/DashboardMotion'
 
 interface Conta {
   id: string; descricao: string; fornecedor: string | null; vencimento: string; valor: number
@@ -32,6 +33,11 @@ export default function ContasPagarPage() {
   const [portal, setPortal] = useState<Portal | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [feedback, setFeedback] = useState('')
+  const feedbackTone = useMemo(() => {
+    if (/cadastrada|baixado|atualizado|copiada/i.test(feedback)) return 'success' as const
+    if (/lido|leitura|reconhecido|confira|compare/i.test(feedback)) return 'warning' as const
+    return 'error' as const
+  }, [feedback])
   const [filtro, setFiltro] = useState<'PENDENTE' | 'PAGO' | 'TODOS'>('PENDENTE')
   const [abrirCadastro, setAbrirCadastro] = useState(false)
   const [form, setForm] = useState<EstadoFormulario>(criarEstadoInicial)
@@ -238,7 +244,7 @@ export default function ContasPagarPage() {
         <div className="flex flex-col gap-2 min-[420px]:flex-row"><button type="button" onClick={() => setConfigurandoPortal(true)} className="min-h-11 border px-4 text-[10px] font-black uppercase" style={{ borderColor: 'var(--border)' }}><Building2 size={14} className="mr-2 inline" />Portal financeiro</button><button type="button" onClick={abrirFormularioCadastro} className="min-h-11 px-4 text-[10px] font-black uppercase text-black" style={{ backgroundColor: primary }}><Plus size={14} className="mr-2 inline" />Nova conta</button></div>
       </header>
 
-      {feedback && <p role="status" className="border p-3 text-xs" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>{feedback}</p>}
+      {feedback && <ActionFeedback message={feedback} tone={feedbackTone} className="text-xs" />}
 
       <section className="grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 lg:grid-cols-4">
         <Resumo label="Total pendente" valor={moeda.format(resumo.total)} cor={primary} />

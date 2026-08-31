@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { LucideIcon } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { useContainers, StatusContainer, TipoContainer, type RegistroContainer } from '@/contexts/ContainersContext'
 import { obterAnoMesSemana, MESES } from '@/lib/dataUtils'
 import {
@@ -325,7 +326,7 @@ export default function ContainersPage() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
-      {erroContainers && <div role="alert" className="border border-red-500/30 p-3 text-sm text-red-500">{erroContainers}</div>}
+      {erroContainers && <ActionFeedback message={erroContainers} tone="error" />}
 
       {/* ─── CABEÇALHO ─── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b pb-4" style={{ borderColor: 'var(--border)' }}>
@@ -993,7 +994,7 @@ export default function ContainersPage() {
         </div>
 
         {erroHistorico ? (
-          <p className="p-4 text-xs text-red-500" role="alert">{erroHistorico}</p>
+          <ActionFeedback message={erroHistorico} tone="error" className="m-4 text-xs" />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-[720px] w-full whitespace-nowrap text-left text-xs">

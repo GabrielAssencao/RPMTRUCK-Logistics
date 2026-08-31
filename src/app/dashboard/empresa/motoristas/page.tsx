@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { formatarCPF } from '@/utils/documentos'
+import { ActionFeedback } from '@/components/motion/DashboardMotion'
 
 interface VeiculoCompleto {
   id: string
@@ -68,6 +69,12 @@ export default function MotoristasPage() {
   const [veiculos, setVeiculos] = useState<VeiculoCompleto[]>([])
   const [motoristas, setMotoristas] = useState<MotoristaCard[]>([])
   const [feedback, setFeedback] = useState('')
+  const [feedbackTone, setFeedbackTone] = useState<'success' | 'error'>('success')
+
+  const mostrarFeedback = (mensagem: string, tone: typeof feedbackTone) => {
+    setFeedbackTone(tone)
+    setFeedback(mensagem)
+  }
 
   // Carrossel e Drag/Drop
   const [indexCarrossel, setIndexCarrossel] = useState(0)
@@ -83,7 +90,10 @@ export default function MotoristasPage() {
       const data = await response.json(); if (!response.ok) throw new Error(data.erro)
       setMotoristas(data.motoristas.map((m: MotoristaApi) => ({ id: m.id, nomeAbreviado: m.nome, cpf: m.cpf ? formatarCPF(m.cpf) : 'Não informado', cnh: m.cnh, categoria: m.categoria, validadeCNH: String(m.validade).slice(0, 10), fotoUrl: m.foto_url || undefined, veiculoIdVinculado: m.veiculoId || undefined })))
       setVeiculos(data.veiculos.map((v: VeiculoApi) => ({ id: v.id, modelo: v.modelo, placa: v.placa, tipo: v.tipo, kmAtual: v.quilometragem, motoristaVinculadoId: v.motoristas?.[0]?.id })))
-    }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar motoristas.'))
+    }).catch(error => {
+      setFeedbackTone('error')
+      setFeedback(error instanceof Error ? error.message : 'Falha ao carregar motoristas.')
+    })
   }, [])
 
   if (!montado) return null
@@ -116,7 +126,7 @@ export default function MotoristasPage() {
 
     const response = await fetch(`/api/motoristas/${draggedMotoristaId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ veiculoId }) })
     const data = await response.json()
-    if (!response.ok) return setFeedback(data.erro || 'Não foi possível vincular o motorista.')
+    if (!response.ok) return mostrarFeedback(data.erro || 'Não foi possível vincular o motorista.', 'error')
 
     setMotoristas(prev => prev.map(m => {
       if (m.id === draggedMotoristaId) return { ...m, veiculoIdVinculado: veiculoId }
@@ -132,27 +142,30 @@ export default function MotoristasPage() {
 
     setDraggedMotoristaId(null)
     setHoveredVeiculoId(null)
+    mostrarFeedback('Motorista vinculado ao veículo.', 'success')
   }
 
   const handleDesvincular = async (motoristaId: string) => {
     const response = await fetch(`/api/motoristas/${motoristaId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ veiculoId: null }) })
-    if (!response.ok) return setFeedback('Não foi possível desvincular o motorista.')
+    if (!response.ok) return mostrarFeedback('Não foi possível desvincular o motorista.', 'error')
     setMotoristas(prev => prev.map(m => m.id === motoristaId ? { ...m, veiculoIdVinculado: undefined } : m))
     setVeiculos(prev => prev.map(v => v.motoristaVinculadoId === motoristaId ? { ...v, motoristaVinculadoId: undefined } : v))
+    mostrarFeedback('Motorista desvinculado do veículo.', 'success')
   }
 
   // Exclusão definitiva de condutor
   const handleConfirmarExclusao = async (motoristaId: string) => {
     const response = await fetch(`/api/motoristas/${motoristaId}`, { method: 'DELETE' })
     const data = await response.json()
-    if (!response.ok) return setFeedback(data.erro || 'Não foi possível excluir o motorista.')
+    if (!response.ok) return mostrarFeedback(data.erro || 'Não foi possível excluir o motorista.', 'error')
     setMotoristas(prev => prev.filter(m => m.id !== motoristaId))
     setExcluindoId(null)
+    mostrarFeedback('Motorista removido.', 'success')
   }
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
-      {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
+      {feedback && <ActionFeedback message={feedback} tone={feedbackTone} />}
       
       {/* ─── CABEÇALHO ─── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">

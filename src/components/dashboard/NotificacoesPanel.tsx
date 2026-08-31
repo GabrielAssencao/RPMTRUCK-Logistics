@@ -19,7 +19,7 @@ export default function NotificacoesPanel({
   onPendenciasChange,
   centralHref = '/dashboard/empresa/notificacoes',
 }: NotificacoesPanelProps) {
-  const { primary } = useTheme()
+  const { primary, semanticColors } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
   const { notificacoes, naoLidas, loading, error, pendenciasPorModulo, marcarComoLida, marcarTodasComoLidas, limparLidas, deletarNotificacao, recarregar } =
     useNotificacoes()
@@ -39,7 +39,7 @@ export default function NotificacoesPanel({
     FROTA: '#f59e0b',
     MOTORISTAS: '#3b82f6',
     CUSTOS: '#10b981',
-    SEGURANÇA: '#ef4444',
+    SEGURANÇA: semanticColors.danger,
     GERAL: primary
   }
 
@@ -60,7 +60,7 @@ export default function NotificacoesPanel({
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white"
-            style={{ backgroundColor: '#ef4444' }}
+            style={{ backgroundColor: semanticColors.warning, color: '#071018' }}
           >
             {naoLidas > 9 ? '9+' : naoLidas}
           </motion.div>
@@ -106,7 +106,7 @@ export default function NotificacoesPanel({
                 </button>}
                 {temLidas && <button type="button" onClick={() => {
                   if (window.confirm('Remover permanentemente todas as notificações já lidas?')) void limparLidas()
-                }} className="ml-auto flex items-center gap-2 text-xs font-bold text-red-500 hover:underline">
+                }} className="ml-auto flex items-center gap-2 text-xs font-bold hover:underline" style={{ color: semanticColors.danger }}>
                   <Trash2 size={14} /> Limpar lidas
                 </button>}
               </div>
@@ -117,7 +117,7 @@ export default function NotificacoesPanel({
               {loading ? (
                 <div className="p-8 text-center text-foreground-muted text-sm">Carregando notificações...</div>
               ) : error ? (
-                <div className="p-8 text-center text-red-500 text-sm">{error}</div>
+                <div className="p-8 text-center text-sm" style={{ color: semanticColors.danger }}>{error}</div>
               ) : notificacoes.length === 0 ? (
                 <div className="p-8 text-center text-foreground-muted text-sm">
                   Nenhuma notificação
@@ -191,7 +191,8 @@ export default function NotificacoesPanel({
                               onClick={() => {
                                 if (window.confirm(`Excluir permanentemente a notificação “${notif.titulo}”?`)) void deletarNotificacao(notif.id)
                               }}
-                              className="p-1 hover:opacity-70 transition-opacity text-red-500"
+                              className="p-1 hover:opacity-70 transition-opacity"
+                              style={{ color: semanticColors.danger }}
                               title="Deletar"
                             >
                               <Trash2 size={14} />

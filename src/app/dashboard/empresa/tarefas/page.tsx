@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, ClipboardList, Clock3, Plus, RefreshCw, Trash2, UserRound } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import { ActionFeedback } from '@/components/motion/DashboardMotion'
 
 type StatusTarefa = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA'
 type PrioridadeTarefa = 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE'
@@ -143,7 +144,7 @@ export default function TarefasPage() {
       </div>
 
       {(erro || sucesso) && (
-        <div role="status" className={`border p-3 text-sm ${erro ? 'border-red-500/30 text-red-500' : 'border-green-500/30 text-green-500'}`}>{erro || sucesso}</div>
+        <ActionFeedback message={erro || sucesso} tone={erro ? 'error' : 'success'} />
       )}
 
       {eGestor && mostrarFormulario && (

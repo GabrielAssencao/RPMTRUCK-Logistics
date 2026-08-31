@@ -3,7 +3,15 @@
 // src/contexts/ThemeContext.tsx
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { CORES_E_LOGOS, COR_TEMA_PADRAO, normalizarCorTema, obterCorDeContraste } from '@/data/temasELogos'
+import {
+  CORES_E_LOGOS,
+  COR_TEMA_PADRAO,
+  normalizarCorTema,
+  obterCorDeContraste,
+  obterCoresSemanticas,
+  temaPrimarioEhVermelho,
+  type CoresSemanticas,
+} from '@/data/temasELogos'
 
 interface ThemeContextType {
   primary:    string
@@ -11,6 +19,8 @@ interface ThemeContextType {
   isLight:    boolean
   setIsLight: (v: boolean) => void
   themeReady: boolean
+  primaryIsRed: boolean
+  semanticColors: CoresSemanticas
 }
 
 export const ThemeContext = createContext<ThemeContextType>({
@@ -19,6 +29,8 @@ export const ThemeContext = createContext<ThemeContextType>({
   isLight:    false,
   setIsLight: () => {},
   themeReady: false,
+  primaryIsRed: false,
+  semanticColors: obterCoresSemanticas(COR_TEMA_PADRAO),
 })
 
 function lerPreferencia(chave: string) {
@@ -71,6 +83,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (!ready) return
     document.documentElement.style.setProperty('--primary', primary)
     document.documentElement.style.setProperty('--primary-contrast', obterCorDeContraste(primary))
+    const semanticColors = obterCoresSemanticas(primary)
+    document.documentElement.style.setProperty('--status-danger', semanticColors.danger)
+    document.documentElement.style.setProperty('--status-warning', semanticColors.warning)
+    document.documentElement.style.setProperty('--status-success', semanticColors.success)
+    document.documentElement.style.setProperty('--status-info', semanticColors.info)
+    document.documentElement.dataset.primaryFamily = temaPrimarioEhVermelho(primary) ? 'red' : 'default'
     document.documentElement.classList.toggle('light', isLight)
   }, [primary, isLight, ready])
 
@@ -86,7 +104,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ThemeContext.Provider value={{ primary, setPrimary, isLight, setIsLight, themeReady: ready }}>
+    <ThemeContext.Provider value={{
+      primary,
+      setPrimary,
+      isLight,
+      setIsLight,
+      themeReady: ready,
+      primaryIsRed: temaPrimarioEhVermelho(primary),
+      semanticColors: obterCoresSemanticas(primary),
+    }}>
       {children}
     </ThemeContext.Provider>
   )
