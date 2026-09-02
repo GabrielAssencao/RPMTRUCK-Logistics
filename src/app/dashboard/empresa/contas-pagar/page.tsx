@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Building2, Check, Copy, Download, ExternalLink, FileText, Plus, ReceiptText, Upload, X } from 'lucide-react'
+import { AlertTriangle, Building2, Check, Copy, Download, ExternalLink, FileText, Plus, ReceiptText, RotateCcw, Trash2, Upload, X } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel } from '@/lib/financeiro/contasPagar'
 import { CATEGORIAS_CONTA_PAGAR, descricaoContaPagarEhSugestao, obterCategoriaContaPagar } from '@/lib/financeiro/categoriasContaPagar'
@@ -34,11 +34,11 @@ export default function ContasPagarPage() {
   const [carregando, setCarregando] = useState(true)
   const [feedback, setFeedback] = useState('')
   const feedbackTone = useMemo(() => {
-    if (/cadastrada|baixado|atualizado|copiada/i.test(feedback)) return 'success' as const
+    if (/cadastrada|baixado|confirmado|atualizado|copiada|cancelado|revertida/i.test(feedback)) return 'success' as const
     if (/lido|leitura|reconhecido|confira|compare/i.test(feedback)) return 'warning' as const
     return 'error' as const
   }, [feedback])
-  const [filtro, setFiltro] = useState<'PENDENTE' | 'PAGO' | 'TODOS'>('PENDENTE')
+  const [filtro, setFiltro] = useState<'PENDENTE' | 'PAGO' | 'CANCELADO' | 'TODOS'>('PENDENTE')
   const [abrirCadastro, setAbrirCadastro] = useState(false)
   const [form, setForm] = useState<EstadoFormulario>(criarEstadoInicial)
   const [boleto, setBoleto] = useState<File | null>(null)
@@ -47,6 +47,8 @@ export default function ContasPagarPage() {
   const [lendoArquivo, setLendoArquivo] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [baixando, setBaixando] = useState<Conta | null>(null)
+  const [cancelando, setCancelando] = useState<Conta | null>(null)
+  const [reabrindo, setReabrindo] = useState<Conta | null>(null)
   const [comprovante, setComprovante] = useState<File | null>(null)
   const [configurandoPortal, setConfigurandoPortal] = useState(false)
   const [portalForm, setPortalForm] = useState({ nome: '', url: '' })
@@ -199,17 +201,57 @@ export default function ContasPagarPage() {
     }
   }
 
+  const abrirConfirmacaoBaixa = (conta: Conta) => {
+    setComprovante(null)
+    setBaixando(conta)
+  }
+
+  const fecharConfirmacaoBaixa = () => {
+    if (enviando) return
+    setBaixando(null)
+    setComprovante(null)
+  }
+
   const confirmarBaixa = async () => {
-    if (!baixando || !comprovante || submitRef.current) return
-    if (comprovante.size > CONTA_PAGAR_MAX_FILE_BYTES) return setFeedback('O comprovante deve ter no máximo 5 MB.')
+    if (!baixando || submitRef.current) return
+    if (comprovante && comprovante.size > CONTA_PAGAR_MAX_FILE_BYTES) return setFeedback('O comprovante deve ter no máximo 5 MB.')
     submitRef.current = true; setEnviando(true); setFeedback('')
     try {
-      const body = new FormData(); body.set('acao', 'PAGAR'); body.set('comprovante', comprovante)
+      const body = new FormData(); body.set('acao', 'PAGAR')
+      if (comprovante) body.set('comprovante', comprovante)
       const response = await fetch(`/api/contas-pagar/${baixando.id}`, { method: 'PATCH', body })
       const data = await response.json()
       if (!response.ok) throw new Error(data.erro || 'Não foi possível confirmar a baixa.')
-      setBaixando(null); setComprovante(null); setFeedback('Pagamento baixado e comprovante protegido no bucket privado.'); await carregar()
+      setBaixando(null); setComprovante(null)
+      setFeedback(comprovante ? 'Pagamento confirmado e comprovante protegido no bucket privado.' : 'Pagamento confirmado sem comprovante anexado.')
+      await carregar()
     } catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível confirmar a baixa.') }
+    finally { submitRef.current = false; setEnviando(false) }
+  }
+
+  const confirmarCancelamento = async () => {
+    if (!cancelando || submitRef.current) return
+    submitRef.current = true; setEnviando(true); setFeedback('')
+    try {
+      const body = new FormData(); body.set('acao', 'CANCELAR')
+      const response = await fetch(`/api/contas-pagar/${cancelando.id}`, { method: 'PATCH', body })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível cancelar o lançamento.')
+      setCancelando(null); setFeedback('Lançamento cancelado e retirado dos custos operacionais.'); await carregar()
+    } catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível cancelar o lançamento.') }
+    finally { submitRef.current = false; setEnviando(false) }
+  }
+
+  const confirmarReabertura = async () => {
+    if (!reabrindo || submitRef.current) return
+    submitRef.current = true; setEnviando(true); setFeedback('')
+    try {
+      const body = new FormData(); body.set('acao', 'REABRIR')
+      const response = await fetch(`/api/contas-pagar/${reabrindo.id}`, { method: 'PATCH', body })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível reverter a baixa.')
+      setReabrindo(null); setFeedback('Baixa revertida. A conta voltou para pendente.'); await carregar()
+    } catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível reverter a baixa.') }
     finally { submitRef.current = false; setEnviando(false) }
   }
 
@@ -254,12 +296,12 @@ export default function ContasPagarPage() {
       </section>
 
       <div className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)' }}>
-        <div className="flex overflow-x-auto">{(['PENDENTE', 'PAGO', 'TODOS'] as const).map((item) => <button key={item} type="button" onClick={() => setFiltro(item)} className="min-h-10 whitespace-nowrap border px-4 text-[10px] font-black uppercase" style={{ color: filtro === item ? '#000' : 'var(--foreground-muted)', backgroundColor: filtro === item ? primary : 'transparent', borderColor: filtro === item ? primary : 'var(--border)' }}>{item}</button>)}</div>
+        <div className="flex overflow-x-auto">{(['PENDENTE', 'PAGO', 'CANCELADO', 'TODOS'] as const).map((item) => <button key={item} type="button" onClick={() => setFiltro(item)} className="min-h-10 whitespace-nowrap border px-4 text-[10px] font-black uppercase" style={{ color: filtro === item ? '#000' : 'var(--foreground-muted)', backgroundColor: filtro === item ? primary : 'transparent', borderColor: filtro === item ? primary : 'var(--border)' }}>{item}</button>)}</div>
         {capacidades?.exportacaoLote && <Link href="/api/contas-pagar/exportar" download className="flex min-h-10 items-center justify-center border px-4 text-[10px] font-black uppercase" style={{ borderColor: 'var(--border)' }}><Download size={14} className="mr-2" />Exportar CSV</Link>}
       </div>
 
       {carregando ? <p className="py-16 text-center text-xs uppercase tracking-widest text-foreground-muted">Carregando contas...</p> : exibidas.length === 0 ? <div className="border border-dashed py-16 text-center" style={{ borderColor: 'var(--border)' }}><ReceiptText className="mx-auto mb-3 text-foreground-muted" /><p className="text-sm font-bold">Nenhuma conta nesta categoria.</p><p className="mt-1 text-xs text-foreground-muted">Cadastre o primeiro vencimento para iniciar a organização.</p></div> : (
-        <div className="grid gap-3 xl:grid-cols-2">{exibidas.map((conta) => <ContaCard key={conta.id} conta={conta} capacidades={capacidades!} portal={portal} primary={primary} onCopiar={() => void copiarLinha(conta)} onArquivo={(tipo) => void abrirArquivo(conta.id, tipo)} onBaixar={() => setBaixando(conta)} />)}</div>
+        <div className="grid gap-3 xl:grid-cols-2">{exibidas.map((conta) => <ContaCard key={conta.id} conta={conta} capacidades={capacidades!} portal={portal} primary={primary} onCopiar={() => void copiarLinha(conta)} onArquivo={(tipo) => void abrirArquivo(conta.id, tipo)} onBaixar={() => abrirConfirmacaoBaixa(conta)} onCancelar={() => setCancelando(conta)} onReabrir={() => setReabrindo(conta)} />)}</div>
       )}
 
       {abrirCadastro && (
@@ -308,7 +350,11 @@ export default function ContasPagarPage() {
         </Modal>
       )}
 
-      {baixando && <Modal titulo="Confirmar pagamento" onClose={() => !enviando && setBaixando(null)}><div className="space-y-4"><p className="text-sm"><strong>{baixando.descricao}</strong><br /><span className="text-foreground-muted">{moeda.format(baixando.valor)} · vencimento {new Date(`${baixando.vencimento}T12:00:00`).toLocaleDateString('pt-BR')}</span></p><p className="border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-500">Esta ação não movimenta dinheiro. Confirme somente depois de autorizar a operação no banco.</p><Campo label="Comprovante obrigatório (até 5 MB)"><input type="file" required accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setComprovante(e.target.files?.[0] ?? null)} className="input-financeiro file:mr-3 file:border-0 file:bg-transparent file:text-xs file:font-bold" /></Campo><button type="button" disabled={!comprovante || enviando} onClick={() => void confirmarBaixa()} className="min-h-12 w-full text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}><Check size={15} className="mr-2 inline" />{enviando ? 'Confirmando...' : 'Confirmar baixa'}</button></div></Modal>}
+      {baixando && <Modal titulo="Confirmar pagamento" onClose={fecharConfirmacaoBaixa}><div className="space-y-4"><p className="text-sm"><strong>{baixando.descricao}</strong><br /><span className="text-foreground-muted">{moeda.format(baixando.valor)} · vencimento {new Date(`${baixando.vencimento}T12:00:00`).toLocaleDateString('pt-BR')}</span></p><p className="border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-500">Esta ação não movimenta dinheiro. Confirme somente depois de autorizar a operação no banco.</p><Campo label="Comprovante opcional (até 5 MB)"><input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setComprovante(e.target.files?.[0] ?? null)} className="input-financeiro file:mr-3 file:border-0 file:bg-transparent file:text-xs file:font-bold" /></Campo><p className="text-[11px] text-foreground-muted">O anexo não é obrigatório para confirmar este pagamento.</p><button type="button" disabled={enviando} onClick={() => void confirmarBaixa()} className="min-h-12 w-full text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}><Check size={15} className="mr-2 inline" />{enviando ? 'Confirmando...' : 'Confirmar pagamento'}</button></div></Modal>}
+
+      {reabrindo && <Modal titulo="Reverter baixa" onClose={() => !enviando && setReabrindo(null)}><div className="space-y-4"><p className="text-sm"><strong>{reabrindo.descricao}</strong><br /><span className="text-foreground-muted">{moeda.format(reabrindo.valor)} · vencimento {new Date(`${reabrindo.vencimento}T12:00:00`).toLocaleDateString('pt-BR')}</span></p><p role="alert" className="border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-500">A conta e o custo vinculado voltarão para pendente. O comprovante da baixa equivocada será removido, e a reversão ficará registrada na auditoria.</p><div className="grid gap-2 sm:grid-cols-2"><button type="button" disabled={enviando} onClick={() => setReabrindo(null)} className="min-h-12 border px-4 text-xs font-black uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>Manter como paga</button><button type="button" disabled={enviando} onClick={() => void confirmarReabertura()} className="min-h-12 border border-amber-500 bg-amber-500 px-4 text-xs font-black uppercase text-black disabled:opacity-50">{enviando ? 'Revertendo...' : 'Confirmar reversão'}</button></div></div></Modal>}
+
+      {cancelando && <Modal titulo="Cancelar lançamento" onClose={() => !enviando && setCancelando(null)}><div className="space-y-4"><p className="text-sm"><strong>{cancelando.descricao}</strong><br /><span className="text-foreground-muted">{moeda.format(cancelando.valor)} · vencimento {new Date(`${cancelando.vencimento}T12:00:00`).toLocaleDateString('pt-BR')}</span></p><p role="alert" className="border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-400">O lançamento sairá das contas pendentes e dos custos operacionais vinculados. O registro será preservado como cancelado para auditoria.</p><div className="grid gap-2 sm:grid-cols-2"><button type="button" disabled={enviando} onClick={() => setCancelando(null)} className="min-h-12 border px-4 text-xs font-black uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>Manter lançamento</button><button type="button" disabled={enviando} onClick={() => void confirmarCancelamento()} className="min-h-12 border border-red-500 bg-red-500 px-4 text-xs font-black uppercase text-white disabled:opacity-50"><Trash2 size={15} className="mr-2 inline" />{enviando ? 'Cancelando...' : 'Confirmar cancelamento'}</button></div></div></Modal>}
 
       {configurandoPortal && <Modal titulo="Portal financeiro" onClose={() => !enviando && setConfigurandoPortal(false)}><div className="space-y-4"><p className="text-xs text-foreground-muted">Cadastre somente o endereço HTTPS oficial do internet banking ou ERP. O RPMTRUCK nunca recebe sua senha bancária.</p><Campo label="Nome"><input maxLength={80} value={portalForm.nome} onChange={(e) => setPortalForm({ ...portalForm, nome: e.target.value })} placeholder="Ex.: Banco do Brasil PJ" className="input-financeiro" /></Campo><Campo label="Endereço HTTPS"><input type="url" maxLength={500} value={portalForm.url} onChange={(e) => setPortalForm({ ...portalForm, url: e.target.value })} placeholder="https://..." className="input-financeiro" /></Campo><button type="button" disabled={enviando} onClick={() => void salvarPortal()} className="min-h-12 w-full text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}>Salvar portal</button></div></Modal>}
     </div>
@@ -318,8 +364,26 @@ export default function ContasPagarPage() {
 function Resumo({ label, valor, cor }: { label: string; valor: string; cor: string }) { return <div className="min-w-0 border p-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}><p className="text-[9px] font-black uppercase tracking-widest text-foreground-muted">{label}</p><p className="mt-2 truncate font-rajdhani text-xl font-black" style={{ color: cor }}>{valor}</p></div> }
 function Campo({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider">{label}</span>{children}</label> }
 function Modal({ titulo, onClose, children }: { titulo: string; onClose: () => void; children: React.ReactNode }) { return <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-4"><div role="dialog" aria-modal="true" aria-label={titulo} className="max-h-[92dvh] w-full overflow-y-auto border p-4 sm:max-w-2xl sm:p-6" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}><div className="mb-5 flex items-center justify-between gap-4"><h2 className="font-rajdhani text-xl font-black uppercase">{titulo}</h2><button type="button" onClick={onClose} aria-label="Fechar" className="min-h-10 min-w-10 border" style={{ borderColor: 'var(--border)' }}><X size={17} className="mx-auto" /></button></div>{children}</div></div> }
-function ContaCard({ conta, capacidades, portal, primary, onCopiar, onArquivo, onBaixar }: { conta: Conta; capacidades: Capacidades; portal: Portal | null; primary: string; onCopiar: () => void; onArquivo: (tipo: 'boleto' | 'comprovante') => void; onBaixar: () => void }) {
+function ContaCard({ conta, capacidades, portal, primary, onCopiar, onArquivo, onBaixar, onCancelar, onReabrir }: { conta: Conta; capacidades: Capacidades; portal: Portal | null; primary: string; onCopiar: () => void; onArquivo: (tipo: 'boleto' | 'comprovante') => void; onBaixar: () => void; onCancelar: () => void; onReabrir: () => void }) {
   const cores = capacidades.alertasVisuais ? { VERDE: '#22c55e', AMARELO: '#f59e0b', VERMELHO: '#ef4444' } : { VERDE: primary, AMARELO: primary, VERMELHO: primary }
   const prazo = conta.status !== 'PENDENTE' ? conta.status : conta.diasParaVencer < 0 ? `Vencida há ${Math.abs(conta.diasParaVencer)} dia(s)` : conta.diasParaVencer === 0 ? 'Vence hoje' : `Vence em ${conta.diasParaVencer} dia(s)`
-  return <article className="border-l-4 border-y border-r p-4 sm:p-5" style={{ borderColor: 'var(--border)', borderLeftColor: cores[conta.nivel], backgroundColor: 'var(--background-secondary)' }}><div className="flex flex-col gap-3 min-[430px]:flex-row min-[430px]:items-start min-[430px]:justify-between"><div className="min-w-0"><p className="truncate font-black uppercase">{conta.descricao}</p><p className="mt-1 truncate text-xs text-foreground-muted">{conta.fornecedor || 'Fornecedor não informado'}</p></div><div className="shrink-0 min-[430px]:text-right"><p className="font-rajdhani text-xl font-black">{moeda.format(conta.valor)}</p><p className="text-[10px] font-black uppercase" style={{ color: conta.status === 'PENDENTE' ? cores[conta.nivel] : conta.status === 'PAGO' ? '#22c55e' : 'var(--foreground-muted)' }}>{prazo}</p></div></div>{conta.linhaDigitavelFormatada && <p className="mt-4 break-all border p-2 font-mono text-[10px] text-foreground-muted" style={{ borderColor: 'var(--border)' }}>{conta.linhaDigitavelFormatada}</p>}<div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{conta.possuiBoleto && <button type="button" onClick={() => onArquivo('boleto')} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><FileText size={13} className="mr-1 inline" />Boleto</button>}{conta.possuiComprovante && <button type="button" onClick={() => onArquivo('comprovante')} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><ReceiptText size={13} className="mr-1 inline" />Comprovante</button>}{conta.status === 'PENDENTE' && capacidades.copiarEAbrirPortal && conta.linhaDigitavel && <button type="button" onClick={onCopiar} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}><Copy size={13} className="mr-1 inline" />Copiar código</button>}{conta.status === 'PENDENTE' && capacidades.copiarEAbrirPortal && portal && <a href={portal.url} target="_blank" rel="noopener noreferrer" onClick={onCopiar} className="flex min-h-10 items-center justify-center border px-3 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}><ExternalLink size={13} className="mr-1" />Abrir banco</a>}{conta.status === 'PENDENTE' && <button type="button" onClick={onBaixar} className="col-span-2 min-h-10 px-3 text-[10px] font-black uppercase text-black sm:ml-auto" style={{ backgroundColor: primary }}><Check size={13} className="mr-1 inline" />Dar baixa</button>}</div>{conta.status === 'PENDENTE' && !capacidades.copiarEAbrirPortal && <p className="mt-3 text-[10px] text-foreground-muted"><AlertTriangle size={12} className="mr-1 inline" />Cópia do código e abertura do portal disponíveis a partir do Avançado.</p>}</article>
+  return (
+    <article className="border-l-4 border-y border-r p-4 sm:p-5" style={{ borderColor: 'var(--border)', borderLeftColor: cores[conta.nivel], backgroundColor: 'var(--background-secondary)' }}>
+      <div className="flex flex-col gap-3 min-[430px]:flex-row min-[430px]:items-start min-[430px]:justify-between">
+        <div className="min-w-0"><p className="truncate font-black uppercase">{conta.descricao}</p><p className="mt-1 truncate text-xs text-foreground-muted">{conta.fornecedor || 'Fornecedor não informado'}</p></div>
+        <div className="shrink-0 min-[430px]:text-right"><p className="font-rajdhani text-xl font-black">{moeda.format(conta.valor)}</p><p className="text-[10px] font-black uppercase" style={{ color: conta.status === 'PENDENTE' ? cores[conta.nivel] : conta.status === 'PAGO' ? '#22c55e' : 'var(--foreground-muted)' }}>{prazo}</p></div>
+      </div>
+      {conta.linhaDigitavelFormatada && <p className="mt-4 break-all border p-2 font-mono text-[10px] text-foreground-muted" style={{ borderColor: 'var(--border)' }}>{conta.linhaDigitavelFormatada}</p>}
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        {conta.possuiBoleto && <button type="button" onClick={() => onArquivo('boleto')} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><FileText size={13} className="mr-1 inline" />Boleto</button>}
+        {conta.possuiComprovante && <button type="button" onClick={() => onArquivo('comprovante')} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><ReceiptText size={13} className="mr-1 inline" />Comprovante</button>}
+        {conta.status === 'PENDENTE' && capacidades.copiarEAbrirPortal && conta.linhaDigitavel && <button type="button" onClick={onCopiar} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}><Copy size={13} className="mr-1 inline" />Copiar código</button>}
+        {conta.status === 'PENDENTE' && capacidades.copiarEAbrirPortal && portal && <a href={portal.url} target="_blank" rel="noopener noreferrer" onClick={onCopiar} className="flex min-h-10 items-center justify-center border px-3 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}><ExternalLink size={13} className="mr-1" />Abrir banco</a>}
+        {conta.status === 'PENDENTE' && <button type="button" onClick={onCancelar} className="min-h-10 border border-red-500/60 px-3 text-[10px] font-bold uppercase text-red-400"><Trash2 size={13} className="mr-1 inline" />Cancelar</button>}
+        {conta.status === 'PENDENTE' && <button type="button" onClick={onBaixar} className="min-h-10 px-3 text-[10px] font-black uppercase text-black sm:ml-auto" style={{ backgroundColor: primary }}><Check size={13} className="mr-1 inline" />Dar baixa</button>}
+        {conta.status === 'PAGO' && <button type="button" onClick={onReabrir} className="col-span-2 min-h-10 border border-amber-500/60 px-3 text-[10px] font-bold uppercase text-amber-500 sm:ml-auto"><RotateCcw size={13} className="mr-1 inline" />Reverter baixa</button>}
+      </div>
+      {conta.status === 'PENDENTE' && !capacidades.copiarEAbrirPortal && <p className="mt-3 text-[10px] text-foreground-muted"><AlertTriangle size={12} className="mr-1 inline" />Cópia do código e abertura do portal disponíveis a partir do Avançado.</p>}
+    </article>
+  )
 }

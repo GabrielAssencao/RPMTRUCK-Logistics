@@ -39,13 +39,19 @@ test('upload é limitado no cliente e no servidor e valida assinatura do conteú
   assert.match(storage, /upsert: false/)
 })
 
-test('baixa exige comprovante e possui claim atômico contra concorrência', () => {
+test('baixa aceita comprovante opcional e possui claim atômico contra concorrência', () => {
   const route = read('src/app/api/contas-pagar/[id]/route.ts')
+  const page = read('src/app/dashboard/empresa/contas-pagar/page.tsx')
 
-  assert.match(route, /Anexe o comprovante para confirmar a baixa/)
+  assert.match(route, /arquivo instanceof File && arquivo\.size > 0/)
+  assert.match(route, /\.\.\.\(comprovante \? \{/)
+  assert.doesNotMatch(route, /Anexe o comprovante para confirmar a baixa/)
   assert.match(route, /updateMany\(\{[\s\S]*status: 'PENDENTE'/)
   assert.match(route, /if \(resultado\.count !== 1\)/)
   assert.match(route, /TransactionIsolationLevel\.Serializable/)
+  assert.match(page, /Comprovante opcional/)
+  assert.match(page, /disabled=\{enviando\}/)
+  assert.match(page, /setComprovante\(null\)[\s\S]*setBaixando\(conta\)/)
 })
 
 test('bucket financeiro é privado e acessado por URL assinada curta', () => {
@@ -54,6 +60,37 @@ test('bucket financeiro é privado e acessado por URL assinada curta', () => {
 
   assert.match(migration, /'contas-pagar'[\s\S]*false,[\s\S]*5242880/)
   assert.match(storage, /createSignedUrl\(caminho, 60\)/)
+})
+
+test('cancelamento substitui exclusão física e preserva a trilha financeira', () => {
+  const route = read('src/app/api/contas-pagar/[id]/route.ts')
+  const page = read('src/app/dashboard/empresa/contas-pagar/page.tsx')
+
+  assert.match(route, /acao !== 'PAGAR' && acao !== 'CANCELAR' && acao !== 'REABRIR'/)
+  assert.match(route, /data: \{ status: 'CANCELADO' \}/)
+  assert.match(route, /tx\.custo\.deleteMany/)
+  assert.doesNotMatch(route, /tx\.contaPagar\.delete/)
+  assert.match(page, /Cancelar lançamento/)
+  assert.match(page, /O registro será preservado como cancelado para auditoria/)
+  assert.match(page, /\['PENDENTE', 'PAGO', 'CANCELADO', 'TODOS'\]/)
+})
+
+test('baixa paga pode ser revertida com auditoria e sem alterar relatório fechado', () => {
+  const route = read('src/app/api/contas-pagar/[id]/route.ts')
+  const page = read('src/app/dashboard/empresa/contas-pagar/page.tsx')
+  const migration = read('prisma/migrations/20260901010000_auditoria_contas_pagar/migration.sql')
+
+  assert.match(route, /if \(acao === 'REABRIR'\)/)
+  assert.match(route, /where: \{ id, empresaId: auth\.empresaId!, status: 'PAGO' \}/)
+  assert.match(route, /status: 'PENDENTE', pago_em: null, pagoPorId: null/)
+  assert.match(route, /comprovante_path: null, comprovante_nome: null/)
+  assert.match(route, /tx\.custo\.updateMany\([\s\S]*data: \{ status: 'PENDENTE' \}/)
+  assert.match(route, /atual\.custo\?\.relatorioArquivoId/)
+  assert.match(route, /removerArquivosContaPagar\(\[comprovanteAnterior\]\)/)
+  assert.match(page, /Reverter baixa/)
+  assert.match(page, /Confirmar reversão/)
+  assert.match(migration, /CREATE TRIGGER "auditar_contas_pagar"/)
+  assert.match(migration, /AFTER INSERT OR UPDATE OR DELETE ON public\."contas_pagar"/)
 })
 
 test('troca de plano sincroniza cobrança no servidor sem alterar faturas pagas', () => {

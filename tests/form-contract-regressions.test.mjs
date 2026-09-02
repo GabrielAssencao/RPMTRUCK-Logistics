@@ -146,3 +146,15 @@ test('custos e containers permitem consolidar o mes ou o ano em grupos mensais',
   assert.match(containers, /itensTabelaContainers/)
   assert.match(containers, />\s*Ano todo\s*<\/button>/)
 })
+
+test('patio 3D pode ser ocultado por preferencia visual local e acessivel', () => {
+  const page = read('src/app/dashboard/empresa/containers/page.tsx')
+
+  assert.match(page, /PREFERENCIA_PATIO_3D = '@rpmtruck:containers:patio3dEnabled'/)
+  assert.match(page, /localStorage\.getItem\(PREFERENCIA_PATIO_3D\)/)
+  assert.match(page, /localStorage\.setItem\(PREFERENCIA_PATIO_3D, String\(habilitado\)\)/)
+  assert.match(page, /role="switch"/)
+  assert.match(page, /aria-checked=\{patio3DHabilitado \?\? true\}/)
+  assert.match(page, /\{patio3DHabilitado && \(/)
+  assert.match(page, /useReducedMotion\(\)/)
+})

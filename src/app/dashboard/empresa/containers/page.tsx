@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import type { LucideIcon } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
@@ -44,6 +44,7 @@ const STATUS_CONFIG: Record<StatusContainer, { label: string; cor: string; icone
 }
 
 const TIPOS_CONTAINER: TipoContainer[] = ['20 PÉS', '40 PÉS', '40 HC', 'REEFER', 'TANQUE', 'OUTRO']
+const PREFERENCIA_PATIO_3D = '@rpmtruck:containers:patio3dEnabled'
 
 export interface ItemConteudo {
   nome: string
@@ -81,6 +82,7 @@ const FORM_INICIAL = {
 
 export default function ContainersPage() {
   const { primary } = useTheme()
+  const reduzirMovimento = useReducedMotion()
   const {
     containers,
     duplas,
@@ -95,6 +97,7 @@ export default function ContainersPage() {
   // ─── ESTADOS DE SELEÇÃO E NAVEGAÇÃO GAMIFICADA ──────────────────────────
   const [containerAtivoId, setContainerAtivoId] = useState<string | null>(null)
   const [selecionados, setSelecionados] = useState<string[]>([])
+  const [patio3DHabilitado, setPatio3DHabilitado] = useState<boolean | null>(null)
 
   // ─── CONTROLE TEMPORAL ──────────────────────────────────────────────────
   const hoje = new Date()
@@ -130,6 +133,37 @@ export default function ContainersPage() {
 
   // Exclusão inline
   const [excluindoId, setExcluindoId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const carregarPreferencia = () => {
+      try {
+        setPatio3DHabilitado(localStorage.getItem(PREFERENCIA_PATIO_3D) !== 'false')
+      } catch {
+        setPatio3DHabilitado(true)
+      }
+    }
+    const sincronizarPreferencia = (event: StorageEvent) => {
+      if (event.key !== PREFERENCIA_PATIO_3D) return
+      const habilitado = event.newValue !== 'false'
+      setPatio3DHabilitado(habilitado)
+      if (!habilitado) setContainerAtivoId(null)
+    }
+
+    queueMicrotask(carregarPreferencia)
+    window.addEventListener('storage', sincronizarPreferencia)
+    return () => window.removeEventListener('storage', sincronizarPreferencia)
+  }, [])
+
+  const alternarPatio3D = () => {
+    const habilitado = !(patio3DHabilitado ?? true)
+    setPatio3DHabilitado(habilitado)
+    if (!habilitado) setContainerAtivoId(null)
+    try {
+      localStorage.setItem(PREFERENCIA_PATIO_3D, String(habilitado))
+    } catch {
+      // A preferência continua válida nesta sessão quando o storage é bloqueado.
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -500,8 +534,53 @@ export default function ContainersPage() {
         />
       </div>
 
+      <section className="flex flex-col gap-3 border p-4 sm:flex-row sm:items-center sm:justify-between" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest">
+            <Box size={16} style={{ color: primary }} /> Exibição do pátio 3D
+          </h2>
+          <p id="descricao-toggle-patio" className="mt-1 text-[10px] text-foreground-muted">
+            Preferência visual deste navegador. A tabela, os filtros e os dados continuam disponíveis.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={patio3DHabilitado ?? true}
+          aria-describedby="descricao-toggle-patio"
+          disabled={patio3DHabilitado === null}
+          onClick={alternarPatio3D}
+          className="inline-flex min-h-11 shrink-0 items-center justify-between gap-3 border px-3 py-2 text-[10px] font-black uppercase transition-colors disabled:cursor-wait disabled:opacity-60 sm:min-w-44"
+          style={{ borderColor: patio3DHabilitado ? primary : 'var(--border)', backgroundColor: 'var(--background)' }}
+        >
+          <span>{patio3DHabilitado === false ? 'Pátio oculto' : 'Pátio visível'}</span>
+          <span
+            aria-hidden="true"
+            className="relative h-6 w-11 shrink-0 border p-0.5"
+            style={{ borderColor: patio3DHabilitado ? primary : 'var(--foreground-muted)', backgroundColor: patio3DHabilitado ? `${primary}20` : 'var(--background-secondary)' }}
+          >
+            <motion.span
+              className="block h-[18px] w-[18px]"
+              animate={{ x: patio3DHabilitado ? 18 : 0 }}
+              transition={{ duration: reduzirMovimento ? 0 : 0.16, ease: [0.2, 0, 0, 1] }}
+              style={{ backgroundColor: patio3DHabilitado ? primary : 'var(--foreground-muted)' }}
+            />
+          </span>
+        </button>
+      </section>
+
       {/* ─── PÁTIO DE CONTAINERS 3D GAMIFICADO (SELEÇÃO ESTILO JOGO) ─── */}
-      <div className="border p-3 relative overflow-hidden sm:p-6" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
+      <AnimatePresence initial={false}>
+        {patio3DHabilitado && (
+          <motion.div
+            key="patio-3d"
+            initial={reduzirMovimento ? false : { opacity: 0, y: -12, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduzirMovimento ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.99 }}
+            transition={{ duration: reduzirMovimento ? 0 : 0.24, ease: [0.2, 0, 0, 1] }}
+            className="border p-3 relative overflow-hidden sm:p-6"
+            style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}
+          >
         
         <div className="flex items-center justify-between mb-4">
           <span className="font-bold text-xs uppercase flex items-center gap-2">
@@ -758,7 +837,9 @@ export default function ContainersPage() {
           </div>
 
         </div>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ─── FILTROS DE BUSCA ─── */}
       <div className="flex flex-col lg:flex-row gap-4">
