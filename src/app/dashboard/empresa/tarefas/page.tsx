@@ -4,6 +4,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, ClipboardList, Clock3, Plus, RefreshCw, Trash2, UserRound } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
+import { NOTIFICACOES_ATUALIZADAS_EVENT } from '@/hooks/useNotificacoes'
 
 type StatusTarefa = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA'
 type PrioridadeTarefa = 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE'
@@ -102,6 +104,8 @@ export default function TarefasPage() {
       setForm(atual => ({ titulo: '', descricao: '', prazo: '', prioridade: 'MEDIA', responsavelId: atual.responsavelId }))
       setMostrarFormulario(false)
       setSucesso('Tarefa delegada e responsável notificado.')
+      sinalizarAtualizacaoDashboardEmpresa()
+      window.dispatchEvent(new Event(NOTIFICACOES_ATUALIZADAS_EVENT))
     } catch (cause) {
       setErro(cause instanceof Error ? cause.message : 'Falha ao delegar tarefa.')
     } finally {
@@ -117,6 +121,8 @@ export default function TarefasPage() {
     if (!response.ok) return setErro(data.erro || 'Não foi possível atualizar a tarefa.')
     setTarefas(atual => atual.map(item => item.id === tarefa.id ? data : item))
     setSucesso('Status da tarefa atualizado.')
+    sinalizarAtualizacaoDashboardEmpresa()
+    window.dispatchEvent(new Event(NOTIFICACOES_ATUALIZADAS_EVENT))
   }
 
   const excluir = async (tarefa: Tarefa) => {
@@ -126,6 +132,8 @@ export default function TarefasPage() {
     if (!response.ok) return setErro(data.erro || 'Não foi possível excluir a tarefa.')
     setTarefas(atual => atual.filter(item => item.id !== tarefa.id))
     setSucesso('Tarefa excluída.')
+    sinalizarAtualizacaoDashboardEmpresa()
+    window.dispatchEvent(new Event(NOTIFICACOES_ATUALIZADAS_EVENT))
   }
 
   return (

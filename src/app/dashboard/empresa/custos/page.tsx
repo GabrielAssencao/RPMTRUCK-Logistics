@@ -8,6 +8,7 @@ import { useContainers } from '@/contexts/ContainersContext'
 import { obterAnoMesSemana, MESES } from '@/lib/dataUtils'
 import { PLANOS_CONFIG, type PlanoTipo } from '@/utils/planos'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 import { 
   DollarSign, 
   Search, 
@@ -35,11 +36,12 @@ import {
 } from 'lucide-react'
 
 // ─── TIPOS E DADOS ──────────────────────────────────────────────────────────
-type CategoriaCusto = 'COMBUSTIVEL' | 'MANUTENCAO' | 'PEDAGIO' | 'ALIMENTACAO' | 'DIARIA_MOTORISTA' | 'SEGURO' | 'SALARIO' | 'OUTROS'
+type CategoriaCusto = 'COMBUSTIVEL' | 'MANUTENCAO' | 'PEDAGIO' | 'ALIMENTACAO' | 'DIARIA_MOTORISTA' | 'SEGURO' | 'SALARIO' | 'COMISSAO_TRANSPORTE' | 'OUTROS'
 
 interface RegistroCusto {
   id: string
   duplaId: string | null
+  motoristaNome: string | null
   data: string // YYYY-MM-DD
   ano: number
   mesIndex: number // 0 a 11
@@ -51,11 +53,10 @@ interface RegistroCusto {
   status: 'PAGO' | 'PENDENTE'
   arquivado: boolean
   origemContaPagar: boolean
+  origemComissaoContainer: boolean
 }
 
-// Linha "achatada" usada só pra renderizar a tabela — une lançamentos
-// manuais de Custos com as comissões automáticas vindas de Containers,
-// sem misturar os dois modelos de dados.
+// Linha "achatada" usada para renderizar custos manuais e integrados.
 interface LinhaExibicao {
   id: string
   duplaId: string | null
@@ -63,7 +64,7 @@ interface LinhaExibicao {
   veiculoPlaca: string
   motoristaNome: string
   data: string
-  categoria: CategoriaCusto | 'COMISSAO_TRANSPORTE'
+  categoria: CategoriaCusto
   descricao: string
   formaPagamento: string
   valor: number
@@ -74,7 +75,7 @@ interface LinhaExibicao {
 
 export default function CustosPage() {
   const { primary } = useTheme()
-  const { containers, duplas, loading: carregandoDuplas } = useContainers()
+  const { duplas, loading: carregandoDuplas } = useContainers()
   const [montado, setMontado] = useState(false)
 
   // Contexto da Empresa (Plano Ativo)
@@ -179,42 +180,20 @@ export default function CustosPage() {
       })
     : despesasGerais.slice(0, 8).map((custo) => ({ tipo: 'CUSTO' as const, custo }))
 
-  // ─── COMISSÕES AUTOMÁTICAS DE CONTAINERS (NOVO) ────────────────────────
-  // Regra: container CANCELADO não gera custo. ENTREGUE = comissão PAGA.
-  // AGENDADO / EM_TRÂNSITO = comissão PENDENTE (prevista, mas ainda não
-  // "fechada"). Se sua regra de negócio for outra (ex: comissão devida na
-  // coleta), é só trocar essa condição.
-  const comissoesContainerAno = containers.filter(c => {
-    if (c.duplaId !== duplaAtiva.id || c.status === 'CANCELADO') return false
-    const bucket = obterAnoMesSemana(c.data)
-    return bucket.ano === anoSelecionado
-  })
-
-  const comissoesContainerSemana = comissoesContainerAno.filter(c => {
-    const bucket = obterAnoMesSemana(c.data)
-    return (semanaSelecionada === 'ANO' || bucket.mesIndex === mesSelecionadoIndex)
-      && (semanaSelecionada === 'ANO' || semanaSelecionada === 'MES' || bucket.semanaIndex === semanaSelecionada)
-  })
-
-  const totalComissaoContainerAno = comissoesContainerAno.reduce((acc, c) => acc + c.comissao, 0)
-  const totalComissaoContainerSemana = comissoesContainerSemana.reduce((acc, c) => acc + c.comissao, 0)
-  const totalComissaoContainerPendenteSemana = comissoesContainerSemana
-    .filter(c => c.status !== 'ENTREGUE')
-    .reduce((acc, c) => acc + c.comissao, 0)
-
-  // ─── TOTAIS COMBINADOS (MANUAL + AUTOMÁTICO) ───────────────────────────
-  const acumuladoManualAno = custos
+  // Comissões automáticas são custos persistidos e vinculados ao container.
+  // Assim, todos os totais abaixo usam a mesma fonte da dashboard e dos relatórios.
+  const acumuladoAnoAtual = custos
     .filter(c => c.duplaId === duplaAtiva.id && c.ano === anoSelecionado)
     .reduce((acc, curr) => acc + curr.valor, 0)
-  const acumuladoAnoAtual = acumuladoManualAno + totalComissaoContainerAno
 
-  const totalManualSemana = custosFiltrados.reduce((acc, curr) => acc + curr.valor, 0)
-  const totalSemana = totalManualSemana + totalComissaoContainerSemana
+  const totalSemana = custosFiltrados.reduce((acc, curr) => acc + curr.valor, 0)
 
   const totalCombustivelSemana = custosFiltrados.filter(c => c.categoria === 'COMBUSTIVEL').reduce((acc, curr) => acc + curr.valor, 0)
+  const totalComissaoContainerSemana = custosFiltrados
+    .filter(c => c.categoria === 'COMISSAO_TRANSPORTE' && c.origemComissaoContainer)
+    .reduce((acc, curr) => acc + curr.valor, 0)
 
-  const totalPendenteManualSemana = custosFiltrados.filter(c => c.status === 'PENDENTE').reduce((acc, curr) => acc + curr.valor, 0)
-  const totalPendenteSemana = totalPendenteManualSemana + totalComissaoContainerPendenteSemana
+  const totalPendenteSemana = custosFiltrados.filter(c => c.status === 'PENDENTE').reduce((acc, curr) => acc + curr.valor, 0)
 
   // ─── LINHAS COMBINADAS PRA TABELA ───────────────────────────────────────
   const linhasManual: LinhaExibicao[] = custosFiltrados.map(c => ({
@@ -222,48 +201,18 @@ export default function CustosPage() {
     duplaId: c.duplaId,
     veiculoModelo: duplaAtiva.veiculoModelo,
     veiculoPlaca: duplaAtiva.veiculoPlaca,
-    motoristaNome: duplaAtiva.motoristaNome,
+    motoristaNome: c.motoristaNome ?? duplaAtiva.motoristaNome,
     data: c.data,
     categoria: c.categoria,
     descricao: c.descricao,
     formaPagamento: c.formaPagamento,
     valor: c.valor,
     status: c.status,
-    origem: c.origemContaPagar ? 'CONTA_PAGAR' : 'MANUAL',
+    origem: c.origemComissaoContainer ? 'CONTAINER_AUTO' : c.origemContaPagar ? 'CONTA_PAGAR' : 'MANUAL',
     arquivado: c.arquivado,
   }))
 
-  const mostrarComissoesContainer = filtroCategoria === 'TODOS' || filtroCategoria === 'COMISSAO_TRANSPORTE'
-  const linhasComissaoContainer: LinhaExibicao[] = mostrarComissoesContainer
-    ? comissoesContainerSemana
-        .filter(c => {
-          const termo = busca.toLowerCase()
-          return (
-            c.codigo.toLowerCase().includes(termo) ||
-            c.terminalInicio.toLowerCase().includes(termo) ||
-            c.terminalFim.toLowerCase().includes(termo) ||
-            'comissão transporte'.includes(termo) ||
-            termo === ''
-          )
-        })
-        .map(c => ({
-          id: `container-${c.id}`,
-          duplaId: c.duplaId,
-          veiculoModelo: duplaAtiva.veiculoModelo,
-          veiculoPlaca: duplaAtiva.veiculoPlaca,
-          motoristaNome: duplaAtiva.motoristaNome,
-          data: c.data,
-          categoria: 'COMISSAO_TRANSPORTE' as const,
-          descricao: `Comissão sobre frete — Container ${c.codigo} (${c.terminalInicio} → ${c.terminalFim})`,
-          formaPagamento: 'AUTOMÁTICO',
-          valor: c.comissao,
-          status: c.status === 'ENTREGUE' ? 'PAGO' : 'PENDENTE',
-          origem: 'CONTAINER_AUTO' as const,
-          arquivado: false,
-        }))
-    : []
-
-  const linhasCombinadas = [...linhasManual, ...linhasComissaoContainer].sort((a, b) => b.data.localeCompare(a.data))
+  const linhasCombinadas = linhasManual.sort((a, b) => b.data.localeCompare(a.data))
   const periodoFiltroDia = obterAnoMesSemana(dataFiltroDia || new Date().toISOString().split('T')[0])
   const termoBusca = busca.trim().toLowerCase()
   const duplaCorrespondeAoCaminhao = (duplaId: string | null) => {
@@ -284,45 +233,19 @@ export default function CustosPage() {
         duplaId: custo.duplaId,
         veiculoModelo: dupla?.veiculoModelo ?? 'Veículo não identificado',
         veiculoPlaca: dupla?.veiculoPlaca ?? '—',
-        motoristaNome: dupla?.motoristaNome ?? 'Não vinculado',
+        motoristaNome: custo.motoristaNome ?? dupla?.motoristaNome ?? 'Não vinculado',
         data: custo.data,
         categoria: custo.categoria,
         descricao: custo.descricao,
         formaPagamento: custo.formaPagamento,
         valor: custo.valor,
         status: custo.status,
-        origem: custo.origemContaPagar ? 'CONTA_PAGAR' as const : 'MANUAL' as const,
+        origem: custo.origemComissaoContainer ? 'CONTAINER_AUTO' as const : custo.origemContaPagar ? 'CONTA_PAGAR' as const : 'MANUAL' as const,
         arquivado: custo.arquivado,
       }
     })
 
-  const linhasComissaoDia: LinhaExibicao[] = mostrarComissoesContainer
-    ? containers
-        .filter(container => {
-          if (container.status === 'CANCELADO' || container.data !== dataFiltroDia || !duplaCorrespondeAoCaminhao(container.duplaId)) return false
-          return !termoBusca || container.codigo.toLowerCase().includes(termoBusca) || container.terminalInicio.toLowerCase().includes(termoBusca) || container.terminalFim.toLowerCase().includes(termoBusca) || 'comissão transporte'.includes(termoBusca)
-        })
-        .map(container => {
-          const dupla = duplas.find(item => item.id === container.duplaId)
-          return {
-            id: `container-${container.id}`,
-            duplaId: container.duplaId,
-            veiculoModelo: dupla?.veiculoModelo ?? 'Veículo não identificado',
-            veiculoPlaca: dupla?.veiculoPlaca ?? '—',
-            motoristaNome: dupla?.motoristaNome ?? 'Não vinculado',
-            data: container.data,
-            categoria: 'COMISSAO_TRANSPORTE' as const,
-            descricao: `Comissão sobre frete — Container ${container.codigo} (${container.terminalInicio} → ${container.terminalFim})`,
-            formaPagamento: 'AUTOMÁTICO',
-            valor: container.comissao,
-            status: container.status === 'ENTREGUE' ? 'PAGO' as const : 'PENDENTE' as const,
-            origem: 'CONTAINER_AUTO' as const,
-            arquivado: false,
-          }
-        })
-    : []
-
-  const linhasDia = [...linhasManualDia, ...linhasComissaoDia].sort((a, b) => b.valor - a.valor)
+  const linhasDia = linhasManualDia.sort((a, b) => b.valor - a.valor)
   const linhasExibidas = modoConsulta === 'DIA' ? linhasDia : linhasCombinadas
   const totalExibido = linhasExibidas.reduce((total, linha) => total + linha.valor, 0)
   const itensTabelaCustos: Array<
@@ -350,6 +273,10 @@ export default function CustosPage() {
       setErroFormulario('Altere o status pela baixa do boleto em Contas a Pagar.')
       return
     }
+    if (custoAtual?.origemComissaoContainer) {
+      setErroFormulario('Altere o status da movimentação no módulo de Containers.')
+      return
+    }
     if (custoAtual?.arquivado) {
       setErroFormulario('Este custo faz parte de um relatório de auditoria e permanece somente para consulta.')
       return
@@ -358,7 +285,8 @@ export default function CustosPage() {
     const response = await fetch(`/api/custos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: novoStatus }) })
     const data = await response.json()
     if (!response.ok) return setErroFormulario(data.erro || 'Falha ao atualizar custo.')
-    setCustos(prev => prev.map(c => c.id === id ? data : c))
+    setCustos(prev => prev.map(c => c.id === id ? { ...c, ...data } : c))
+    sinalizarAtualizacaoDashboardEmpresa()
     setMensagemSucesso('Status do custo atualizado com sucesso.')
     window.setTimeout(() => setMensagemSucesso(''), 3500)
   }
@@ -416,6 +344,7 @@ export default function CustosPage() {
     if (!response.ok) return setErroFormulario(novoRegistro.erro || 'Não foi possível salvar a despesa.')
 
     setCustos(prev => [novoRegistro, ...prev])
+    sinalizarAtualizacaoDashboardEmpresa()
     setAnoSelecionado(periodoDoLancamento.ano)
     setMesSelecionadoIndex(periodoDoLancamento.mesIndex)
     setSemanaSelecionada(periodoDoLancamento.semanaIndex)
@@ -437,6 +366,11 @@ export default function CustosPage() {
       setErroFormulario('A despesa vinculada deve ser gerenciada em Contas a Pagar.')
       return
     }
+    if (custoAtual?.origemComissaoContainer) {
+      setExcluindoId(null)
+      setErroFormulario('Desative a comissão ou altere a movimentação no módulo de Containers.')
+      return
+    }
     if (custoAtual?.arquivado) {
       setExcluindoId(null)
       setErroFormulario('Este custo faz parte de um relatório de auditoria e não pode ser excluído.')
@@ -447,6 +381,7 @@ export default function CustosPage() {
     const data = await response.json()
     if (!response.ok) return setErroFormulario(data.erro || 'Não foi possível excluir o custo.')
     setCustos(prev => prev.filter(c => c.id !== id))
+    sinalizarAtualizacaoDashboardEmpresa()
     setExcluindoId(null)
   }
 
@@ -1035,7 +970,7 @@ export default function CustosPage() {
               <fieldset>
                 <legend className="text-[10px] uppercase font-bold mb-2">Categoria da despesa</legend>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {(['COMBUSTIVEL', 'PEDAGIO', 'MANUTENCAO', 'ALIMENTACAO', 'DIARIA_MOTORISTA', 'SEGURO', 'SALARIO', 'OUTROS'] as CategoriaCusto[]).map(categoria => (
+                  {(['COMBUSTIVEL', 'PEDAGIO', 'MANUTENCAO', 'ALIMENTACAO', 'DIARIA_MOTORISTA', 'SEGURO', 'SALARIO', 'COMISSAO_TRANSPORTE', 'OUTROS'] as CategoriaCusto[]).map(categoria => (
                     <button
                       type="button"
                       key={categoria}
@@ -1076,6 +1011,7 @@ export default function CustosPage() {
                     <option value="DIARIA_MOTORISTA" style={{ backgroundColor: 'var(--background)' }}>Diária Motorista</option>
                     <option value="SEGURO" style={{ backgroundColor: 'var(--background)' }}>Seguro / Proteção</option>
                     <option value="SALARIO" style={{ backgroundColor: 'var(--background)' }}>Salários / Folha</option>
+                    <option value="COMISSAO_TRANSPORTE" style={{ backgroundColor: 'var(--background)' }}>Comissão de Transporte</option>
                     <option value="OUTROS" style={{ backgroundColor: 'var(--background)' }}>Outros Custos</option>
                   </select>
                 </div>
@@ -1189,7 +1125,7 @@ function CardResumo({ titulo, valor, primary, icone, destaque = false, alerta = 
   )
 }
 
-function BadgeCategoria({ categoria, primary }: { categoria: CategoriaCusto | 'COMISSAO_TRANSPORTE', primary: string }) {
+function BadgeCategoria({ categoria, primary }: { categoria: CategoriaCusto, primary: string }) {
   const label = categoria.replace('_', ' ')
   let icon = <FileText size={12} />
 

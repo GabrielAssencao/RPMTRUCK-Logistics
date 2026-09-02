@@ -8,6 +8,7 @@ import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel } from '@/lib/financ
 import { CATEGORIAS_CONTA_PAGAR, descricaoContaPagarEhSugestao, obterCategoriaContaPagar } from '@/lib/financeiro/categoriasContaPagar'
 import { lerBoletoPdfLocalmente, lerCodigoBarrasImagemLocalmente } from './_utils/leituraBoletoPdf'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
 interface Conta {
   id: string; descricao: string; fornecedor: string | null; vencimento: string; valor: number
@@ -193,6 +194,7 @@ export default function ContasPagarPage() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.erro || 'Não foi possível cadastrar a conta.')
       limparCadastro(); setAbrirCadastro(false); setFeedback('Conta cadastrada com segurança.')
+      sinalizarAtualizacaoDashboardEmpresa()
       await carregar()
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Não foi possível cadastrar a conta.')
@@ -224,6 +226,7 @@ export default function ContasPagarPage() {
       if (!response.ok) throw new Error(data.erro || 'Não foi possível confirmar a baixa.')
       setBaixando(null); setComprovante(null)
       setFeedback(comprovante ? 'Pagamento confirmado e comprovante protegido no bucket privado.' : 'Pagamento confirmado sem comprovante anexado.')
+      sinalizarAtualizacaoDashboardEmpresa()
       await carregar()
     } catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível confirmar a baixa.') }
     finally { submitRef.current = false; setEnviando(false) }
@@ -237,7 +240,7 @@ export default function ContasPagarPage() {
       const response = await fetch(`/api/contas-pagar/${cancelando.id}`, { method: 'PATCH', body })
       const data = await response.json()
       if (!response.ok) throw new Error(data.erro || 'Não foi possível cancelar o lançamento.')
-      setCancelando(null); setFeedback('Lançamento cancelado e retirado dos custos operacionais.'); await carregar()
+      setCancelando(null); setFeedback('Lançamento cancelado e retirado dos custos operacionais.'); sinalizarAtualizacaoDashboardEmpresa(); await carregar()
     } catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível cancelar o lançamento.') }
     finally { submitRef.current = false; setEnviando(false) }
   }
@@ -250,7 +253,7 @@ export default function ContasPagarPage() {
       const response = await fetch(`/api/contas-pagar/${reabrindo.id}`, { method: 'PATCH', body })
       const data = await response.json()
       if (!response.ok) throw new Error(data.erro || 'Não foi possível reverter a baixa.')
-      setReabrindo(null); setFeedback('Baixa revertida. A conta voltou para pendente.'); await carregar()
+      setReabrindo(null); setFeedback('Baixa revertida. A conta voltou para pendente.'); sinalizarAtualizacaoDashboardEmpresa(); await carregar()
     } catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível reverter a baixa.') }
     finally { submitRef.current = false; setEnviando(false) }
   }

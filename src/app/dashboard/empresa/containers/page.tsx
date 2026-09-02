@@ -73,6 +73,7 @@ const FORM_INICIAL = {
   terminalFim: '',
   duplaId: '',
   frete: '',
+  comissaoAtiva: true,
   percentualComissao: '10',
   comissao: '0.00',
   status: 'AGENDADO' as StatusContainer,
@@ -214,7 +215,9 @@ export default function ContainersPage() {
   // Resumos
   const totalContainersPeriodo = containersFiltrados.length
   const totalFretePeriodo = containersFiltrados.reduce((acc, c) => acc + c.frete, 0)
-  const totalComissaoPeriodo = containersFiltrados.reduce((acc, c) => acc + c.comissao, 0)
+  const totalComissaoPeriodo = containersFiltrados
+    .filter(container => container.comissaoAtiva && container.status !== 'CANCELADO')
+    .reduce((acc, c) => acc + c.comissao, 0)
   const itensTabelaContainers: Array<
     | { tipo: 'MES'; mesIndex: number; quantidade: number; totalFrete: number; totalComissao: number }
     | { tipo: 'LINHA'; container: RegistroContainer }
@@ -230,7 +233,9 @@ export default function ContainersPage() {
             mesIndex,
             quantidade: registrosMes.length,
             totalFrete: registrosMes.reduce((total, container) => total + container.frete, 0),
-            totalComissao: registrosMes.reduce((total, container) => total + container.comissao, 0),
+            totalComissao: registrosMes
+              .filter(container => container.comissaoAtiva && container.status !== 'CANCELADO')
+              .reduce((total, container) => total + container.comissao, 0),
           },
           ...registrosMes.map((container) => ({ tipo: 'LINHA' as const, container })),
         ]
@@ -307,6 +312,7 @@ export default function ContainersPage() {
       terminalFim: registro.terminalFim,
       duplaId: registro.duplaId,
       frete: String(registro.frete),
+      comissaoAtiva: registro.comissaoAtiva,
       percentualComissao: String(registro.percentualComissao),
       comissao: String(registro.comissao),
       status: registro.status,
@@ -327,6 +333,7 @@ export default function ContainersPage() {
       terminalFim: form.terminalFim,
       duplaId: form.duplaId,
       frete: Number(form.frete) || 0,
+      comissaoAtiva: form.comissaoAtiva,
       percentualComissao: Number(form.percentualComissao),
       status: form.status,
       observacoes: form.observacoes || undefined,
@@ -355,7 +362,23 @@ export default function ContainersPage() {
     const comissao = Number.isFinite(freteNumero) && Number.isFinite(percentualNumero)
       ? (freteNumero * percentualNumero / 100).toFixed(2)
       : '0.00'
-    setForm(prev => ({ ...prev, frete, percentualComissao: percentual, comissao }))
+    setForm(prev => ({
+      ...prev,
+      frete,
+      percentualComissao: percentual,
+      comissao: prev.comissaoAtiva ? comissao : '0.00',
+    }))
+  }
+
+  const atualizarComissaoAtiva = (comissaoAtiva: boolean) => {
+    setForm(prev => {
+      const frete = Number(prev.frete)
+      const percentual = Number(prev.percentualComissao)
+      const comissao = comissaoAtiva && Number.isFinite(frete) && Number.isFinite(percentual)
+        ? (frete * percentual / 100).toFixed(2)
+        : '0.00'
+      return { ...prev, comissaoAtiva, comissao }
+    })
   }
 
   return (
@@ -1008,7 +1031,9 @@ export default function ContainersPage() {
                         </td>
 
                         <td className="px-6 py-4 text-right font-bold text-xs" style={{ color: primary }}>
-                          {c.comissao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          {c.comissaoAtiva
+                            ? c.comissao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                            : <span className="text-[9px] uppercase text-foreground-muted">Manual / desativada</span>}
                         </td>
 
                         <td className="px-6 py-4 text-center">
@@ -1234,6 +1259,22 @@ export default function ContainersPage() {
                   </div>
                 </div>
 
+                <label className="flex items-start gap-3 border p-3" style={{ borderColor: 'var(--border)' }}>
+                  <input
+                    type="checkbox"
+                    checked={form.comissaoAtiva}
+                    onChange={event => atualizarComissaoAtiva(event.target.checked)}
+                    className="mt-0.5 h-4 w-4"
+                    style={{ accentColor: primary }}
+                  />
+                  <span>
+                    <span className="block text-[10px] font-black uppercase tracking-wider">Gerar comissão automática</span>
+                    <span className="mt-1 block text-[10px] leading-relaxed text-foreground-muted">
+                      Desative para empresas sem comissão por frete ou quando o pagamento for lançado manualmente.
+                    </span>
+                  </span>
+                </label>
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                   <div>
                     <label className="block text-[10px] uppercase font-bold mb-1">Frete (R$) *</label>
@@ -1253,6 +1294,7 @@ export default function ContainersPage() {
                       placeholder="Ex: 20"
                       value={form.percentualComissao}
                       onChange={e => atualizarCalculoComissao(form.frete, e.target.value)}
+                      disabled={!form.comissaoAtiva}
                       className="w-full p-2.5 border bg-transparent outline-none"
                       style={{ borderColor: 'var(--border)' }}
                     />
@@ -1262,6 +1304,7 @@ export default function ContainersPage() {
                     <input
                       type="number" step="0.01" readOnly
                       value={form.comissao}
+                      disabled={!form.comissaoAtiva}
                       aria-describedby="ajuda-comissao"
                       className="w-full p-2.5 border bg-transparent outline-none opacity-75"
                       style={{ borderColor: 'var(--border)' }}
@@ -1269,7 +1312,9 @@ export default function ContainersPage() {
                   </div>
                 </div>
                 <p id="ajuda-comissao" className="text-[10px] text-foreground-muted">
-                  Informe o percentual acordado. A comissão é calculada automaticamente sobre o frete e confirmada novamente pelo servidor.
+                  {form.comissaoAtiva
+                    ? 'Informe o percentual acordado. A comissão é calculada sobre o frete, registrada em Custos e confirmada novamente pelo servidor.'
+                    : 'Nenhuma comissão automática será lançada. Salários e comissões manuais continuam disponíveis no módulo de Custos.'}
                 </p>
 
                 {/* ── SEÇÃO OPCIONAL DE PREENCHIMENTO DE CARGA (% DO VEÍCULO) ── */}

@@ -53,6 +53,13 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
       },
     })
 
+    if (parsed.data.status === 'CONCLUIDA' || parsed.data.status === 'CANCELADA') {
+      await tx.notificacao.updateMany({
+        where: { tarefaId: atualizada.id, lida: false },
+        data: { lida: true },
+      })
+    }
+
     if (parsed.data.responsavelId && parsed.data.responsavelId !== atual.responsavelId) {
       await tx.notificacao.create({
         data: {

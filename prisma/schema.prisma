@@ -75,6 +75,7 @@ enum CategoriaContaPagar {
   DIARIA_MOTORISTA
   SEGURO
   SALARIO
+  COMISSAO_TRANSPORTE
   OUTROS
 }
 
@@ -111,6 +112,7 @@ enum CategoriaCusto {
   DIARIA_MOTORISTA
   SEGURO
   SALARIO
+  COMISSAO_TRANSPORTE
   OUTROS
 }
 
@@ -426,6 +428,9 @@ model Custo {
   contaPagarId String?     @unique @map("conta_pagar_id")
   contaPagar   ContaPagar? @relation(fields: [contaPagarId], references: [id], onDelete: SetNull)
 
+  containerId String?    @unique @map("container_id")
+  container   Container? @relation(fields: [containerId], references: [id], onDelete: Cascade)
+
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
 
@@ -503,6 +508,7 @@ model Container {
   frete               Float    @default(0)
   comissao            Float    @default(0)
   percentual_comissao Float    @default(10)
+  comissao_ativa       Boolean  @default(true)
   status              String   @default("AGENDADO")
   observacoes         String?
   itens_conteudo      Json?
@@ -515,6 +521,8 @@ model Container {
 
   motoristaId String?
   motorista   Motorista? @relation(fields: [motoristaId], references: [id], onDelete: SetNull)
+
+  custoComissao Custo?
 
   relatorioArquivoId String?
   relatorioArquivo   RelatorioArquivo? @relation(fields: [relatorioArquivoId], references: [id], onDelete: Restrict)

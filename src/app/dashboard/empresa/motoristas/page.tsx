@@ -19,6 +19,7 @@ import {
 import Link from 'next/link'
 import { formatarCPF } from '@/utils/documentos'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
 interface VeiculoCompleto {
   id: string
@@ -100,7 +101,11 @@ export default function MotoristasPage() {
 
   // Comissão calculada pelos vínculos relacionais persistidos no banco.
   const obterComissaoDoMotorista = (motoristaId: string) => {
-    const containersDoMotorista = containers.filter(c => c.motoristaId === motoristaId && c.status !== 'CANCELADO')
+    const containersDoMotorista = containers.filter(c => (
+      c.motoristaId === motoristaId
+      && c.comissaoAtiva
+      && c.status !== 'CANCELADO'
+    ))
 
     const recebida = containersDoMotorista
       .filter(c => c.status === 'ENTREGUE')
@@ -142,6 +147,7 @@ export default function MotoristasPage() {
 
     setDraggedMotoristaId(null)
     setHoveredVeiculoId(null)
+    sinalizarAtualizacaoDashboardEmpresa()
     mostrarFeedback('Motorista vinculado ao veículo.', 'success')
   }
 
@@ -150,6 +156,7 @@ export default function MotoristasPage() {
     if (!response.ok) return mostrarFeedback('Não foi possível desvincular o motorista.', 'error')
     setMotoristas(prev => prev.map(m => m.id === motoristaId ? { ...m, veiculoIdVinculado: undefined } : m))
     setVeiculos(prev => prev.map(v => v.motoristaVinculadoId === motoristaId ? { ...v, motoristaVinculadoId: undefined } : v))
+    sinalizarAtualizacaoDashboardEmpresa()
     mostrarFeedback('Motorista desvinculado do veículo.', 'success')
   }
 
@@ -159,6 +166,7 @@ export default function MotoristasPage() {
     const data = await response.json()
     if (!response.ok) return mostrarFeedback(data.erro || 'Não foi possível excluir o motorista.', 'error')
     setMotoristas(prev => prev.filter(m => m.id !== motoristaId))
+    sinalizarAtualizacaoDashboardEmpresa()
     setExcluindoId(null)
     mostrarFeedback('Motorista removido.', 'success')
   }

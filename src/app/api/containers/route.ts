@@ -5,6 +5,7 @@ import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { criarNotificacao } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
 import { executarComAuditoria } from '@/lib/auditoria'
+import { sincronizarCustoComissaoContainer } from '@/lib/financeiro/comissoesContainer'
 import {
   calcularComissao,
   codigoContainerSchema,
@@ -24,6 +25,7 @@ const schema = z.object({
   veiculoId: z.string().uuid(),
   motoristaId: z.string().uuid().optional().nullable(),
   frete: valorMonetarioSchema,
+  comissaoAtiva: z.boolean().default(true),
   percentualComissao: percentualSchema,
   status: z.enum(['AGENDADO', 'EM_TRANSITO', 'ENTREGUE', 'CANCELADO']),
   observacoes: textoOperacional(1, 2000).optional().nullable(),
@@ -52,6 +54,7 @@ function serializar(container: Container) {
     motoristaId: container.motoristaId,
     frete: container.frete,
     comissao: container.comissao,
+    comissaoAtiva: container.comissao_ativa,
     percentualComissao: container.percentual_comissao,
     status: container.status,
     observacoes: container.observacoes || undefined,
@@ -115,6 +118,9 @@ export async function POST(request: NextRequest) {
   try {
     const dataOperacao = new Date(`${parsed.data.data}T12:00:00`)
     const container = await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
+      const comissao = parsed.data.comissaoAtiva
+        ? calcularComissao(parsed.data.frete, parsed.data.percentualComissao)
+        : 0
       const criado = await tx.container.create({
         data: {
           data: dataOperacao,
@@ -123,7 +129,8 @@ export async function POST(request: NextRequest) {
           terminal_inicio: parsed.data.terminalInicio,
           terminal_fim: parsed.data.terminalFim,
           frete: parsed.data.frete,
-          comissao: calcularComissao(parsed.data.frete, parsed.data.percentualComissao),
+          comissao,
+          comissao_ativa: parsed.data.comissaoAtiva,
           percentual_comissao: parsed.data.percentualComissao,
           status: parsed.data.status,
           observacoes: parsed.data.observacoes || null,
@@ -143,6 +150,7 @@ export async function POST(request: NextRequest) {
           empresaId: criado.empresaId,
         },
       })
+      await sincronizarCustoComissaoContainer(tx, criado)
       return criado
     })
 

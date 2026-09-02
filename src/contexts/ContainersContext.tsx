@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
 export type StatusContainer = 'AGENDADO' | 'EM_TRANSITO' | 'ENTREGUE' | 'CANCELADO'
 export type TipoContainer = '20 PÉS' | '40 PÉS' | '40 HC' | 'REEFER' | 'TANQUE' | 'OUTRO'
@@ -26,6 +27,7 @@ export interface RegistroContainer {
   motoristaId?: string | null
   frete: number
   comissao: number
+  comissaoAtiva: boolean
   percentualComissao: number
   status: StatusContainer
   observacoes?: string
@@ -92,6 +94,7 @@ export function ContainersProvider({ children }: { children: ReactNode }) {
     }
     setErro('')
     setContainers(prev => [data, ...prev])
+    sinalizarAtualizacaoDashboardEmpresa()
     return true
   }, [duplas])
 
@@ -113,6 +116,7 @@ export function ContainersProvider({ children }: { children: ReactNode }) {
     }
     setErro('')
     setContainers(prev => prev.map(container => container.id === id ? data : container))
+    sinalizarAtualizacaoDashboardEmpresa()
     return true
   }, [duplas])
 
@@ -125,6 +129,7 @@ export function ContainersProvider({ children }: { children: ReactNode }) {
     }
     setErro('')
     setContainers(prev => prev.filter(container => container.id !== id))
+    sinalizarAtualizacaoDashboardEmpresa()
     return true
   }, [])
 
@@ -147,7 +152,9 @@ export function ContainersProvider({ children }: { children: ReactNode }) {
     totalEmTransito: containers.filter(container => container.status === 'EM_TRANSITO').length,
     totalContainersMes: containersDoMes.length,
     totalFreteMes: containersDoMes.reduce((total, container) => total + container.frete, 0),
-    totalComissaoMes: containersDoMes.reduce((total, container) => total + container.comissao, 0),
+    totalComissaoMes: containersDoMes
+      .filter(container => container.comissaoAtiva && container.status !== 'CANCELADO')
+      .reduce((total, container) => total + container.comissao, 0),
   }), [adicionarContainer, atualizarContainer, containers, containersDoMes, duplas, erro, loading, removerContainer])
 
   return <ContainersContext.Provider value={value}>{children}</ContainersContext.Provider>
