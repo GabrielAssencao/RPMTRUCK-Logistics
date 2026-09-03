@@ -116,6 +116,7 @@ export async function proxy(request: NextRequest) {
     '/dashboard/empresa/relatorios',
     '/dashboard/empresa/usuarios',
     '/dashboard/empresa/configuracoes',
+    '/dashboard/empresa/chat',
   ]
   if (
     rotasSomenteGestor.some((rota) => pathname.startsWith(rota)) &&

@@ -13,6 +13,8 @@ import AdminRequests from './_modulos/solicitacoes/AdminRequests'
 import SettingsModule from './_modulos/configuracoes/SettingsModule'
 import SecurityModule from './_modulos/seguranca/SecurityModule'
 import SubscriptionsModule from './_modulos/assinaturas/SubscriptionsModule'
+import ChatModule from './_modulos/chat/ChatModule'
+import AlertasModule from './_modulos/alertas/AlertasModule'
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard')
@@ -34,6 +36,10 @@ export default function AdminPage() {
         return <SecurityModule key="security" />
       case 'subscriptions':
         return <SubscriptionsModule key="subscriptions" />
+      case 'chat':
+        return <ChatModule key="chat" />
+      case 'alerts':
+        return <AlertasModule key="alerts" />
       default:
         return <DashboardModule key="dashboard" />
     }

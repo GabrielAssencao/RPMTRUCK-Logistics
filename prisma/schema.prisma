@@ -135,6 +135,12 @@ enum StatusRelatorioArquivo {
   ARQUIVO_REMOVIDO
 }
 
+enum AlertaSeveridade {
+  INFORMACAO
+  AVISO
+  CRITICO
+}
+
 // =============================================================================
 // MODELOS / TABELAS DO BANCO DE DADOS (MULTI-TENANT INFRAS)
 // =============================================================================
@@ -221,6 +227,7 @@ model Empresa {
   eventos_seguranca       EventoSeguranca[]
   solicitacoes_assinatura SolicitacaoAssinatura[]
   contas_pagar            ContaPagar[]
+  conversa_suporte        ConversaSuporte?
 
   @@map("empresas")
 }
@@ -255,6 +262,10 @@ model Usuario {
   faturas_baixadas                  Fatura[]                @relation("FaturasBaixadasPor")
   contas_pagar_criadas              ContaPagar[]            @relation("ContasPagarCriadasPor")
   contas_pagar_baixadas             ContaPagar[]            @relation("ContasPagarBaixadasPor")
+  mensagens_suporte                 MensagemSuporte[]
+  alertas_criados                   AlertaSistema[]         @relation("AlertasCriados")
+  alertas_destinados                AlertaSistema[]         @relation("AlertasDestinados")
+  alertas_lidos                     AlertaLeitura[]
 
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
@@ -466,6 +477,74 @@ model Notificacao {
   @@index([usuarioId, lida, criado_em])
   @@index([empresaId, lida, criado_em])
   @@map("notificacoes")
+}
+
+model ConversaSuporte {
+  id        String            @id @default(uuid())
+  empresaId String            @unique
+  empresa   Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  mensagens MensagemSuporte[]
+
+  criado_em     DateTime @default(now())
+  atualizado_em DateTime @updatedAt
+
+  @@index([atualizado_em])
+  @@map("conversas_suporte")
+}
+
+model MensagemSuporte {
+  id       String    @id @default(uuid())
+  conteudo String
+  lida_em  DateTime?
+
+  conversaId String
+  conversa   ConversaSuporte @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+
+  autorId String
+  autor   Usuario @relation(fields: [autorId], references: [id], onDelete: Restrict)
+
+  criado_em DateTime @default(now())
+
+  @@index([conversaId, criado_em])
+  @@index([conversaId, lida_em])
+  @@map("mensagens_suporte")
+}
+
+model AlertaSistema {
+  id         String           @id @default(uuid())
+  titulo     String
+  mensagem   String
+  severidade AlertaSeveridade @default(INFORMACAO)
+  ativo      Boolean          @default(true)
+  inicio_em  DateTime         @default(now())
+  fim_em     DateTime?
+
+  destinatarioId String?
+  destinatario   Usuario? @relation("AlertasDestinados", fields: [destinatarioId], references: [id], onDelete: Cascade)
+
+  criadoPorId String
+  criadoPor   Usuario @relation("AlertasCriados", fields: [criadoPorId], references: [id], onDelete: Restrict)
+
+  leituras AlertaLeitura[]
+
+  criado_em     DateTime @default(now())
+  atualizado_em DateTime @updatedAt
+
+  @@index([ativo, inicio_em, fim_em])
+  @@index([destinatarioId, ativo, inicio_em])
+  @@map("alertas_sistema")
+}
+
+model AlertaLeitura {
+  alertaId  String
+  alerta    AlertaSistema @relation(fields: [alertaId], references: [id], onDelete: Cascade)
+  usuarioId String
+  usuario   Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  lido_em   DateTime      @default(now())
+
+  @@id([alertaId, usuarioId])
+  @@index([usuarioId, lido_em])
+  @@map("alertas_leituras")
 }
 
 model Tarefa {

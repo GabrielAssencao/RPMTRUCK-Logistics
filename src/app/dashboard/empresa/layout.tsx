@@ -26,12 +26,14 @@ import {
   ReceiptText,
   Eye,
   EyeOff,
+  MessageSquare,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
 import { normalizarModulos, type ModuloCodigo } from '@/utils/planos'
 import { useSessionActivity } from '@/hooks/useSessionActivity'
 import { DashboardMotion } from '@/components/motion/DashboardMotion'
+import AlertasSistema from '@/components/dashboard/AlertasSistema'
 
 // ─── Marcadores Operacionais do Cliente (Empresa) ─────────────────────────────
 interface NavEmpresaItem {
@@ -60,6 +62,7 @@ const NAV_EMPRESA: NavEmpresaItem[] = [
   { path: '/dashboard/empresa/arquivos', icon: Archive, label: 'ARQUIVO OPERACIONAL', modulo: null, notificacaoModulo: 'RELATORIOS', somenteGestor: true },
   { path: '/dashboard/empresa/relatorios', icon: FilePieChart, label: 'RELATÓRIOS', modulo: 'RELATORIOS', notificacaoModulo: 'RELATORIOS', somenteGestor: true },
   { path: '/dashboard/empresa/usuarios', icon: UserSquare2, label: 'OPERADORES', modulo: null, notificacaoModulo: 'USUARIOS', somenteGestor: true },
+  { path: '/dashboard/empresa/chat', icon: MessageSquare, label: 'CHAT COM ADMIN', modulo: null, notificacaoModulo: 'CHAT', somenteGestor: true },
 ]
 
 const CONFIG_ITEM = { path: '/dashboard/empresa/configuracoes', icon: Settings, label: 'CONFIGURAÇÕES' }
@@ -476,6 +479,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
 
         {/* ÁREA DE RENDERIZAÇÃO DA PÁGINA INTERNA */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-8">
+          {rotaAtualPermitida && <AlertasSistema />}
           <DashboardMotion>
             {rotaAtualPermitida ? children : <div className="py-16 text-center text-xs font-mono text-foreground-muted">Validando permissões...</div>}
           </DashboardMotion>
