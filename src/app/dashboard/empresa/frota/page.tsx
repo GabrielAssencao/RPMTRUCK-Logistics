@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import GenericDrawer, { FieldConfig } from '@/components/dashboard/GenericDrawer'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
 type StatusVeiculo = 'OPERACIONAL' | 'OFICINA' | 'INATIVO'
 
@@ -153,6 +154,7 @@ export default function FrotaPage() {
     const data = await response.json()
     if (!response.ok) return mostrarFeedback(data.erro || 'Falha ao alterar status.', 'error')
     setVeiculos(prev => prev.map(v => v.id === id ? normalizarVeiculo(data) : v))
+    sinalizarAtualizacaoDashboardEmpresa()
     mostrarFeedback('Status do veículo atualizado.', 'success')
   }
 
@@ -187,6 +189,7 @@ export default function FrotaPage() {
     const data = await response.json()
     if (!response.ok) return mostrarFeedback(data.erro || 'A atualização em lote não pôde ser concluída.', 'error')
     setVeiculos(prev => prev.map(v => selecionados.has(v.id) ? { ...v, status: novoStatus } : v))
+    sinalizarAtualizacaoDashboardEmpresa()
     setSelecionados(new Set())
     setNovoStatusEmLote(null)
     mostrarFeedback(`Status de ${ids.length} veículo(s) atualizado.`, 'success')
@@ -207,6 +210,7 @@ export default function FrotaPage() {
     }
     const removidos = Array.isArray(data.removidos) ? data.removidos as string[] : []
     setVeiculos(prev => prev.filter(v => !removidos.includes(v.id)))
+    if (removidos.length > 0) sinalizarAtualizacaoDashboardEmpresa()
     if (data.falhas?.length) mostrarFeedback('Alguns veículos possuem histórico e não puderam ser removidos.', 'warning')
     else mostrarFeedback(`${removidos.length} veículo(s) removido(s).`, 'success')
     setSelecionados(new Set())
@@ -251,6 +255,7 @@ export default function FrotaPage() {
     }
     const salvo = normalizarVeiculo(data)
     setVeiculos(prev => veiculoParaEditar ? prev.map(v => v.id === salvo.id ? salvo : v) : [salvo, ...prev])
+    sinalizarAtualizacaoDashboardEmpresa()
     mostrarFeedback(veiculoParaEditar ? 'Veículo atualizado com sucesso.' : 'Veículo adicionado à frota.', 'success')
 
     return true
@@ -262,6 +267,7 @@ export default function FrotaPage() {
     const data = await response.json()
     if (!response.ok) return mostrarFeedback(data.erro || 'Não foi possível remover o veículo.', 'error')
     setVeiculos(prev => prev.filter(v => v.id !== id))
+    sinalizarAtualizacaoDashboardEmpresa()
     setExcluindoId(null)
     setMenuAcoesAberto(null)
     mostrarFeedback('Veículo removido da frota.', 'success')

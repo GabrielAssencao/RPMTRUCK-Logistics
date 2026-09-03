@@ -17,6 +17,7 @@ interface ContainerRelatorio {
   terminal_fim: string
   frete: number
   comissao: number
+  comissao_ativa: boolean
   status: string
   observacoes: string | null
   veiculo: { placa: string; modelo: string }
@@ -167,7 +168,9 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
 
   const abastecimentos = dados.custos.filter((custo) => custo.categoria === 'COMBUSTIVEL')
   const totalFrete = dados.containers.reduce((total, container) => total + container.frete, 0)
-  const totalComissao = dados.containers.reduce((total, container) => total + container.comissao, 0)
+  const totalComissao = dados.containers
+    .filter((container) => container.comissao_ativa && container.status !== 'CANCELADO')
+    .reduce((total, container) => total + container.comissao, 0)
   const totalCustos = dados.custos.reduce((total, custo) => total + custo.valor, 0)
   const totalManutencoes = dados.manutencoes.reduce((total, manutencao) => total + manutencao.custo, 0)
 
@@ -231,7 +234,7 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
   const metricas: Array<[string, number, string, number, string, number]> = [
     ['Movimentações', dados.movimentacoesPermanentes.length, 'Containers detalhados', dados.containers.length, 'Abastecimentos', abastecimentos.length],
     ['Manutenções', dados.manutencoes.length, 'Custos', dados.custos.length, 'Total de fretes', totalFrete],
-    ['Total de comissões', totalComissao, 'Total de custos', totalCustos, 'Total de manutenções', totalManutencoes],
+    ['Comissões ativas', totalComissao, 'Total de custos (inclui comissões)', totalCustos, 'Total de manutenções', totalManutencoes],
   ]
   metricas.forEach((metrica, indice) => {
     const linha = 9 + indice

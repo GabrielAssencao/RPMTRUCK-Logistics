@@ -23,6 +23,7 @@ import {
   Lock,
 } from 'lucide-react'
 import Link from 'next/link'
+import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 
 type StatusManutencao = 'PENDENTE' | 'CONCLUIDA' | 'CANCELADA' | 'NAO_REALIZADA'
@@ -120,6 +121,7 @@ function ManutencaoContent() {
     const novoRegistro = await response.json()
     if (!response.ok) { setFeedbackTone('error'); return setFeedback(novoRegistro.erro || 'Não foi possível salvar a manutenção.') }
     setHistorico(prev => [novoRegistro, ...prev])
+    sinalizarAtualizacaoDashboardEmpresa()
     setModalInclusaoOpen(false)
     setFormManutencao({ dataAgendada: dataHoje, tipo: 'PREVENTIVA', pecas: '', custo: '', kmAtual: '' })
     setFeedbackTone('success')
@@ -138,6 +140,7 @@ function ManutencaoContent() {
     const data = await response.json()
     if (!response.ok) { setFeedbackTone('error'); return setFeedback(data.erro || 'Não foi possível atualizar a manutenção.') }
     setHistorico(prev => prev.map(item => item.id === id ? data : item))
+    sinalizarAtualizacaoDashboardEmpresa()
     setFeedbackTone('success')
     setFeedback('Status da manutenção atualizado.')
   }
@@ -154,6 +157,7 @@ function ManutencaoContent() {
     const data = await response.json()
     if (!response.ok) { setFeedbackTone('error'); return setFeedback(data.erro || 'Não foi possível excluir a manutenção.') }
     setHistorico(prev => prev.filter(h => h.id !== id))
+    sinalizarAtualizacaoDashboardEmpresa()
     setExcluindoId(null)
     setFeedbackTone('success')
     setFeedback('Manutenção excluída do histórico operacional.')

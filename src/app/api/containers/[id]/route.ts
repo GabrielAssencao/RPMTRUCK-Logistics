@@ -4,6 +4,7 @@ import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { Prisma, type Container } from '@prisma/client'
+import { sincronizarCustoComissaoContainer } from '@/lib/financeiro/comissoesContainer'
 import {
   calcularComissao,
   codigoContainerSchema,
@@ -23,6 +24,7 @@ const schema = z.object({
   veiculoId: z.string().uuid().optional(),
   motoristaId: z.string().uuid().nullable().optional(),
   frete: valorMonetarioSchema.optional(),
+  comissaoAtiva: z.boolean().optional(),
   percentualComissao: percentualSchema.optional(),
   status: z.enum(['AGENDADO', 'EM_TRANSITO', 'ENTREGUE', 'CANCELADO']).optional(),
   observacoes: textoOperacional(1, 2000).nullable().optional(),
@@ -47,6 +49,7 @@ const serializar = (container: Container) => ({
   motoristaId: container.motoristaId,
   frete: container.frete,
   comissao: container.comissao,
+  comissaoAtiva: container.comissao_ativa,
   percentualComissao: container.percentual_comissao,
   status: container.status,
   observacoes: container.observacoes || undefined,
@@ -74,6 +77,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   }
   const frete = dados.frete ?? atual.frete
   const percentualComissao = dados.percentualComissao ?? atual.percentual_comissao
+  const comissaoAtiva = dados.comissaoAtiva ?? atual.comissao_ativa
 
   try {
     const container = await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
@@ -90,9 +94,8 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
           terminal_inicio: dados.terminalInicio,
           terminal_fim: dados.terminalFim,
           frete: dados.frete,
-          comissao: dados.frete !== undefined || dados.percentualComissao !== undefined
-            ? calcularComissao(frete, percentualComissao)
-            : undefined,
+          comissao: comissaoAtiva ? calcularComissao(frete, percentualComissao) : 0,
+          comissao_ativa: dados.comissaoAtiva,
           percentual_comissao: dados.percentualComissao,
           status: dados.status,
           observacoes: dados.observacoes,
@@ -141,6 +144,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
           },
         })
       }
+      await sincronizarCustoComissaoContainer(tx, atualizado)
       return atualizado
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 

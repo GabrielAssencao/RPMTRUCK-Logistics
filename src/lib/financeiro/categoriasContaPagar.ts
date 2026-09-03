@@ -49,6 +49,13 @@ export const CATEGORIAS_CONTA_PAGAR = [
     descricoes: ['Pagamento de salário', 'Folha de pagamento', 'Encargos da folha de pagamento'],
   },
   {
+    valor: 'COMISSAO_TRANSPORTE',
+    rotulo: 'Comissão de transporte',
+    integracao: 'Custos & Despesas',
+    requerVeiculo: true,
+    descricoes: ['Comissão de motorista', 'Comissão sobre frete', 'Pagamento de comissão de transporte'],
+  },
+  {
     valor: 'OUTROS',
     rotulo: 'Outras despesas',
     integracao: 'Custos & Despesas',

@@ -152,3 +152,35 @@ test('arquivos versionados não contêm formatos comuns de segredos privados', (
     }
   }
 })
+
+test('chat restringe empresas ao gestor e deriva o tenant da sessão', () => {
+  const chat = read('src/app/api/chat/route.ts')
+  const adminChat = read('src/app/api/admin/chat/route.ts')
+  const proxy = read('src/proxy.ts')
+
+  assert.match(chat, /requireEmpresaAuth\(request, \{ acao: 'GESTAO' \}\)/)
+  assert.match(chat, /empresaAuth\.session\.empresaId/)
+  assert.match(chat, /isAdminRole/)
+  assert.match(chat, /applyRateLimit\(/)
+  assert.match(adminChat, /requireAdminAuth\(request\)/)
+  assert.match(adminChat, /applyRateLimit\(/)
+  assert.match(proxy, /\/dashboard\/empresa\/chat/)
+})
+
+test('alertas globais e individuais são filtrados e lidos pelo usuário autenticado', () => {
+  const alerts = read('src/app/api/alertas/route.ts')
+  const readAlert = read('src/app/api/alertas/[id]/ler/route.ts')
+  const adminAlerts = read('src/app/api/admin/alertas/route.ts')
+  const scope = read('src/lib/alertas.ts')
+  const migration = read('prisma/migrations/20260903010000_chat_e_alertas_sistema/migration.sql')
+
+  assert.match(alerts, /requireAuth\(request\)/)
+  assert.match(alerts, /leituras: \{ none: \{ usuarioId: auth\.session\.userId \} \}/)
+  assert.match(readAlert, /escopoAlertaVisivel\(auth\.session\.userId\)/)
+  assert.match(readAlert, /alertaId_usuarioId/)
+  assert.match(adminAlerts, /requireAdminAuth\(request\)/)
+  assert.match(adminAlerts, /Destinatário não encontrado/)
+  assert.match(scope, /destinatarioId: usuarioId/)
+  assert.match(migration, /REVOKE ALL ON TABLE "conversas_suporte"/)
+  assert.doesNotMatch(migration, /auditar_mensagens_suporte/)
+})

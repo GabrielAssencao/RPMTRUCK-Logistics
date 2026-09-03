@@ -59,7 +59,7 @@ export function DashboardDistributionPieChart({
   cores,
 }: {
   dados: DistribuicaoCusto[]
-  cores: [string, string, string, string]
+  cores: readonly string[]
 }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -78,7 +78,7 @@ export function DashboardDistributionPieChart({
           endAngle={-270}
         >
           {dados.map((entry, index) => (
-            <Cell key={entry.name} fill={cores[index] ?? cores[3]} />
+            <Cell key={entry.name} fill={cores[index] ?? 'var(--border)'} />
           ))}
         </Pie>
         <RechartsTooltip

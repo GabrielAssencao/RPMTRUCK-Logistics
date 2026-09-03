@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -10,14 +11,10 @@ import {
   MapPin, 
   DollarSign, 
   TrendingDown, 
-  TrendingUp, 
   AlertTriangle,
-  Clock,
   Wrench,
-  Calendar,
   Send,
   X,
-  UserCheck,
   ShieldAlert,
   Lock,
   Sparkles,
@@ -25,6 +22,7 @@ import {
   ReceiptText,
 } from 'lucide-react'
 import type { PlanoTipo } from '@/utils/planos'
+import { DASHBOARD_EMPRESA_ATUALIZADA_EVENT, sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
 const DashboardCostAreaChart = dynamic(
   () => import('@/components/dashboard/empresa/EmpresaDashboardCharts').then(modulo => modulo.DashboardCostAreaChart),
@@ -61,6 +59,7 @@ interface ResumoContasPagar {
 
 export default function PainelEmpresa() {
   const { primary } = useTheme()
+  const router = useRouter()
   const [montado, setMontado] = useState(false)
   
   const [nomeUsuario, setNomeUsuario] = useState('Gabriel Souza')
@@ -76,7 +75,7 @@ export default function PainelEmpresa() {
   const [feedback, setFeedback] = useState('')
   const [contasPagar, setContasPagar] = useState<ResumoContasPagar>({ visivel: false, total: 0, urgentes: 0, proximas: 0, contas: [] })
 
-  const [recorteDias, setRecorteDias] = useState<'7_DIAS' | '15_DIAS' | '30_DIAS'>('7_DIAS')
+  const [recorteDias] = useState<'7_DIAS' | '15_DIAS' | '30_DIAS'>('7_DIAS')
 
   // Modais
   const [alertaDetalhado, setAlertaDetalhado] = useState<AlertaInteligente | null>(null)
@@ -86,27 +85,54 @@ export default function PainelEmpresa() {
   // Form de Delegação
   const [operadorSelecionado, setOperadorSelecionado] = useState('')
   const [instrucaoDelegacao, setInstrucaoDelegacao] = useState('')
+  const carregamentoAtualRef = useRef(0)
+
+  const carregarDashboard = useCallback(async () => {
+    const carregamento = ++carregamentoAtualRef.current
+    try {
+      const response = await fetch('/api/dashboard/empresa', { cache: 'no-store' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar o painel.')
+      if (carregamento !== carregamentoAtualRef.current) return
+      setNomeUsuario(data.usuario.nome)
+      setNomeEmpresa(data.empresa.nome)
+      setPlanoEmpresa(data.empresa.plano)
+      setTarefasHabilitadas(data.empresa.modulos.includes('TAREFAS'))
+      setPodeDelegarTarefas(Boolean(data.usuario.podeDelegar))
+      setMetricas(data.metricas)
+      setDadosGraficos(data.graficos)
+      setDadosDistribuicaoCustos(data.graficos.distribuicao)
+      setAlertas(data.alertas)
+      setOperadores(data.operadores)
+      setContasPagar(data.contasPagar ?? { visivel: false, total: 0, urgentes: 0, proximas: 0, contas: [] })
+    } catch (error) {
+      if (carregamento === carregamentoAtualRef.current) {
+        setFeedback(error instanceof Error ? error.message : 'Falha ao carregar painel.')
+      }
+    }
+  }, [])
 
   useEffect(() => {
-    queueMicrotask(() => setMontado(true))
-    fetch('/api/dashboard/empresa', { cache: 'no-store' })
-      .then(async response => {
-        const data = await response.json()
-        if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar o painel.')
-        setNomeUsuario(data.usuario.nome)
-        setNomeEmpresa(data.empresa.nome)
-        setPlanoEmpresa(data.empresa.plano)
-        setTarefasHabilitadas(data.empresa.modulos.includes('TAREFAS'))
-        setPodeDelegarTarefas(Boolean(data.usuario.podeDelegar))
-        setMetricas(data.metricas)
-        setDadosGraficos(data.graficos)
-        setDadosDistribuicaoCustos(data.graficos.distribuicao)
-        setAlertas(data.alertas)
-        setOperadores(data.operadores)
-        setContasPagar(data.contasPagar ?? { visivel: false, total: 0, urgentes: 0, proximas: 0, contas: [] })
-      })
-      .catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar painel.'))
-  }, [])
+    queueMicrotask(() => {
+      setMontado(true)
+      void carregarDashboard()
+    })
+
+    const atualizarSeVisivel = () => {
+      if (!document.hidden) void carregarDashboard()
+    }
+    const intervalo = window.setInterval(atualizarSeVisivel, 60_000)
+    document.addEventListener('visibilitychange', atualizarSeVisivel)
+    window.addEventListener('focus', atualizarSeVisivel)
+    window.addEventListener(DASHBOARD_EMPRESA_ATUALIZADA_EVENT, atualizarSeVisivel)
+
+    return () => {
+      window.clearInterval(intervalo)
+      document.removeEventListener('visibilitychange', atualizarSeVisivel)
+      window.removeEventListener('focus', atualizarSeVisivel)
+      window.removeEventListener(DASHBOARD_EMPRESA_ATUALIZADA_EVENT, atualizarSeVisivel)
+    }
+  }, [carregarDashboard])
 
   useEffect(() => {
     if (!alertaDetalhado) return
@@ -126,6 +152,7 @@ export default function PainelEmpresa() {
   const corCombustivel = primary
   const corManutencao = eTemaVermelho(primary) ? '#f97316' : '#ef4444'
   const corPedagio = eTemaAmarelo(primary) ? '#06b6d4' : '#eab308'
+  const coresDistribuicao = [corCombustivel, corManutencao, corPedagio, '#8b5cf6', 'var(--border)']
 
   const calcularUrgencia = (alerta: AlertaInteligente): Urgencia => {
     if (alerta.categoria === 'VEICULO' && alerta.subtipo === 'NAO_REALIZADA') return 'ALTA'
@@ -165,7 +192,7 @@ export default function PainelEmpresa() {
     setAlertaParaDelegar(null)
     setOperadorSelecionado('')
     setInstrucaoDelegacao('')
-    setMetricas(atual => ({ ...atual, tarefasPendentes: atual.tarefasPendentes + 1 }))
+    sinalizarAtualizacaoDashboardEmpresa()
   }
 
   return (
@@ -249,13 +276,13 @@ export default function PainelEmpresa() {
           <div className="flex-1 min-h-[250px]">
             <DashboardDistributionPieChart
               dados={dadosDistribuicaoCustos}
-              cores={[corCombustivel, corManutencao, corPedagio, 'var(--border)']}
+              cores={coresDistribuicao}
             />
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] uppercase tracking-[0.15em]">
             {dadosDistribuicaoCustos.map((entry, index) => {
-              const color = index === 0 ? corCombustivel : index === 1 ? corManutencao : index === 2 ? corPedagio : 'var(--border)';
+              const color = coresDistribuicao[index] ?? 'var(--border)';
               return (
                 <div key={entry.name} className="flex items-center gap-2 opacity-80">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
@@ -455,7 +482,7 @@ export default function PainelEmpresa() {
                 <button 
                   onClick={() => {
                     setModalUpgradeOpen(false)
-                    window.location.href = '/solicitar-acesso?plano=AVANCADO'
+                    router.push('/auth/solicitar-acesso?plano=AVANCADO')
                   }}
                   className="w-full py-3 px-4 font-extrabold uppercase text-xs text-black flex items-center justify-center gap-2 cursor-pointer transition-transform hover:scale-[1.01]"
                   style={{ backgroundColor: primary, clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}

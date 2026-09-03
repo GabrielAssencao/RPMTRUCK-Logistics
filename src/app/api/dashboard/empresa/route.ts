@@ -39,6 +39,8 @@ export async function GET(request: NextRequest) {
   const inicioCustos = inicioMes < inicio30Dias ? inicioMes : inicio30Dias
   const limiteCnh = new Date(agora.getTime() + 30 * 86_400_000)
   const empresaId = auth.session.empresaId
+  const hoje = new Date(Date.UTC(agora.getFullYear(), agora.getMonth(), agora.getDate()))
+  const limiteContasProximas = new Date(hoje.getTime() + 4 * 86_400_000)
 
   const operadoresPromise = gestor
     ? prisma.usuario.findMany({
@@ -47,14 +49,37 @@ export async function GET(request: NextRequest) {
         orderBy: { nome: 'asc' as const },
       })
     : Promise.resolve([])
-  const contasPendentesPromise = gestor && auth.empresa.modulos.includes('CONTAS_PAGAR')
-    ? prisma.contaPagar.findMany({
-        where: { empresaId, status: 'PENDENTE' },
-        select: { id: true, descricao: true, fornecedor: true, vencimento: true, valor: true },
-        orderBy: { vencimento: 'asc' },
-        take: 20,
-      })
-    : Promise.resolve([])
+  const contasPagarHabilitadas = gestor && auth.empresa.modulos.includes('CONTAS_PAGAR')
+  const resumoContasPagarPromise = contasPagarHabilitadas
+    ? Promise.all([
+        prisma.contaPagar.findMany({
+          where: { empresaId, status: 'PENDENTE' },
+          select: { id: true, descricao: true, fornecedor: true, vencimento: true, valor: true },
+          orderBy: { vencimento: 'asc' },
+          take: 5,
+        }),
+        prisma.contaPagar.aggregate({
+          where: { empresaId, status: 'PENDENTE' },
+          _sum: { valor: true },
+        }),
+        prisma.contaPagar.count({
+          where: { empresaId, status: 'PENDENTE', vencimento: { lte: hoje } },
+        }),
+        prisma.contaPagar.count({
+          where: {
+            empresaId,
+            status: 'PENDENTE',
+            vencimento: { gt: hoje, lte: limiteContasProximas },
+          },
+        }),
+      ]).then(([contas, total, urgentes, proximas]) => ({
+        visivel: true,
+        contas,
+        total: Number(total._sum.valor ?? 0),
+        urgentes,
+        proximas,
+      }))
+    : Promise.resolve({ visivel: false, contas: [], total: 0, urgentes: 0, proximas: 0 })
 
   const [
     veiculosPorStatus,
@@ -63,7 +88,7 @@ export async function GET(request: NextRequest) {
     motoristas,
     operadores,
     tarefasPendentes,
-    contasPendentes,
+    resumoContasPagar,
   ] = await Promise.all([
     prisma.veiculo.groupBy({
       by: ['status'],
@@ -95,7 +120,7 @@ export async function GET(request: NextRequest) {
         ...(gestor ? {} : { responsavelId: auth.session.userId }),
       },
     }),
-    contasPendentesPromise,
+    resumoContasPagarPromise,
   ])
 
   const totalVeiculos = veiculosPorStatus.reduce((total, grupo) => total + grupo._count._all, 0)
@@ -129,7 +154,9 @@ export async function GET(request: NextRequest) {
 
     if (custo.data >= inicioMes) {
       custoMes += custo.valor
-      const categoriaDistribuicao = categoriaGrafico ?? 'OUTROS'
+      const categoriaDistribuicao = custo.categoria === 'SALARIO' || custo.categoria === 'COMISSAO_TRANSPORTE'
+        ? 'PESSOAL'
+        : categoriaGrafico ?? 'OUTROS'
       distribuicaoValores.set(
         categoriaDistribuicao,
         (distribuicaoValores.get(categoriaDistribuicao) ?? 0) + custo.valor,
@@ -150,7 +177,7 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  const distribuicao = ['COMBUSTIVEL', 'MANUTENCAO', 'PEDAGIO', 'OUTROS'].map(categoria => {
+  const distribuicao = ['COMBUSTIVEL', 'MANUTENCAO', 'PEDAGIO', 'PESSOAL', 'OUTROS'].map(categoria => {
     const valor = distribuicaoValores.get(categoria) ?? 0
     const name = categoria === 'COMBUSTIVEL'
       ? 'Combustível'
@@ -158,7 +185,9 @@ export async function GET(request: NextRequest) {
         ? 'Manutenção'
         : categoria === 'PEDAGIO'
           ? 'Pedágios'
-          : 'Outros'
+          : categoria === 'PESSOAL'
+            ? 'Pessoal — salários e comissões'
+            : 'Outros'
     return { name, value: custoMes ? Math.round((valor / custoMes) * 100) : 0 }
   })
 
@@ -207,11 +236,11 @@ export async function GET(request: NextRequest) {
     },
     alertas,
     contasPagar: {
-      visivel: gestor,
-      total: contasPendentes.reduce((soma, conta) => soma + Number(conta.valor), 0),
-      urgentes: contasPendentes.filter((conta) => nivelVencimento(conta.vencimento, agora) === 'VERMELHO').length,
-      proximas: contasPendentes.filter((conta) => nivelVencimento(conta.vencimento, agora) === 'AMARELO').length,
-      contas: contasPendentes.slice(0, 5).map((conta) => ({
+      visivel: resumoContasPagar.visivel,
+      total: resumoContasPagar.total,
+      urgentes: resumoContasPagar.urgentes,
+      proximas: resumoContasPagar.proximas,
+      contas: resumoContasPagar.contas.map((conta) => ({
         ...conta,
         valor: Number(conta.valor),
         vencimento: conta.vencimento.toISOString().slice(0, 10),

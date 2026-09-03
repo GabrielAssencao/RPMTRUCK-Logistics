@@ -6,6 +6,7 @@ import { formatarCPF, formatarRG, normalizarDocumentoIdentidade, normalizarRegis
 import { ArrowLeft, Upload, CheckCircle2, User, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
 export default function NovoMotoristaPage() {
   const { primary } = useTheme()
@@ -111,6 +112,7 @@ export default function NovoMotoristaPage() {
     const data = await response.json()
     setSalvando(false)
     if (!response.ok) return setErro(data.erro || 'Não foi possível cadastrar o motorista.')
+    sinalizarAtualizacaoDashboardEmpresa()
     router.push('/dashboard/empresa/motoristas')
     router.refresh()
   }

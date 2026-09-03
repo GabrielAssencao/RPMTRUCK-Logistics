@@ -15,6 +15,8 @@ import {
   X,
   ShieldCheck,
   CreditCard,
+  MessageSquare,
+  Megaphone,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
@@ -29,16 +31,20 @@ const NAV_ADMIN = [
   { id: 'subscriptions', icon: CreditCard, label: 'PLANOS / ASSINATURAS' },
   { id: 'resets', icon: ShieldAlert, label: 'REDEFINIÇÕES DE SENHA' },
   { id: 'security', icon: ShieldCheck, label: 'LOGS / SEGURANÇA' },
+  { id: 'chat', icon: MessageSquare, label: 'CHAT / ATENDIMENTO' },
+  { id: 'alerts', icon: Megaphone, label: 'ALERTAS DO SISTEMA' },
 ] as const
 
 const CONFIG_ITEM = { id: 'settings', icon: Settings, label: 'CONFIGURAÇÕES' } as const
 
 const LARGURA_RECOLHIDA = '72px'
 const LARGURA_EXPANDIDA = '16rem'
-export type AdminTab = 'dashboard' | 'companies' | 'requests' | 'subscriptions' | 'resets' | 'security' | 'settings'
+export type AdminTab = 'dashboard' | 'companies' | 'requests' | 'subscriptions' | 'resets' | 'security' | 'chat' | 'alerts' | 'settings'
 
 // Dicionário para traduzir o activeTab no Header
 const TAB_LABELS: Record<AdminTab, string> = {
+  'chat': 'CHAT',
+  'alerts': 'ALERTAS',
   'dashboard': 'PAINEL',
   'companies': 'EMPRESAS',
   'requests': 'SOLICITAÇÕES',
