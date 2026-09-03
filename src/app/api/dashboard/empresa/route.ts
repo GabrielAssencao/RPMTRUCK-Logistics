@@ -88,6 +88,7 @@ export async function GET(request: NextRequest) {
     motoristas,
     operadores,
     tarefasPendentes,
+    tarefasOperacionaisAtivas,
     resumoContasPagar,
   ] = await Promise.all([
     prisma.veiculo.groupBy({
@@ -101,7 +102,7 @@ export async function GET(request: NextRequest) {
       select: { data: true, valor: true, categoria: true },
     }),
     prisma.historicoVeiculo.findMany({
-      where: { empresaId, status: 'PENDENTE' },
+      where: { empresaId, status: 'PENDENTE', relatorioArquivoId: null },
       include: { veiculo: { select: { modelo: true, placa: true } } },
       orderBy: { data_agendada: 'asc' },
       take: 20,
@@ -119,6 +120,15 @@ export async function GET(request: NextRequest) {
         status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
         ...(gestor ? {} : { responsavelId: auth.session.userId }),
       },
+    }),
+    prisma.tarefa.findMany({
+      where: {
+        empresaId,
+        status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
+        origem_id: { not: null },
+      },
+      select: { origem_id: true },
+      take: 500,
     }),
     resumoContasPagarPromise,
   ])
@@ -191,15 +201,16 @@ export async function GET(request: NextRequest) {
     return { name, value: custoMes ? Math.round((valor / custoMes) * 100) : 0 }
   })
 
+  const origensComTarefaAtiva = new Set(tarefasOperacionaisAtivas.map((tarefa) => tarefa.origem_id))
   const alertas = [
-    ...manutencoes.map(manutencao => ({
+    ...manutencoes.filter((manutencao) => !origensComTarefaAtiva.has(manutencao.id)).map(manutencao => ({
       id: manutencao.id,
       categoria: 'VEICULO',
       subtipo: manutencao.data_agendada < agora ? 'NAO_REALIZADA' : 'PENDENTE',
       foco: `${manutencao.veiculo.modelo} (${manutencao.veiculo.placa})`,
       descricao: `${manutencao.tipo}: ${manutencao.descricao || manutencao.pecas_substituidas || 'manutenção programada'} — ${manutencao.data_agendada.toLocaleDateString('pt-BR')}`,
     })),
-    ...motoristas.map(motorista => ({
+    ...motoristas.filter((motorista) => !origensComTarefaAtiva.has(motorista.id)).map(motorista => ({
       id: motorista.id,
       categoria: 'MOTORISTA',
       subtipo: 'DOCUMENTO',

@@ -43,3 +43,22 @@ test('resumo financeiro agrega todas as contas e limita apenas a lista visual', 
   assert.match(resumoFinanceiro, /take: 5/)
   assert.doesNotMatch(resumoFinanceiro, /take: 20/)
 })
+
+test('dashboard ignora manutenção arquivada e pendências que já possuem tarefa ativa', () => {
+  const route = read('src/app/api/dashboard/empresa/route.ts')
+  const tarefas = read('src/app/api/tarefas/route.ts')
+
+  assert.match(route, /status: 'PENDENTE', relatorioArquivoId: null/)
+  assert.match(route, /origensComTarefaAtiva/)
+  assert.match(route, /!origensComTarefaAtiva\.has\(manutencao\.id\)/)
+  assert.match(route, /!origensComTarefaAtiva\.has\(motorista\.id\)/)
+  assert.match(tarefas, /Esta pendência já possui uma tarefa ativa/)
+  assert.match(tarefas, /status: \{ in: \['PENDENTE', 'EM_ANDAMENTO'\] \}/)
+})
+
+test('tooltips dos gráficos respeitam as cores do tema', () => {
+  const charts = read('src/components/dashboard/empresa/EmpresaDashboardCharts.tsx')
+
+  assert.match(charts, /itemStyle=\{\{ color: 'var\(--foreground\)' \}\}/)
+  assert.match(charts, /labelStyle=\{\{ color: 'var\(--foreground\)' \}\}/)
+})

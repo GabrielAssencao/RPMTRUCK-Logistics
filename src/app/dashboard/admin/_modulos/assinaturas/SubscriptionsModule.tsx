@@ -15,6 +15,8 @@ interface PlanoAdmin {
   precoVeiculoAdicional: number
   usuariosBase: number
   veiculosBase: number
+  ticketsSuporteMes: number
+  prazoRespostaSuporteHoras: number
   versao: number
 }
 
@@ -179,7 +181,7 @@ export default function SubscriptionsModule() {
           <div className="grid gap-4 xl:grid-cols-2">
             {planos.map((plano) => (
               <div key={plano.id} className="border p-5" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
-                <div className="mb-5 flex items-start justify-between gap-4"><div><div className="text-[10px] uppercase tracking-widest text-foreground-muted">Versão comercial {plano.versao}</div><h4 className="text-2xl font-black uppercase font-rajdhani">{plano.nome}</h4></div><div className="text-right text-[10px] uppercase tracking-widest text-foreground-muted">Base<br />{plano.usuariosBase} usuários · {plano.veiculosBase} veículos</div></div>
+                <div className="mb-5 flex items-start justify-between gap-4"><div><div className="text-[10px] uppercase tracking-widest text-foreground-muted">Versão comercial {plano.versao}</div><h4 className="text-2xl font-black uppercase font-rajdhani">{plano.nome}</h4></div><div className="text-right text-[10px] uppercase tracking-widest text-foreground-muted">Base<br />{plano.usuariosBase} usuários · {plano.veiculosBase} veículos<br />{plano.ticketsSuporteMes} tickets · resposta {plano.prazoRespostaSuporteHoras}h úteis</div></div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <MoneyField label="Mensalidade base" value={plano.precoBase} onChange={(valor) => atualizarCampo(plano.id, 'precoBase', valor)} />
                   <MoneyField label="Taxa de implantação" value={plano.taxaImplantacao} onChange={(valor) => atualizarCampo(plano.id, 'taxaImplantacao', valor)} />

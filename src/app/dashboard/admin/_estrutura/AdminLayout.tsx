@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -31,7 +31,6 @@ const NAV_ADMIN = [
   { id: 'subscriptions', icon: CreditCard, label: 'PLANOS / ASSINATURAS' },
   { id: 'resets', icon: ShieldAlert, label: 'REDEFINIÇÕES DE SENHA' },
   { id: 'security', icon: ShieldCheck, label: 'LOGS / SEGURANÇA' },
-  { id: 'chat', icon: MessageSquare, label: 'CHAT / ATENDIMENTO' },
   { id: 'alerts', icon: Megaphone, label: 'ALERTAS DO SISTEMA' },
 ] as const
 
@@ -66,6 +65,25 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarExpandida, setSidebarExpandida] = useState(false)
   const [pendenciasPorModulo, setPendenciasPorModulo] = useState<Record<string, number>>({})
+  const [ticketsNaoLidos, setTicketsNaoLidos] = useState(0)
+
+  const atualizarResumoSuporte = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/chat', { cache: 'no-store' })
+      if (!response.ok) return
+      const body = await response.json()
+      const tickets = Array.isArray(body.tickets) ? body.tickets : []
+      setTicketsNaoLidos(tickets.reduce((total: number, ticket: { naoLidas?: number }) => total + (ticket.naoLidas ?? 0), 0))
+    } catch {
+      // Falha do contador não impede a abertura da central.
+    }
+  }, [])
+
+  useEffect(() => {
+    const initial = window.setTimeout(() => void atualizarResumoSuporte(), 0)
+    const interval = window.setInterval(() => { if (!document.hidden) void atualizarResumoSuporte() }, 30_000)
+    return () => { window.clearTimeout(initial); window.clearInterval(interval) }
+  }, [atualizarResumoSuporte])
 
   const handleLogout = () => {
     localStorage.removeItem('@rpmtruck:admin')
@@ -222,6 +240,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
           </div>
 
           <div className="flex items-center gap-4">
+            <button type="button" onClick={() => changeTab('chat')} aria-label="Abrir suporte e tickets" title="Suporte e tickets" className="relative flex min-h-11 min-w-11 items-center justify-center border transition-colors hover:text-foreground" style={{ borderColor: activeTab === 'chat' ? primary : 'var(--border)', color: activeTab === 'chat' ? primary : 'var(--foreground-muted)' }}><MessageSquare size={18} />{ticketsNaoLidos > 0 && <span className="absolute -right-1.5 -top-1.5 min-w-5 rounded-full px-1 py-0.5 text-center text-[9px] font-black text-black" style={{ backgroundColor: primary }}>{ticketsNaoLidos > 99 ? '99+' : ticketsNaoLidos}</span>}</button>
             <NotificacoesPanel onPendenciasChange={setPendenciasPorModulo} centralHref={null} />
             <ThemeToggle />
             <div className="w-px h-6 bg-border hidden sm:block" style={{ backgroundColor: 'var(--border)' }} />

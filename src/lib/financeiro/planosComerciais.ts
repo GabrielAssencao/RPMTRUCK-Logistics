@@ -16,6 +16,8 @@ export interface PlanoComercialSerializado {
   usuariosBase: number
   veiculosBase: number
   historicoAnos: number
+  ticketsSuporteMes: number
+  prazoRespostaSuporteHoras: number
   modulos: readonly string[]
   ativo: boolean
   visivelLanding: boolean
@@ -78,6 +80,8 @@ function serializarPlano(row: {
     usuariosBase: tecnico.usuariosBase,
     veiculosBase: tecnico.veiculosBase,
     historicoAnos: tecnico.historicoAnos,
+    ticketsSuporteMes: tecnico.ticketsSuporteMes,
+    prazoRespostaSuporteHoras: tecnico.prazoRespostaSuporteHoras,
     modulos: tecnico.modulosPadrao,
     ativo: row.ativo,
     visivelLanding: row.visivelLanding,

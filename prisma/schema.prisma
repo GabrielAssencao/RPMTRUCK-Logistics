@@ -141,6 +141,34 @@ enum AlertaSeveridade {
   CRITICO
 }
 
+enum CategoriaTicketSuporte {
+  SUPORTE_TECNICO
+  REPORTAR_ERRO
+  DUVIDA_OPERACIONAL
+  SOLICITACAO
+  FINANCEIRO
+}
+
+enum StatusTicketSuporte {
+  ABERTO
+  EM_ATENDIMENTO
+  AGUARDANDO_CLIENTE
+  RESOLVIDO
+  FECHADO
+}
+
+enum PrioridadeTicketSuporte {
+  BAIXA
+  NORMAL
+  ALTA
+  URGENTE
+}
+
+enum TipoMensagemSuporte {
+  USUARIO
+  SISTEMA
+}
+
 // =============================================================================
 // MODELOS / TABELAS DO BANCO DE DADOS (MULTI-TENANT INFRAS)
 // =============================================================================
@@ -227,7 +255,7 @@ model Empresa {
   eventos_seguranca       EventoSeguranca[]
   solicitacoes_assinatura SolicitacaoAssinatura[]
   contas_pagar            ContaPagar[]
-  conversa_suporte        ConversaSuporte?
+  conversas_suporte       ConversaSuporte[]
 
   @@map("empresas")
 }
@@ -480,28 +508,45 @@ model Notificacao {
 }
 
 model ConversaSuporte {
-  id        String            @id @default(uuid())
-  empresaId String            @unique
-  empresa   Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  id                 String                  @id @default(uuid())
+  protocolo          String                  @unique
+  assunto            String
+  categoria          CategoriaTicketSuporte
+  status             StatusTicketSuporte     @default(ABERTO)
+  prioridade         PrioridadeTicketSuporte @default(NORMAL)
+  cobravelExtra      Boolean                 @default(false) @map("cobravel_extra")
+  franquiaNoMomento  Int                     @map("franquia_no_momento")
+  ordemNaCompetencia Int                     @map("ordem_na_competencia")
+  competencia        DateTime                @db.Date
+  primeiraRespostaEm DateTime?               @map("primeira_resposta_em")
+  encerradoEm        DateTime?               @map("encerrado_em")
+
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
   mensagens MensagemSuporte[]
 
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
 
+  @@index([empresaId, status, atualizado_em])
+  @@index([empresaId, competencia])
   @@index([atualizado_em])
   @@map("conversas_suporte")
 }
 
 model MensagemSuporte {
-  id       String    @id @default(uuid())
-  conteudo String
-  lida_em  DateTime?
+  id         String              @id @default(uuid())
+  conteudo   String
+  tipo       TipoMensagemSuporte @default(USUARIO)
+  automatica Boolean             @default(false)
+  lida_em    DateTime?
 
   conversaId String
   conversa   ConversaSuporte @relation(fields: [conversaId], references: [id], onDelete: Cascade)
 
-  autorId String
-  autor   Usuario @relation(fields: [autorId], references: [id], onDelete: Restrict)
+  autorId String?
+  autor   Usuario? @relation(fields: [autorId], references: [id], onDelete: SetNull)
 
   criado_em DateTime @default(now())
 

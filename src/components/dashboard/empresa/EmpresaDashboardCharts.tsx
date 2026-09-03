@@ -44,6 +44,8 @@ export function DashboardCostAreaChart({
         <YAxis stroke="var(--foreground-muted)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={valor => `R$${Number(valor) / 1000}k`} />
         <RechartsTooltip
           contentStyle={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)', color: 'var(--foreground)', fontSize: '12px' }}
+          itemStyle={{ color: 'var(--foreground)' }}
+          labelStyle={{ color: 'var(--foreground)' }}
           formatter={valor => [`R$ ${Number(valor).toLocaleString('pt-BR')}`, '']}
         />
         <Area type="monotone" dataKey="combustivel" stroke={corCombustivel} strokeWidth={2} fillOpacity={0.2} fill={corCombustivel} name="Combustível" />
@@ -89,6 +91,8 @@ export function DashboardDistributionPieChart({
             fontSize: '12px',
             borderRadius: '12px',
           }}
+          itemStyle={{ color: 'var(--foreground)' }}
+          labelStyle={{ color: 'var(--foreground)' }}
           formatter={valor => [`${Number(valor)}%`, 'Proporção']}
         />
       </PieChart>
