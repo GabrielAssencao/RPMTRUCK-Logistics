@@ -180,6 +180,7 @@ test('migração de tickets preserva histórico e corrige a ambiguidade do rate 
 
   assert.match(migration, /DROP INDEX IF EXISTS "conversas_suporte_empresaId_key"/)
   assert.match(migration, /SUP-LEG-/)
+  assert.match(migration, /replace\("id"::text, '-', ''\)/)
   assert.match(migration, /candidato\.expira_em/)
   assert.match(migration, /DELETE FROM public\.rate_limits AS expirado/)
   assert.doesNotMatch(migration, /DROP TABLE "mensagens_suporte"/)

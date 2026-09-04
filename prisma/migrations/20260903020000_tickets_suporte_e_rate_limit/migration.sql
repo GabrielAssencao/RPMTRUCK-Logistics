@@ -114,7 +114,7 @@ ALTER TABLE "conversas_suporte"
 
 UPDATE "conversas_suporte"
 SET
-  "protocolo" = 'SUP-LEG-' || upper(replace("id", '-', '')),
+  "protocolo" = 'SUP-LEG-' || upper(replace("id"::text, '-', '')),
   "competencia" = date_trunc('month', "criado_em")::date;
 
 UPDATE "conversas_suporte" AS ticket
