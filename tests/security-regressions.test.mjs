@@ -200,6 +200,7 @@ test('tickets geram notificacoes individuais e sincronizam leitura ao abrir', ()
   assert.match(adminTicket, /\['GESTOR_EMPRESA'\], tx/)
   assert.match(notifications, /usuarioId: id[\s\S]*ticketSuporteId: input\.ticketSuporteId/)
   assert.match(migration, /notificacoes_ticketSuporteId_fkey/)
+  assert.match(migration, /ADD COLUMN "ticketSuporteId" TEXT/)
 })
 
 test('alertas globais e individuais são filtrados e lidos pelo usuário autenticado', () => {

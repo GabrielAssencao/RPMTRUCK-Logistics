@@ -151,7 +151,7 @@ CREATE INDEX "conversas_suporte_empresaId_competencia_idx"
   ON "conversas_suporte"("empresaId", "competencia");
 
 ALTER TABLE "notificacoes"
-  ADD COLUMN "ticketSuporteId" UUID;
+  ADD COLUMN "ticketSuporteId" TEXT;
 
 ALTER TABLE "notificacoes"
   ADD CONSTRAINT "notificacoes_ticketSuporteId_fkey"
