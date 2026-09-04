@@ -4,6 +4,7 @@ import { requireAdminAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { PRIORIDADE_TICKET_LABEL, STATUS_TICKET_LABEL } from '@/lib/suporteConfig'
+import { notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 
 const atualizarTicketSchema = z.object({
   status: z.enum(['ABERTO', 'EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE', 'RESOLVIDO', 'FECHADO']).optional(),
@@ -25,7 +26,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const atual = await prisma.conversaSuporte.findUnique({
     where: { id },
-    select: { id: true, status: true, prioridade: true },
+    select: { id: true, protocolo: true, assunto: true, empresaId: true, status: true, prioridade: true },
   })
   if (!atual) return NextResponse.json({ erro: 'Ticket não encontrado.' }, { status: 404 })
 
@@ -55,9 +56,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           tipo: 'SISTEMA',
           automatica: true,
           conteudo: mudancas.join(' '),
-          lida_em: new Date(),
         },
       })
+      await notificarUsuariosDaEmpresa(atual.empresaId, {
+        modulo: 'CHAT',
+        titulo: `Atualização em ${atual.protocolo}`,
+        mensagem: mudancas.join(' '),
+        ticketSuporteId: atual.id,
+      }, ['GESTOR_EMPRESA'], tx)
     }
     return atualizado
   })

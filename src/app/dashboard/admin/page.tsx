@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 // Layout do Admin (a "casca" que arrumamos no Passo 1)
 import AdminLayout, { type AdminTab } from './_estrutura/AdminLayout'
@@ -18,6 +18,24 @@ import AlertasModule from './_modulos/alertas/AlertasModule'
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard')
+  const [ticketSuporteId, setTicketSuporteId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const abrirTicket = (event: Event) => {
+      const ticketId = (event as CustomEvent<{ ticketId?: string }>).detail?.ticketId
+      setTicketSuporteId(ticketId ?? null)
+      setActiveTab('chat')
+    }
+    const params = new URLSearchParams(window.location.search)
+    const inicializar = params.get('tab') === 'chat'
+      ? window.setTimeout(() => abrirTicket(new CustomEvent('ticket', { detail: { ticketId: params.get('ticket') ?? undefined } })), 0)
+      : null
+    window.addEventListener('rpmtruck:abrir-ticket-suporte', abrirTicket)
+    return () => {
+      if (inicializar !== null) window.clearTimeout(inicializar)
+      window.removeEventListener('rpmtruck:abrir-ticket-suporte', abrirTicket)
+    }
+  }, [])
 
   // O "Cérebro" decide qual componente renderizar com base na aba ativa
   const renderModule = () => {
@@ -37,7 +55,7 @@ export default function AdminPage() {
       case 'subscriptions':
         return <SubscriptionsModule key="subscriptions" />
       case 'chat':
-        return <ChatModule key="chat" />
+        return <ChatModule key="chat" initialTicketId={ticketSuporteId} />
       case 'alerts':
         return <AlertasModule key="alerts" />
       default:

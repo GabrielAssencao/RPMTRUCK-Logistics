@@ -11,6 +11,7 @@ interface CriarNotificacaoInput {
   usuarioId?: string | null
   veiculoId?: string | null
   tarefaId?: string | null
+  ticketSuporteId?: string | null
 }
 
 export function escopoNotificacoes(session: SessionPayload): Prisma.NotificacaoWhereInput {
@@ -36,6 +37,7 @@ export async function criarNotificacao(input: CriarNotificacaoInput) {
       usuarioId: input.usuarioId ?? null,
       veiculoId: input.veiculoId ?? null,
       tarefaId: input.tarefaId ?? null,
+      ticketSuporteId: input.ticketSuporteId ?? null,
     },
   })
 }
@@ -44,14 +46,15 @@ export async function notificarUsuariosDaEmpresa(
   empresaId: string,
   input: Omit<CriarNotificacaoInput, 'empresaId' | 'usuarioId'>,
   roles?: Array<'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'>,
+  database: Prisma.TransactionClient | typeof prisma = prisma,
 ) {
-  const usuarios = await prisma.usuario.findMany({
+  const usuarios = await database.usuario.findMany({
     where: { empresaId, ...(roles?.length ? { role: { in: roles } } : {}) },
     select: { id: true },
   })
   if (usuarios.length === 0) return { count: 0 }
 
-  return prisma.notificacao.createMany({
+  return database.notificacao.createMany({
     data: usuarios.map(({ id }) => ({
       titulo: input.titulo,
       mensagem: input.mensagem,
@@ -60,18 +63,22 @@ export async function notificarUsuariosDaEmpresa(
       usuarioId: id,
       veiculoId: input.veiculoId ?? null,
       tarefaId: input.tarefaId ?? null,
+      ticketSuporteId: input.ticketSuporteId ?? null,
     })),
   })
 }
 
-export async function notificarAdmins(input: Omit<CriarNotificacaoInput, 'empresaId' | 'usuarioId'>) {
-  const admins = await prisma.usuario.findMany({
+export async function notificarAdmins(
+  input: Omit<CriarNotificacaoInput, 'empresaId' | 'usuarioId'>,
+  database: Prisma.TransactionClient | typeof prisma = prisma,
+) {
+  const admins = await database.usuario.findMany({
     where: { role: 'ADMIN_RPM', empresaId: null },
     select: { id: true },
   })
   if (admins.length === 0) return { count: 0 }
 
-  return prisma.notificacao.createMany({
+  return database.notificacao.createMany({
     data: admins.map(({ id }) => ({
       titulo: input.titulo,
       mensagem: input.mensagem,
@@ -79,6 +86,7 @@ export async function notificarAdmins(input: Omit<CriarNotificacaoInput, 'empres
       usuarioId: id,
       veiculoId: input.veiculoId ?? null,
       tarefaId: input.tarefaId ?? null,
+      ticketSuporteId: input.ticketSuporteId ?? null,
     })),
   })
 }

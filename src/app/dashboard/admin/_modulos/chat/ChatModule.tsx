@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PrioridadeTicketSuporte, StatusTicketSuporte } from '@prisma/client'
 import { Headset, RefreshCw } from 'lucide-react'
 import ChatWorkspace from '@/components/dashboard/ChatWorkspace'
@@ -11,7 +11,7 @@ import { CATEGORIA_TICKET_LABEL, PRIORIDADE_TICKET_LABEL, STATUS_TICKET_LABEL } 
 const STATUS = ['ABERTO', 'EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE', 'RESOLVIDO', 'FECHADO'] as const
 const PRIORIDADES = ['BAIXA', 'NORMAL', 'ALTA', 'URGENTE'] as const
 
-export default function ChatModule() {
+export default function ChatModule({ initialTicketId = null }: { initialTicketId?: string | null }) {
   const { primary } = useTheme()
   const [tickets, setTickets] = useState<SupportTicket[]>([])
   const [selecionado, setSelecionado] = useState<SupportTicket | null>(null)
@@ -19,6 +19,7 @@ export default function ChatModule() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const ticketInicial = useRef<string | null>(initialTicketId)
 
   const carregar = useCallback(async (silencioso = false) => {
     if (!silencioso) setLoading(true)
@@ -28,7 +29,11 @@ export default function ChatModule() {
       if (!response.ok) throw new Error(body.erro || 'Não foi possível carregar os tickets.')
       const lista = Array.isArray(body.tickets) ? body.tickets as SupportTicket[] : []
       setTickets(lista)
-      setSelecionado((atual) => atual ? lista.find((item) => item.id === atual.id) ?? null : null)
+      const alvo = ticketInicial.current
+      ticketInicial.current = null
+      setSelecionado((atual) => (alvo ? lista.find((item) => item.id === alvo) : null)
+        ?? (atual ? lista.find((item) => item.id === atual.id) : null)
+        ?? null)
       setError('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível carregar os tickets.')
@@ -38,10 +43,18 @@ export default function ChatModule() {
   }, [])
 
   useEffect(() => {
+    ticketInicial.current = new URLSearchParams(window.location.search).get('ticket') ?? ticketInicial.current
     const initial = window.setTimeout(() => void carregar(), 0)
     const interval = window.setInterval(() => { if (!document.hidden) void carregar(true) }, 15_000)
     return () => { window.clearTimeout(initial); window.clearInterval(interval) }
   }, [carregar])
+
+  useEffect(() => {
+    if (!initialTicketId) return
+    ticketInicial.current = initialTicketId
+    const atualizar = window.setTimeout(() => void carregar(true), 0)
+    return () => window.clearTimeout(atualizar)
+  }, [carregar, initialTicketId])
 
   const atualizar = async (alteracao: { status?: StatusTicketSuporte; prioridade?: PrioridadeTicketSuporte }) => {
     if (!selecionado || saving) return

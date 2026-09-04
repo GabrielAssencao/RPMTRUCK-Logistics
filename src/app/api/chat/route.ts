@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { inicioCompetencia } from '@/lib/suporte'
 import { obterPoliticaSuporte } from '@/lib/suporteConfig'
+import { notificarAdmins, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 
 export const dynamic = 'force-dynamic'
 
@@ -120,10 +121,16 @@ export async function GET(request: NextRequest) {
   }> = []
 
   if (ticketSelecionado) {
-    await prisma.mensagemSuporte.updateMany({
-      where: { conversaId: ticketSelecionado.id, ...filtroNaoLidas(escopo.admin) },
-      data: { lida_em: new Date() },
-    })
+    await prisma.$transaction([
+      prisma.mensagemSuporte.updateMany({
+        where: { conversaId: ticketSelecionado.id, ...filtroNaoLidas(escopo.admin) },
+        data: { lida_em: new Date() },
+      }),
+      prisma.notificacao.updateMany({
+        where: { usuarioId: escopo.auth.session!.userId, ticketSuporteId: ticketSelecionado.id, lida: false },
+        data: { lida: true },
+      }),
+    ])
     mensagens = await prisma.mensagemSuporte.findMany({
       where: { conversaId: ticketSelecionado.id },
       orderBy: { criado_em: 'desc' },
@@ -175,7 +182,7 @@ export async function POST(request: NextRequest) {
 
   const ticket = await prisma.conversaSuporte.findFirst({
     where: { id: parsed.data.ticketId, empresaId: escopo.empresaId },
-    select: { id: true, status: true, primeiraRespostaEm: true },
+    select: { id: true, protocolo: true, assunto: true, status: true, primeiraRespostaEm: true },
   })
   if (!ticket) return NextResponse.json({ erro: 'Ticket não encontrado.' }, { status: 404 })
   if (ticket.status === 'FECHADO' || ticket.status === 'RESOLVIDO') {
@@ -209,6 +216,17 @@ export async function POST(request: NextRequest) {
             atualizado_em: agora,
           },
     })
+    const aviso = {
+      modulo: 'CHAT',
+      titulo: `Nova mensagem em ${ticket.protocolo}`,
+      mensagem: ticket.assunto,
+      ticketSuporteId: ticket.id,
+    }
+    if (escopo.admin) {
+      await notificarUsuariosDaEmpresa(escopo.empresaId, aviso, ['GESTOR_EMPRESA'], tx)
+    } else {
+      await notificarAdmins(aviso, tx)
+    }
     return criada
   })
 

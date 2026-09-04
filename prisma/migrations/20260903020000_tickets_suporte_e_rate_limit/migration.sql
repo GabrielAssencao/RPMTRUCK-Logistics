@@ -150,6 +150,17 @@ CREATE INDEX "conversas_suporte_empresaId_status_atualizado_em_idx"
 CREATE INDEX "conversas_suporte_empresaId_competencia_idx"
   ON "conversas_suporte"("empresaId", "competencia");
 
+ALTER TABLE "notificacoes"
+  ADD COLUMN "ticketSuporteId" UUID;
+
+ALTER TABLE "notificacoes"
+  ADD CONSTRAINT "notificacoes_ticketSuporteId_fkey"
+  FOREIGN KEY ("ticketSuporteId") REFERENCES "conversas_suporte"("id")
+  ON DELETE SET NULL ON UPDATE CASCADE;
+
+CREATE INDEX "notificacoes_ticketSuporteId_usuarioId_lida_idx"
+  ON "notificacoes"("ticketSuporteId", "usuarioId", "lida");
+
 ALTER TABLE "conversas_suporte"
   ADD CONSTRAINT "conversas_suporte_assunto_check"
     CHECK (char_length(btrim("assunto")) BETWEEN 3 AND 160),

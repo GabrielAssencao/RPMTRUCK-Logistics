@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { calcularCoberturaTicket, gerarProtocoloTicket, inicioCompetencia, montarRespostaAutomatica } from '@/lib/suporte'
 import { prioridadeInicialTicket } from '@/lib/suporteConfig'
+import { notificarAdmins } from '@/lib/notificacoes'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
         const usados = await tx.conversaSuporte.count({ where: { empresaId, competencia } })
         const cobertura = calcularCoberturaTicket(auth.empresa!.plano, usados)
         const mensagemInicialEm = new Date()
-        return tx.conversaSuporte.create({
+        const criado = await tx.conversaSuporte.create({
           data: {
             protocolo: gerarProtocoloTicket(),
             assunto: parsed.data.assunto,
@@ -78,6 +79,13 @@ export async function POST(request: NextRequest) {
             atualizado_em: true,
           },
         })
+        await notificarAdmins({
+          modulo: 'CHAT',
+          titulo: `Novo ticket ${criado.protocolo}`,
+          mensagem: `${auth.empresa!.nome}: ${criado.assunto}`,
+          ticketSuporteId: criado.id,
+        }, tx)
+        return criado
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 
       return NextResponse.json({ ticket }, { status: 201, headers: { 'Cache-Control': 'no-store' } })

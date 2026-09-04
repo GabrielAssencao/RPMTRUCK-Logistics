@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useCallback, useEffect, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { CirclePlus, Headset, RefreshCw, TicketCheck } from 'lucide-react'
 import ChatWorkspace from '@/components/dashboard/ChatWorkspace'
 import type { SupportAllowance, SupportTicket } from '@/components/dashboard/supportTypes'
@@ -19,6 +19,7 @@ export default function SupportTicketCenter() {
   const [novoAberto, setNovoAberto] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({ categoria: 'SUPORTE_TECNICO', assunto: '', mensagem: '' })
+  const ticketInicial = useRef<string | null>(null)
 
   const carregar = useCallback(async (silencioso = false) => {
     if (!silencioso) setLoading(true)
@@ -29,7 +30,12 @@ export default function SupportTicketCenter() {
       const lista = Array.isArray(body.tickets) ? body.tickets as SupportTicket[] : []
       setTickets(lista)
       setFranquia(body.franquia ?? FRANQUIA_INICIAL)
-      setSelecionado((atual) => atual ? lista.find((ticket) => ticket.id === atual.id) ?? null : lista[0] ?? null)
+      const alvo = ticketInicial.current
+      ticketInicial.current = null
+      setSelecionado((atual) => (alvo ? lista.find((ticket) => ticket.id === alvo) : null)
+        ?? (atual ? lista.find((ticket) => ticket.id === atual.id) : null)
+        ?? lista[0]
+        ?? null)
       setError('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível carregar os tickets.')
@@ -39,9 +45,21 @@ export default function SupportTicketCenter() {
   }, [])
 
   useEffect(() => {
+    ticketInicial.current = new URLSearchParams(window.location.search).get('ticket')
     const initial = window.setTimeout(() => void carregar(), 0)
     const interval = window.setInterval(() => { if (!document.hidden) void carregar(true) }, 20_000)
     return () => { window.clearTimeout(initial); window.clearInterval(interval) }
+  }, [carregar])
+
+  useEffect(() => {
+    const abrirTicket = (event: Event) => {
+      const ticketId = (event as CustomEvent<{ ticketId?: string }>).detail?.ticketId
+      if (!ticketId) return
+      ticketInicial.current = ticketId
+      void carregar(true)
+    }
+    window.addEventListener('rpmtruck:abrir-ticket-suporte', abrirTicket)
+    return () => window.removeEventListener('rpmtruck:abrir-ticket-suporte', abrirTicket)
   }, [carregar])
 
   const criarTicket = async (event: FormEvent) => {

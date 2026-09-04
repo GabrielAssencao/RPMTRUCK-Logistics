@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 const criarSchema = z.object({
   titulo: textoOperacional(3, 120),
   mensagem: textoOperacional(3, 1000),
-  modulo: z.enum(['FROTA', 'MOTORISTAS', 'CONTAINERS', 'CUSTOS', 'TAREFAS', 'RELATORIOS', 'USUARIOS']),
+  modulo: z.enum(['FROTA', 'MOTORISTAS', 'CONTAINERS', 'CUSTOS', 'TAREFAS', 'RELATORIOS', 'USUARIOS', 'CHAT']),
   usuarioId: z.string().uuid().optional(),
   veiculoId: z.string().uuid().optional(),
 }).strict()
@@ -94,6 +94,7 @@ export async function GET(request: NextRequest) {
       include: {
         veiculo: { select: { id: true, modelo: true, placa: true } },
         tarefa: { select: { id: true, status: true, prioridade: true, prazo: true } },
+        ticketSuporte: { select: { id: true, protocolo: true, assunto: true } },
       },
       orderBy: { criado_em: 'desc' },
       skip: (pagina - 1) * limite,

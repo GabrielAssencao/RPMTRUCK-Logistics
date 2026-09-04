@@ -500,10 +500,14 @@ model Notificacao {
   tarefaId String?
   tarefa   Tarefa? @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
 
+  ticketSuporteId String?
+  ticketSuporte   ConversaSuporte? @relation(fields: [ticketSuporteId], references: [id], onDelete: SetNull)
+
   criado_em DateTime @default(now())
 
   @@index([usuarioId, lida, criado_em])
   @@index([empresaId, lida, criado_em])
+  @@index([ticketSuporteId, usuarioId, lida])
   @@map("notificacoes")
 }
 
@@ -525,6 +529,7 @@ model ConversaSuporte {
   empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
   mensagens MensagemSuporte[]
+  notificacoes Notificacao[]
 
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
