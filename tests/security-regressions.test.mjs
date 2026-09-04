@@ -155,7 +155,9 @@ test('arquivos versionados não contêm formatos comuns de segredos privados', (
 
 test('chat restringe empresas ao gestor e deriva o tenant da sessão', () => {
   const chat = read('src/app/api/chat/route.ts')
+  const tickets = read('src/app/api/chat/tickets/route.ts')
   const adminChat = read('src/app/api/admin/chat/route.ts')
+  const adminTicket = read('src/app/api/admin/chat/[id]/route.ts')
   const proxy = read('src/proxy.ts')
 
   assert.match(chat, /requireEmpresaAuth\(request, \{ acao: 'GESTAO' \}\)/)
@@ -164,7 +166,41 @@ test('chat restringe empresas ao gestor e deriva o tenant da sessão', () => {
   assert.match(chat, /applyRateLimit\(/)
   assert.match(adminChat, /requireAdminAuth\(request\)/)
   assert.match(adminChat, /applyRateLimit\(/)
+  assert.match(tickets, /requireEmpresaAuth\(request, \{ acao: 'GESTAO' \}\)/)
+  assert.match(tickets, /auth\.session\.empresaId/)
+  assert.match(tickets, /TransactionIsolationLevel\.Serializable/)
+  assert.match(tickets, /cobravelExtra: cobertura\.cobravelExtra/)
+  assert.match(adminTicket, /requireAdminAuth\(request\)/)
+  assert.match(adminTicket, /where: \{ id: atual\.id \}/)
   assert.match(proxy, /\/dashboard\/empresa\/chat/)
+})
+
+test('migração de tickets preserva histórico e corrige a ambiguidade do rate limit', () => {
+  const migration = read('prisma/migrations/20260903020000_tickets_suporte_e_rate_limit/migration.sql')
+
+  assert.match(migration, /DROP INDEX IF EXISTS "conversas_suporte_empresaId_key"/)
+  assert.match(migration, /SUP-LEG-/)
+  assert.match(migration, /replace\("id"::text, '-', ''\)/)
+  assert.match(migration, /candidato\.expira_em/)
+  assert.match(migration, /DELETE FROM public\.rate_limits AS expirado/)
+  assert.doesNotMatch(migration, /DROP TABLE "mensagens_suporte"/)
+})
+
+test('tickets geram notificacoes individuais e sincronizam leitura ao abrir', () => {
+  const chat = read('src/app/api/chat/route.ts')
+  const tickets = read('src/app/api/chat/tickets/route.ts')
+  const adminTicket = read('src/app/api/admin/chat/[id]/route.ts')
+  const notifications = read('src/lib/notificacoes.ts')
+  const migration = read('prisma/migrations/20260903020000_tickets_suporte_e_rate_limit/migration.sql')
+
+  assert.match(tickets, /notificarAdmins\(/)
+  assert.match(chat, /notificarUsuariosDaEmpresa\(escopo\.empresaId, aviso, \['GESTOR_EMPRESA'\], tx\)/)
+  assert.match(chat, /notificarAdmins\(aviso, tx\)/)
+  assert.match(chat, /ticketSuporteId: ticketSelecionado\.id, lida: false/)
+  assert.match(adminTicket, /\['GESTOR_EMPRESA'\], tx/)
+  assert.match(notifications, /usuarioId: id[\s\S]*ticketSuporteId: input\.ticketSuporteId/)
+  assert.match(migration, /notificacoes_ticketSuporteId_fkey/)
+  assert.match(migration, /ADD COLUMN "ticketSuporteId" TEXT/)
 })
 
 test('alertas globais e individuais são filtrados e lidos pelo usuário autenticado', () => {

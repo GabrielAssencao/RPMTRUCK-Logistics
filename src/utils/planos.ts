@@ -23,6 +23,8 @@ export interface PlanoConfig {
   delegacaoTarefas: boolean
   telaTarefas: boolean
   relatoriosPersonalizados: boolean
+  ticketsSuporteMes: number
+  prazoRespostaSuporteHoras: number
   modulosPadrao: readonly ModuloCodigo[]
 }
 
@@ -71,6 +73,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
       '1 ano de histórico e auditoria operacional',
       'Dashboard de custos, combustível e manutenção',
       'Até 4 usuários e 10 veículos na franquia base',
+      '3 tickets de suporte por mês, resposta em até 48h úteis',
     ],
     usuariosBase: 4,
     veiculosBase: 10,
@@ -79,6 +82,8 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
     delegacaoTarefas: false,
     telaTarefas: false,
     relatoriosPersonalizados: false,
+    ticketsSuporteMes: 3,
+    prazoRespostaSuporteHoras: 48,
     modulosPadrao: MODULOS_OPERACIONAIS,
   },
   AVANCADO: {
@@ -89,6 +94,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
       '2 anos de histórico analítico',
       'Delegação direta de tarefas e alertas',
       'Até 10 usuários e 25 veículos na franquia base',
+      '10 tickets de suporte por mês, resposta em até 24h úteis',
     ],
     usuariosBase: 10,
     veiculosBase: 25,
@@ -97,6 +103,8 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
     delegacaoTarefas: true,
     telaTarefas: true,
     relatoriosPersonalizados: false,
+    ticketsSuporteMes: 10,
+    prazoRespostaSuporteHoras: 24,
     modulosPadrao: MODULOS_COM_TAREFAS,
   },
   ENTERPRISE: {
@@ -107,6 +115,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
       '3 anos de histórico operacional',
       'Relatórios e filtros personalizados',
       'Até 25 usuários e 80 veículos na franquia base',
+      '30 tickets de suporte por mês, resposta prioritária em até 4h úteis',
     ],
     usuariosBase: 25,
     veiculosBase: 80,
@@ -115,6 +124,8 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
     delegacaoTarefas: true,
     telaTarefas: true,
     relatoriosPersonalizados: true,
+    ticketsSuporteMes: 30,
+    prazoRespostaSuporteHoras: 4,
     modulosPadrao: TODOS_OS_MODULOS,
   },
   PREVIEW: {
@@ -124,6 +135,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
       'Todos os módulos disponíveis para homologação',
       'Acesso antecipado a recursos beta',
       'Liberação e remoção de módulos pelo SuperAdmin',
+      '30 tickets de suporte por mês para homologação',
     ],
     usuariosBase: 999,
     veiculosBase: 999,
@@ -132,6 +144,8 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
     delegacaoTarefas: true,
     telaTarefas: true,
     relatoriosPersonalizados: true,
+    ticketsSuporteMes: 30,
+    prazoRespostaSuporteHoras: 24,
     modulosPadrao: TODOS_OS_MODULOS,
   },
 }

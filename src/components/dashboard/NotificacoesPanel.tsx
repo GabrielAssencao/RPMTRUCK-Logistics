@@ -9,6 +9,7 @@ import { useNotificacoes } from '@/hooks/useNotificacoes'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, Trash2, Check, CheckCheck } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface NotificacoesPanelProps {
   onPendenciasChange?: (pendencias: Record<string, number>) => void
@@ -20,10 +21,20 @@ export default function NotificacoesPanel({
   centralHref = '/dashboard/empresa/notificacoes',
 }: NotificacoesPanelProps) {
   const { primary, semanticColors } = useTheme()
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const { notificacoes, naoLidas, loading, error, pendenciasPorModulo, marcarComoLida, marcarTodasComoLidas, limparLidas, deletarNotificacao, recarregar } =
     useNotificacoes()
   const temLidas = notificacoes.some(notificacao => notificacao.lida)
+
+  const abrirTicket = async (notificacaoId: string, ticketId: string) => {
+    await marcarComoLida(notificacaoId)
+    setIsOpen(false)
+    const params = new URLSearchParams({ ticket: ticketId })
+    if (centralHref === null) params.set('tab', 'chat')
+    window.dispatchEvent(new CustomEvent('rpmtruck:abrir-ticket-suporte', { detail: { ticketId } }))
+    router.push(`${centralHref === null ? '/dashboard/admin' : '/dashboard/empresa/chat'}?${params.toString()}`)
+  }
 
   const alternarPainel = () => {
     const proximoEstado = !isOpen
@@ -39,6 +50,7 @@ export default function NotificacoesPanel({
     FROTA: '#f59e0b',
     MOTORISTAS: '#3b82f6',
     CUSTOS: '#10b981',
+    CHAT: '#8b5cf6',
     SEGURANÇA: semanticColors.danger,
     GERAL: primary
   }
@@ -156,6 +168,17 @@ export default function NotificacoesPanel({
                           <p className="text-xs text-foreground-muted mt-1 break-words">
                             {notif.mensagem}
                           </p>
+
+                          {notif.ticketSuporteId && (
+                            <button
+                              type="button"
+                              onClick={() => void abrirTicket(notif.id, notif.ticketSuporteId!)}
+                              className="mt-2 text-[10px] font-black uppercase tracking-wider hover:underline"
+                              style={{ color: primary }}
+                            >
+                              Abrir ticket {notif.ticketSuporte?.protocolo ? `· ${notif.ticketSuporte.protocolo}` : ''}
+                            </button>
+                          )}
 
                           {/* Veículo (se relacionado) */}
                           {notif.veiculo && (

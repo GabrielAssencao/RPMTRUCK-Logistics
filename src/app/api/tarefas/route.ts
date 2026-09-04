@@ -55,6 +55,20 @@ export async function POST(request: NextRequest) {
   })
   if (!responsavel) return NextResponse.json({ erro: 'Responsável não pertence à empresa.' }, { status: 400 })
 
+  if (parsed.data.origemId) {
+    const tarefaAtiva = await prisma.tarefa.findFirst({
+      where: {
+        empresaId: auth.session.empresaId,
+        origem_id: parsed.data.origemId,
+        status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
+      },
+      select: { id: true },
+    })
+    if (tarefaAtiva) {
+      return NextResponse.json({ erro: 'Esta pendência já possui uma tarefa ativa.' }, { status: 409 })
+    }
+  }
+
   const tarefa = await executarComAuditoria({ usuarioId: auth.session.userId }, async tx => {
     const criada = await tx.tarefa.create({
       data: {

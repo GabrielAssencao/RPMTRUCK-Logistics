@@ -6,6 +6,12 @@ export interface Notificacao {
   titulo: string
   mensagem: string
   lida: boolean
+  ticketSuporteId?: string | null
+  ticketSuporte?: {
+    id: string
+    protocolo: string
+    assunto: string
+  } | null
   veiculoId?: string
   veiculo?: {
     id: string
