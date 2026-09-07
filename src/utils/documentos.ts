@@ -36,3 +36,12 @@ export function cpfValido(valor: string) {
   const segundo = calcularDigito(`${cpf.slice(0, 9)}${primeiro}`, 11)
   return cpf.endsWith(`${primeiro}${segundo}`)
 }
+
+export function erroCPF(valor: string) {
+  const cpf = somenteNumeros(valor)
+  if (!cpf) return 'Informe o CPF do motorista.'
+  if (cpf.length < 11) return `CPF incompleto: faltam ${11 - cpf.length} dígito${cpf.length === 10 ? '' : 's'}.`
+  if (cpf.length > 11) return 'O CPF deve ter exatamente 11 dígitos.'
+  if (!cpfValido(cpf)) return 'Os dígitos verificadores do CPF não conferem.'
+  return null
+}

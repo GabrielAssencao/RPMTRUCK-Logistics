@@ -22,6 +22,7 @@ import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
 import { useSessionActivity } from '@/hooks/useSessionActivity'
 import { DashboardMotion } from '@/components/motion/DashboardMotion'
+import { ADMIN_SIDEBAR_UPDATED_EVENT, lerAtalhoSegurancaVisivel } from '@/lib/adminSidebarPreferences'
 
 // ─── Marcadores Operacionais do Super Admin ─────────────────────────────────
 const NAV_ADMIN = [
@@ -66,6 +67,20 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
   const [sidebarExpandida, setSidebarExpandida] = useState(false)
   const [pendenciasPorModulo, setPendenciasPorModulo] = useState<Record<string, number>>({})
   const [ticketsNaoLidos, setTicketsNaoLidos] = useState(0)
+  const [atalhoSegurancaVisivel, setAtalhoSegurancaVisivel] = useState(true)
+
+  useEffect(() => {
+    const sincronizar = (event?: Event) => {
+      const visivel = (event as CustomEvent<{ visivel?: boolean }> | undefined)?.detail?.visivel
+      setAtalhoSegurancaVisivel(typeof visivel === 'boolean' ? visivel : lerAtalhoSegurancaVisivel())
+    }
+    const initial = window.setTimeout(sincronizar, 0)
+    window.addEventListener(ADMIN_SIDEBAR_UPDATED_EVENT, sincronizar)
+    return () => {
+      window.clearTimeout(initial)
+      window.removeEventListener(ADMIN_SIDEBAR_UPDATED_EVENT, sincronizar)
+    }
+  }, [])
 
   const atualizarResumoSuporte = useCallback(async () => {
     try {
@@ -96,9 +111,10 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
   }
 
   const renderSidebarContent = (expandida: boolean) => {
+    const itensVisiveis = NAV_ADMIN.filter((item) => item.id !== 'security' || atalhoSegurancaVisivel)
     return (
       <div className="flex flex-col h-full justify-between p-4 font-mono">
-        <div>
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1 custom-scrollbar">
           <div className="mb-6 py-3 border-b border-white/10 flex items-center justify-center min-h-[64px]">
             {expandida ? (
               <div className="w-full px-2 flex flex-col justify-center">
@@ -128,7 +144,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
           </div>
 
           <nav className="space-y-1">
-            {NAV_ADMIN.map((item) => {
+            {itensVisiveis.map((item) => {
               const active = activeTab === item.id
               const Icon = item.icon
               const moduloNotificacao = item.id === 'requests' ? 'ACESSO' : item.id === 'subscriptions' ? 'ASSINATURA' : item.id === 'resets' ? 'SENHAS' : item.id === 'companies' ? 'EMPRESAS' : 'SISTEMA'
@@ -174,7 +190,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
           </nav>
         </div>
 
-        <div className="space-y-1 pt-4 border-t border-white/10">
+        <div className="shrink-0 space-y-1 pt-4 border-t border-white/10">
           <button
             onClick={() => changeTab(CONFIG_ITEM.id)}
             title={!expandida ? CONFIG_ITEM.label : undefined}
@@ -206,7 +222,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
   }
 
   return (
-    <div className="min-h-screen flex transition-colors duration-300" style={{ backgroundColor: 'var(--background)' }}>
+    <div className="flex h-dvh overflow-hidden transition-colors duration-300" style={{ backgroundColor: 'var(--background)' }}>
       
       <aside 
         onMouseEnter={() => setSidebarExpandida(true)}
@@ -226,7 +242,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
       <div className="flex-1 flex flex-col min-w-0">
         
         <header 
-          className="h-16 border-b flex items-center justify-between px-3 sm:px-6 z-40"
+          className="h-16 shrink-0 border-b flex items-center justify-between px-3 sm:px-6 z-40"
           style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}
         >
           <button type="button" onClick={() => setMobileOpen(true)} aria-label="Abrir menu do Superadmin" aria-expanded={mobileOpen} className="md:hidden min-h-11 min-w-11 text-foreground-muted hover:text-foreground">
@@ -251,7 +267,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-8 custom-scrollbar">
+        <main className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5 md:p-8 custom-scrollbar">
           <DashboardMotion motionKey={activeTab}>{children}</DashboardMotion>
         </main>
       </div>

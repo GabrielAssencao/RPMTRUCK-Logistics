@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic'
 
 const schema = z.object({
   nome: nomePessoa(3, 120),
-  cpf: z.string().trim().regex(/^\d{11}$/, 'O CPF deve ter 11 números.').refine(cpfValido, 'Informe um CPF válido.').nullable(),
+  cpf: z.string().trim().regex(/^\d{11}$/, 'O CPF deve ter exatamente 11 números.').refine(cpfValido, 'Os dígitos verificadores do CPF não conferem.'),
   rg: z.string().trim().regex(/^[A-Z0-9]{7,14}$/, 'O RG/CIN deve ter de 7 a 14 letras ou números.').nullable(),
   cnh: z.string().trim().regex(/^\d{9,11}$/, 'Informe de 9 a 11 números do registro apresentado.'),
   categoria: z.enum(['A', 'B', 'C', 'D', 'E', 'AB', 'AC', 'AD', 'AE']),
@@ -43,6 +43,10 @@ function valorDocumentoNumericoOpcional(formData: FormData, campo: string) {
   const valor = valorTexto(formData, campo).trim()
   if (!valor) return null
   return /^[\d.-]+$/.test(valor) ? valor.replace(/\D/g, '') : valor
+}
+
+function valorDocumentoNumericoObrigatorio(formData: FormData, campo: string) {
+  return valorDocumentoNumericoOpcional(formData, campo) ?? ''
 }
 
 function valorDocumentoIdentidadeOpcional(formData: FormData, campo: string) {
@@ -103,7 +107,7 @@ export async function POST(request: NextRequest) {
 
   const parsed = schema.safeParse({
     nome: valorTexto(formData, 'nome'),
-    cpf: valorDocumentoNumericoOpcional(formData, 'cpf'),
+    cpf: valorDocumentoNumericoObrigatorio(formData, 'cpf'),
     rg: valorDocumentoIdentidadeOpcional(formData, 'rg'),
     cnh: normalizarRegistroCNH(valorTexto(formData, 'cnh')),
     categoria: valorTexto(formData, 'categoria'),
@@ -112,7 +116,11 @@ export async function POST(request: NextRequest) {
     veiculoId: valorOpcional(formData, 'veiculoId'),
   })
   if (!parsed.success) {
-    return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? 'Revise os dados cadastrais do motorista.' }, { status: 400 })
+    const issue = parsed.error.issues[0]
+    return NextResponse.json({
+      erro: issue?.message ?? 'Revise os dados cadastrais do motorista.',
+      campo: typeof issue?.path[0] === 'string' ? issue.path[0] : undefined,
+    }, { status: 400 })
   }
 
   const validade = new Date(`${parsed.data.validade}T12:00:00`)
@@ -143,12 +151,13 @@ export async function POST(request: NextRequest) {
       })
       const cpfNovo = parsed.data.cpf ? somenteNumeros(parsed.data.cpf) : null
       const cnhNova = normalizarRegistroCNH(parsed.data.cnh)
-      const duplicado = existentes.some((item) => {
+      const cpfDuplicado = existentes.some((item) => {
         const exposto = exposeMotorista(item)
-        return (cpfNovo && somenteNumeros(exposto.cpf ?? '') === cpfNovo)
-          || normalizarRegistroCNH(exposto.cnh) === cnhNova
+        return cpfNovo && somenteNumeros(exposto.cpf ?? '') === cpfNovo
       })
-      if (duplicado) return NextResponse.json({ erro: 'CPF ou CNH já cadastrado para esta empresa.' }, { status: 409 })
+      if (cpfDuplicado) return NextResponse.json({ erro: 'CPF já cadastrado para esta empresa.', campo: 'cpf' }, { status: 409 })
+      const cnhDuplicada = existentes.some((item) => normalizarRegistroCNH(exposeMotorista(item).cnh) === cnhNova)
+      if (cnhDuplicada) return NextResponse.json({ erro: 'CNH já cadastrada para esta empresa.', campo: 'cnh' }, { status: 409 })
     }
 
     motorista = await executarComAuditoria({ usuarioId }, (tx) => tx.motorista.create({
@@ -190,7 +199,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ erro: error.message }, { status: error.status })
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return NextResponse.json({ erro: 'CPF ou CNH já cadastrado para esta empresa.' }, { status: 409 })
+      const alvo = String(error.meta?.target ?? '').toLowerCase()
+      const campo = alvo.includes('cpf') ? 'cpf' : alvo.includes('cnh') ? 'cnh' : undefined
+      return NextResponse.json({
+        erro: campo === 'cpf' ? 'CPF já cadastrado para esta empresa.' : campo === 'cnh' ? 'CNH já cadastrada para esta empresa.' : 'CPF ou CNH já cadastrado para esta empresa.',
+        campo,
+      }, { status: 409 })
     }
     console.error('Erro ao cadastrar motorista:', error)
     return NextResponse.json({ erro: 'Não foi possível cadastrar o motorista.' }, { status: 500 })

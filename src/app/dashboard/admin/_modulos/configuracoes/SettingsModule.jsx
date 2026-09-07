@@ -1,9 +1,10 @@
 'use client'
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { CORES_E_LOGOS } from '@/data/temasELogos';
-import { KeyRound, Palette, Moon, ShieldCheck, Sun } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, Palette, Moon, ShieldCheck, Sun } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { lerAtalhoSegurancaVisivel, salvarAtalhoSegurancaVisivel } from '@/lib/adminSidebarPreferences';
 
 export default function SettingsModule() {
   const router = useRouter();
@@ -15,6 +16,17 @@ export default function SettingsModule() {
   const [confirmacao, setConfirmacao] = useState('');
   const [alterandoSenha, setAlterandoSenha] = useState(false);
   const [retornoSenha, setRetornoSenha] = useState({ tipo: '', mensagem: '' });
+  const [atalhoSegurancaVisivel, setAtalhoSegurancaVisivel] = useState(true);
+
+  useEffect(() => {
+    const initial = window.setTimeout(() => setAtalhoSegurancaVisivel(lerAtalhoSegurancaVisivel()), 0);
+    return () => window.clearTimeout(initial);
+  }, []);
+
+  const atualizarAtalhoSeguranca = (visivel) => {
+    setAtalhoSegurancaVisivel(visivel);
+    salvarAtalhoSegurancaVisivel(visivel);
+  };
 
   const handleSave = async (settings) => {
     setSalvando(true);
@@ -72,6 +84,29 @@ export default function SettingsModule() {
       <div>
         <p className="font-bold tracking-[0.3em] text-[10px] mb-1" style={{ color: primary }}>PERSONALIZAÇÃO</p>
         <h2 className="text-2xl font-black font-rajdhani">CONFIGURAÇÕES</h2>
+      </div>
+
+      <div className="border p-4 space-y-4 sm:p-6" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest">
+              {atalhoSegurancaVisivel ? <Eye size={16} style={{ color: primary }} /> : <EyeOff size={16} style={{ color: primary }} />}
+              Navegação do SuperAdmin
+            </h3>
+            <p className="mt-2 max-w-2xl text-xs text-foreground-muted font-sans">
+              Exibe ou oculta o atalho “Logs / Segurança” na sidebar. Esta preferência é somente visual e não altera suas permissões.
+            </p>
+          </div>
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 border px-4 py-2 text-xs font-bold uppercase" style={{ borderColor: 'var(--border)' }}>
+            <input
+              type="checkbox"
+              checked={atalhoSegurancaVisivel}
+              onChange={(event) => atualizarAtalhoSeguranca(event.target.checked)}
+              style={{ accentColor: primary }}
+            />
+            Mostrar logs na sidebar
+          </label>
+        </div>
       </div>
 
       {/* Modo de Cor */}
