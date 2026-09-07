@@ -16,10 +16,11 @@ export async function GET(request: NextRequest) {
   try {
     const [empresas, catalogo] = await Promise.all([
       prisma.empresa.findMany({
+        where: { excluidoEm: null },
         include: {
           _count: {
             select: {
-              usuarios: true,
+              usuarios: { where: { excluidoEm: null } },
               veiculos_frota: true,
               motoristas: true,
             },

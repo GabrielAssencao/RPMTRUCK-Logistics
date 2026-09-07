@@ -5,7 +5,7 @@ import { hashPassword, passwordNeedsRehash, verifyLoginPassword } from '@/lib/pa
 import { createSession } from '@/lib/auth';
 import { loginSchema } from '@/lib/validation';
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
-import { normalizarModulos, PLANOS_CONFIG } from '@/utils/planos';
+import { obterModulosEfetivosUsuario, PLANOS_CONFIG } from '@/utils/planos';
 import { verifyBotToken } from '@/lib/botProtection';
 import { pseudonymize, recordSecurityEvent, safeUserAgent } from '@/lib/securityEvents';
 
@@ -72,6 +72,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { erro: 'Credenciais de acesso inválidas.' },
         { status: 401 }
+      );
+    }
+
+    if (!usuario.ativo || usuario.excluidoEm) {
+      return NextResponse.json(
+        { erro: 'Este acesso foi desativado pelo gestor da empresa.' },
+        { status: 403 },
       );
     }
 
@@ -185,6 +192,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const gestor = usuario.role === 'GESTOR_EMPRESA';
+    const modulosEfetivos = usuario.empresa
+      ? obterModulosEfetivosUsuario(usuario.empresa.modulos, usuario.modulosAcesso, gestor)
+      : [];
+
     // 8. Retorna dados do usuário (sem senha)
     return NextResponse.json(
       {
@@ -199,7 +211,7 @@ export async function POST(request: NextRequest) {
                 id: usuario.empresa.id,
                 nome: usuario.empresa.nome,
                 plano: usuario.empresa.plano,
-                modulos: normalizarModulos(usuario.empresa.modulos),
+                modulos: modulosEfetivos,
                 permissoes: PLANOS_CONFIG[usuario.empresa.plano],
               }
             : null,
@@ -208,7 +220,7 @@ export async function POST(request: NextRequest) {
                 id: usuario.empresa.id,
                 nome: usuario.empresa.nome,
                 plano: usuario.empresa.plano,
-                modulos: normalizarModulos(usuario.empresa.modulos),
+                modulos: modulosEfetivos,
                 permissoes: PLANOS_CONFIG[usuario.empresa.plano],
               }
             : null,

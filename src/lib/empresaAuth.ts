@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
   normalizarModulos,
+  obterModulosEfetivosUsuario,
   PLANOS_CONFIG,
   type ModuloCodigo,
   type PlanoTipo,
@@ -73,10 +74,11 @@ export async function requireEmpresaAuth(request: NextRequest, options: EmpresaA
       veiculos_adicionais: true,
       portal_financeiro_nome: true,
       portal_financeiro_url: true,
+      excluidoEm: true,
     },
   })
 
-  if (!empresa) {
+  if (!empresa || empresa.excluidoEm) {
     return { error: 'Empresa não encontrada', status: 404, session: null, empresa: null }
   }
 
@@ -92,9 +94,15 @@ export async function requireEmpresaAuth(request: NextRequest, options: EmpresaA
   }
 
   const modulos = normalizarModulos(empresa.modulos)
-  if (options.modulo && !modulos.includes(options.modulo)) {
+  const gestor = auth.session.role === 'GESTOR_EMPRESA' || auth.session.role === 'GESTOR'
+  const modulosEfetivos = obterModulosEfetivosUsuario(
+    modulos,
+    auth.usuario?.modulosAcesso ?? [],
+    gestor,
+  )
+  if (options.modulo && !modulosEfetivos.includes(options.modulo)) {
     return {
-      error: 'Este módulo não está habilitado para a empresa.',
+      error: 'Este módulo não está disponível para seu usuário ou para o plano da empresa.',
       status: 403,
       session: null,
       empresa: null,
@@ -113,7 +121,8 @@ export async function requireEmpresaAuth(request: NextRequest, options: EmpresaA
     empresa: {
       ...empresaExposta,
       plano,
-      modulos,
+      modulos: modulosEfetivos,
+      modulosContratados: modulos,
       permissoes: PLANOS_CONFIG[plano],
     },
   }

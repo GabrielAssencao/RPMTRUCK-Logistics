@@ -9,8 +9,10 @@ import { Prisma } from '@prisma/client'
 import {
   criarUsuarioEmpresaComLimite,
   LimiteUsuariosError,
+  ModulosUsuarioInvalidosError,
 } from '@/lib/usuariosEmpresa'
 import { TEMPORARY_PASSWORD_TTL_MS } from '@/lib/temporaryPassword'
+import { MODULOS } from '@/utils/planos'
 
 const criarOperadorSchema = z.object({
   nome: nomePessoa(3, 100),
@@ -18,6 +20,7 @@ const criarOperadorSchema = z.object({
   senha: z.string().min(8).max(128),
   role: z.enum(['OPERADOR', 'VISUALIZADOR']),
   acessoDashboardGeral: z.boolean().optional().default(false),
+  modulosAcesso: z.array(z.enum(MODULOS)).max(MODULOS.length).optional(),
 }).strict()
 
 function gestorAutorizado(role?: string) {
@@ -25,7 +28,7 @@ function gestorAutorizado(role?: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const { session, error, status } = await requireEmpresaAuth(request)
+  const { session, error, status } = await requireEmpresaAuth(request, { acao: 'GESTAO' })
   if (error || !session?.empresaId) {
     return NextResponse.json({ error: error || 'Não autenticado' }, { status })
   }
@@ -34,9 +37,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const incluirInativos = request.nextUrl.searchParams.get('incluirInativos') === '1'
     const usuarios = await prisma.usuario.findMany({
-      where: { empresaId: session.empresaId },
-      select: { id: true, nome: true, email: true, role: true, acessoDashboardGeral: true, criado_em: true },
+      where: {
+        empresaId: session.empresaId,
+        excluidoEm: null,
+        ...(incluirInativos ? {} : { ativo: true }),
+      },
+      select: { id: true, nome: true, email: true, role: true, acessoDashboardGeral: true, ativo: true, modulosAcesso: true, criado_em: true },
       orderBy: { criado_em: 'desc' }
     })
     return NextResponse.json(usuarios)
@@ -47,7 +55,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { session, error, status } = await requireEmpresaAuth(request)
+  const { session, error, status } = await requireEmpresaAuth(request, { acao: 'GESTAO' })
   if (error || !session?.empresaId) {
     return NextResponse.json({ error: error || 'Não autenticado' }, { status })
   }
@@ -61,7 +69,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Dados de usuário inválidos.' }, { status: 400 })
     }
 
-    const { nome, email, senha, role, acessoDashboardGeral } = parsed.data
+    const { nome, email, senha, role, acessoDashboardGeral, modulosAcesso } = parsed.data
     const usuarioExiste = await prisma.usuario.findUnique({ where: { email }, select: { id: true } })
     if (usuarioExiste) {
       return NextResponse.json({ error: 'E-mail já cadastrado no sistema.' }, { status: 409 })
@@ -74,6 +82,7 @@ export async function POST(request: NextRequest) {
       senhaHash: await hashPassword(senha),
       role,
       acessoDashboardGeral,
+      modulosAcesso,
       senhaTemporariaExpiraEm: new Date(Date.now() + TEMPORARY_PASSWORD_TTL_MS),
       criadoPorId: session.userId,
     })
@@ -82,6 +91,9 @@ export async function POST(request: NextRequest) {
   } catch (cause) {
     if (cause instanceof LimiteUsuariosError) {
       return NextResponse.json({ error: cause.message }, { status: 409 })
+    }
+    if (cause instanceof ModulosUsuarioInvalidosError) {
+      return NextResponse.json({ error: cause.message }, { status: 403 })
     }
     if (cause instanceof Prisma.PrismaClientKnownRequestError) {
       if (cause.code === 'P2002') return NextResponse.json({ error: 'E-mail já cadastrado no sistema.' }, { status: 409 })

@@ -4,12 +4,13 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { validarTokenBackupEmpresa } from '@/lib/empresaBackupToken'
-import { verifyPassword } from '@/lib/password'
+import { hashPassword, verifyPassword } from '@/lib/password'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { CONTAS_PAGAR_BUCKET } from '@/lib/financeiro/contasPagar'
 import { MOTORISTAS_FOTOS_BUCKET } from '@/lib/motoristaFotos'
+import { randomUUID } from 'node:crypto'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -96,6 +97,8 @@ export async function POST(request: NextRequest) {
       arquivos: arquivos as unknown as Prisma.InputJsonValue,
     },
   })
+  const agora = new Date()
+  const senhaInutilizavel = await hashPassword(randomUUID())
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -106,6 +109,8 @@ export async function POST(request: NextRequest) {
 
       await tx.solicitacaoAssinatura.deleteMany({ where: { empresaId } })
       await tx.notificacao.deleteMany({ where: { empresaId } })
+      await tx.alertaLeitura.deleteMany({ where: { usuario: { empresaId } } })
+      await tx.alertaSistema.deleteMany({ where: { destinatario: { empresaId } } })
       await tx.tarefa.deleteMany({ where: { empresaId } })
       await tx.contaPagar.deleteMany({ where: { empresaId } })
       await tx.container.deleteMany({ where: { empresaId } })
@@ -118,10 +123,46 @@ export async function POST(request: NextRequest) {
       await tx.veiculo.deleteMany({ where: { empresaId } })
       await tx.localizacao.deleteMany({ where: { empresaId } })
       await tx.fatura.deleteMany({ where: { empresaId } })
-      await tx.eventoSeguranca.deleteMany({ where: { empresaId } })
+      await tx.conversaSuporte.deleteMany({ where: { empresaId } })
       await tx.sessaoUsuario.deleteMany({ where: { empresaId } })
-      await tx.auditoriaLog.deleteMany({ where: { empresaId } })
-      await tx.empresa.delete({ where: { id: empresaId } })
+      const usuarios = await tx.usuario.findMany({ where: { empresaId }, select: { id: true } })
+      for (const usuarioEmpresa of usuarios) {
+        await tx.usuario.update({
+          where: { id: usuarioEmpresa.id },
+          data: {
+            nome: 'Usuário removido',
+            email: `removido+${usuarioEmpresa.id}@usuarios.invalid`,
+            senha_hash: senhaInutilizavel,
+            ativo: false,
+            excluidoEm: agora,
+            acessoDashboardGeral: false,
+            modulosAcesso: [],
+            exigeTrocaSenha: false,
+            senhaTemporariaExpiraEm: null,
+            sessaoVersao: { increment: 1 },
+          },
+        })
+      }
+      await tx.empresa.update({
+        where: { id: empresaId },
+        data: {
+          nome: 'Empresa removida',
+          email: `removida+${empresaId}@empresas.invalid`,
+          cnpj: null,
+          cnpjHash: null,
+          nome_contato: null,
+          telefone: null,
+          status: 'INATIVO',
+          status_motivo: 'Conta excluída pelo gestor.',
+          status_alterado_em: agora,
+          status_alterado_por_id: null,
+          total_pago_historico: '0,00',
+          portal_financeiro_nome: null,
+          portal_financeiro_url: null,
+          modulos: [],
+          excluidoEm: agora,
+        },
+      })
       await tx.exclusaoEmpresaJob.update({ where: { id: job.id }, data: { status: 'DADOS_REMOVIDOS' } })
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 })
   } catch (error) {
@@ -153,8 +194,8 @@ export async function POST(request: NextRequest) {
     sucesso: true,
     storagePendente,
     mensagem: storagePendente
-      ? 'Os dados do banco foram excluídos. A limpeza dos arquivos privados foi registrada para nova tentativa.'
-      : 'A empresa, seus dados e arquivos privados foram excluídos.',
+      ? 'Os dados operacionais e identificadores pessoais foram removidos. A limpeza dos arquivos privados foi registrada para nova tentativa.'
+      : 'Os dados operacionais, identificadores pessoais e arquivos privados foram removidos.',
   }, { status: storagePendente ? 202 : 200 })
   response.cookies.delete('rpmtruck_session')
   return response

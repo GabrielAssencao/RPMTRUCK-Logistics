@@ -101,7 +101,7 @@ test('gestor redefine apenas operadores do próprio tenant e revoga sessões', (
   const page = read('src/app/dashboard/empresa/usuarios/page.tsx')
 
   assert.match(route, /requireEmpresaAuth\(request\)/)
-  assert.match(route, /where: \{ id, empresaId: auth\.session\.empresaId \}/)
+  assert.match(route, /where: \{ id, empresaId: auth\.session\.empresaId, excluidoEm: null \}/)
   assert.match(route, /usuario\.role === 'GESTOR_EMPRESA'/)
   assert.match(route, /exigeTrocaSenha: true/)
   assert.match(route, /sessaoUsuario\.updateMany/)
@@ -271,4 +271,42 @@ test('dados pessoais e mutacoes de motoristas exigem gestor no backend', () => {
   assert.equal((photo.match(/acao: 'GESTAO'/g) || []).length, 2)
   assert.doesNotMatch(collection, /role === 'OPERADOR'/)
   assert.doesNotMatch(photo, /role === 'OPERADOR'/)
+})
+
+test('permissoes individuais nunca ampliam os modulos contratados pela empresa', () => {
+  const empresaAuth = read('src/lib/empresaAuth.ts')
+  const usuarios = read('src/app/api/empresa/usuarios/[id]/route.ts')
+  const planos = read('src/utils/planos.ts')
+
+  assert.match(planos, /obterModulosEfetivosUsuario/)
+  assert.match(planos, /return contratados\.filter\(\(modulo\) => permitidos\.has\(modulo\)\)/)
+  assert.match(empresaAuth, /auth\.usuario\?\.modulosAcesso/)
+  assert.match(empresaAuth, /!modulosEfetivos\.includes\(options\.modulo\)/)
+  assert.match(usuarios, /modulosSolicitados\?\.some\(\(modulo\) => !modulosEmpresa\.includes\(modulo\)\)/)
+  assert.match(usuarios, /sessaoVersao: \{ increment: 1 \}/)
+  assert.match(usuarios, /sessaoUsuario\.(updateMany|deleteMany)/)
+})
+
+test('remoção de funcionario anonimiza a conta e preserva referencias operacionais', () => {
+  const usuarios = read('src/app/api/empresa/usuarios/[id]/route.ts')
+
+  assert.match(usuarios, /nome: 'Usuário removido'/)
+  assert.match(usuarios, /email: emailAnonimo/)
+  assert.match(usuarios, /ativo: false/)
+  assert.match(usuarios, /excluidoEm: agora/)
+  assert.doesNotMatch(usuarios, /tx\.usuario\.delete/)
+})
+
+test('relatorios e dashboard respeitam os modulos efetivos do funcionario', () => {
+  const arquivos = read('src/app/api/relatorios/arquivos/route.ts')
+  const download = read('src/app/api/relatorios/arquivos/[id]/download/route.ts')
+  const gerar = read('src/app/api/relatorios/gerar/route.ts')
+  const dashboard = read('src/app/api/dashboard/empresa/route.ts')
+
+  assert.match(arquivos, /requireEmpresaAuth\(request, \{ modulo: 'RELATORIOS'/)
+  assert.match(download, /requireEmpresaAuth\(request, \{ modulo: 'RELATORIOS'/)
+  assert.match(gerar, /requireEmpresaAuth\(request, \{ modulo: 'RELATORIOS', acao: 'GESTAO' \}\)/)
+  assert.match(dashboard, /frotaHabilitada = auth\.empresa\.modulos\.includes\('FROTA'\)/)
+  assert.match(dashboard, /gestaoHabilitada = auth\.empresa\.modulos\.includes\('GESTAO'\)/)
+  assert.match(dashboard, /tarefasHabilitadas = auth\.empresa\.modulos\.includes\('TAREFAS'\)/)
 })

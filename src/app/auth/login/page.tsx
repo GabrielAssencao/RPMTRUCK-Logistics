@@ -220,7 +220,7 @@ export default function LoginPage() {
           {panelContent}
           {step !== 3 && tab === 'login' && (
             <p className="text-center text-xs mt-8" style={{ color: 'var(--foreground-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
-              Ainda não tem acesso? <Link href="/solicitar-acesso" className="font-bold transition-opacity hover:opacity-70" style={{ color: primary }}>Solicite aqui →</Link>
+              Ainda não tem acesso? <Link href="/auth/solicitar-acesso" className="font-bold transition-opacity hover:opacity-70" style={{ color: primary }}>Solicite aqui →</Link>
             </p>
           )}
         </div>

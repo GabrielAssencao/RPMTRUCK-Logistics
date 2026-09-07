@@ -17,8 +17,11 @@ import {
   ArrowUpDown,
   Copy,
   X,
+  Power,
+  SlidersHorizontal,
 } from 'lucide-react'
 import GenericDrawer, { FieldConfig } from '@/components/dashboard/GenericDrawer'
+import { MODULOS_CONFIG, normalizarModulos, type ModuloCodigo } from '@/utils/planos'
 
 interface UsuarioLocal {
   id: string
@@ -26,6 +29,8 @@ interface UsuarioLocal {
   email: string
   role: 'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'
   acessoDashboardGeral: boolean
+  ativo: boolean
+  modulosAcesso: ModuloCodigo[]
   status: 'ATIVO' | 'INATIVO'
   criadoEm: string
 }
@@ -76,8 +81,8 @@ const CAMPOS_USUARIO: FieldConfig[] = [
     type: 'select', 
     required: true,
     options: [
-      { label: 'OPERADOR (Frota, Containers, Custos e Tarefas)', value: 'OPERADOR' },
-      { label: 'VISUALIZADOR (Leitura operacional)', value: 'VISUALIZADOR' }
+      { label: 'OPERADOR (pode registrar e editar)', value: 'OPERADOR' },
+      { label: 'VISUALIZADOR (somente leitura)', value: 'VISUALIZADOR' }
     ]
   },
   {
@@ -102,8 +107,14 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true)
 
   const [usuarios, setUsuarios] = useState<UsuarioLocal[]>([])
+  const [modulosDisponiveis, setModulosDisponiveis] = useState<ModuloCodigo[]>([])
   const [usuarioLogadoId, setUsuarioLogadoId] = useState('')
-  const [salvandoPermissaoId, setSalvandoPermissaoId] = useState<string | null>(null)
+  const [usuarioEmEdicao, setUsuarioEmEdicao] = useState<UsuarioLocal | null>(null)
+  const [roleEdicao, setRoleEdicao] = useState<'OPERADOR' | 'VISUALIZADOR'>('OPERADOR')
+  const [dashboardEdicao, setDashboardEdicao] = useState(false)
+  const [modulosEdicao, setModulosEdicao] = useState<ModuloCodigo[]>([])
+  const [salvandoAcessos, setSalvandoAcessos] = useState(false)
+  const [alternandoStatusId, setAlternandoStatusId] = useState<string | null>(null)
   const [redefinindoId, setRedefinindoId] = useState<string | null>(null)
   const [credencialTemporaria, setCredencialTemporaria] = useState<CredencialTemporaria | null>(null)
   
@@ -112,7 +123,7 @@ export default function UsuariosPage() {
   const carregarUsuarios = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await fetch('/api/empresa/usuarios')
+      const res = await fetch('/api/empresa/usuarios?incluirInativos=1')
       if (res.ok) {
         const data = await res.json()
         const formatados = data.map((u: UsuarioApi) => ({
@@ -121,7 +132,9 @@ export default function UsuariosPage() {
           email: u.email,
           role: u.role,
           acessoDashboardGeral: Boolean(u.acessoDashboardGeral),
-          status: 'ATIVO',
+          ativo: Boolean(u.ativo),
+          modulosAcesso: normalizarModulos(u.modulosAcesso),
+          status: u.ativo ? 'ATIVO' : 'INATIVO',
           criadoEm: new Date(u.criado_em).toISOString().split('T')[0]
         }))
         setUsuarios(formatados)
@@ -140,6 +153,7 @@ export default function UsuariosPage() {
       if (response.ok) {
         setPerfilLogado(data.usuario.role)
         setUsuarioLogadoId(data.usuario.id)
+        setModulosDisponiveis(normalizarModulos(data.empresa.modulosContratados ?? data.empresa.modulos))
         if (data.usuario.role === 'GESTOR_EMPRESA' || data.usuario.role === 'GESTOR') await carregarUsuarios()
       } else setLoading(false)
     }).catch(() => setLoading(false))
@@ -196,6 +210,7 @@ export default function UsuariosPage() {
           senha: formData.senha,
           role: formData.role,
           acessoDashboardGeral: formData.acessoDashboardGeral === 'true',
+          modulosAcesso: modulosDisponiveis,
         })
       })
 
@@ -216,7 +231,7 @@ export default function UsuariosPage() {
   }
 
   const handleExcluirUsuario = async (id: string) => {
-    if (confirm('Deseja realmente remover o acesso deste operador?')) {
+    if (confirm('Excluir definitivamente esta conta? O acesso e os dados pessoais serão removidos, mas os registros operacionais permanecerão no histórico.')) {
       const response = await fetch(`/api/empresa/usuarios/${id}`, { method: 'DELETE' })
       const data = await response.json()
       if (!response.ok) return alert(data.erro || 'Não foi possível remover o usuário.')
@@ -224,23 +239,64 @@ export default function UsuariosPage() {
     }
   }
 
-  const handleAlternarDashboard = async (usuario: UsuarioLocal) => {
-    setSalvandoPermissaoId(usuario.id)
+  const abrirEdicaoAcessos = (usuario: UsuarioLocal) => {
+    if (usuario.role === 'GESTOR_EMPRESA') return
+    setUsuarioEmEdicao(usuario)
+    setRoleEdicao(usuario.role)
+    setDashboardEdicao(usuario.acessoDashboardGeral)
+    setModulosEdicao(usuario.modulosAcesso.filter((modulo) => modulosDisponiveis.includes(modulo)))
+  }
+
+  const salvarAcessos = async () => {
+    if (!usuarioEmEdicao || salvandoAcessos) return
+    setSalvandoAcessos(true)
+    try {
+      const response = await fetch(`/api/empresa/usuarios/${usuarioEmEdicao.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: roleEdicao,
+          acessoDashboardGeral: dashboardEdicao,
+          modulosAcesso: modulosEdicao,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) return alert(data.erro || 'Não foi possível alterar as permissões.')
+      setUsuarios(prev => prev.map(item => item.id === usuarioEmEdicao.id
+        ? {
+            ...item,
+            role: data.role,
+            acessoDashboardGeral: data.acessoDashboardGeral,
+            modulosAcesso: normalizarModulos(data.modulosAcesso),
+          }
+        : item))
+      setUsuarioEmEdicao(null)
+    } catch {
+      alert('Erro de conexão ao alterar as permissões.')
+    } finally {
+      setSalvandoAcessos(false)
+    }
+  }
+
+  const alternarStatus = async (usuario: UsuarioLocal) => {
+    const acao = usuario.ativo ? 'desabilitar' : 'habilitar'
+    if (!window.confirm(`Deseja ${acao} o acesso de ${usuario.nome}?`)) return
+    setAlternandoStatusId(usuario.id)
     try {
       const response = await fetch(`/api/empresa/usuarios/${usuario.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ acessoDashboardGeral: !usuario.acessoDashboardGeral }),
+        body: JSON.stringify({ ativo: !usuario.ativo }),
       })
       const data = await response.json()
-      if (!response.ok) return alert(data.erro || 'Não foi possível alterar a permissão.')
+      if (!response.ok) return alert(data.erro || 'Não foi possível alterar o status do acesso.')
       setUsuarios(prev => prev.map(item => item.id === usuario.id
-        ? { ...item, acessoDashboardGeral: data.acessoDashboardGeral }
+        ? { ...item, ativo: data.ativo, status: data.ativo ? 'ATIVO' : 'INATIVO' }
         : item))
     } catch {
-      alert('Erro de conexão ao alterar a permissão.')
+      alert('Erro de conexão ao alterar o status do acesso.')
     } finally {
-      setSalvandoPermissaoId(null)
+      setAlternandoStatusId(null)
     }
   }
 
@@ -417,26 +473,18 @@ export default function UsuariosPage() {
                         {u.role === 'GESTOR_EMPRESA' ? (
                           <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: primary }}>Acesso integral</span>
                         ) : (
-                          <button
-                            type="button"
-                            aria-pressed={u.acessoDashboardGeral}
-                            disabled={salvandoPermissaoId === u.id}
-                            onClick={() => void handleAlternarDashboard(u)}
-                            className="inline-flex min-w-24 items-center justify-center gap-2 border px-3 py-2 text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
-                            style={{
-                              borderColor: u.acessoDashboardGeral ? primary : 'var(--border)',
-                              color: u.acessoDashboardGeral ? primary : 'var(--foreground-muted)',
-                            }}
-                          >
-                            {salvandoPermissaoId === u.id ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />}
-                            {u.acessoDashboardGeral ? 'Permitida' : 'Bloqueada'}
-                          </button>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: u.acessoDashboardGeral ? primary : 'var(--foreground-muted)' }}>
+                              {u.acessoDashboardGeral ? 'Permitida' : 'Bloqueada'}
+                            </span>
+                            <div className="mt-1 text-[9px] text-foreground-muted">{u.modulosAcesso.length} módulo(s)</div>
+                          </div>
                         )}
                       </td>
 
                       <td className="px-6 py-4">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] font-bold tracking-widest bg-green-500/10 text-green-500 border border-green-500/20">
-                          <CheckCircle2 size={10} /> {u.status}
+                        <span className={`inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-[10px] font-bold tracking-widest ${u.ativo ? 'border-green-500/20 bg-green-500/10 text-green-500' : 'border-zinc-500/20 bg-zinc-500/10 text-zinc-400'}`}>
+                          {u.ativo ? <CheckCircle2 size={10} /> : <Power size={10} />} {u.status}
                         </span>
                       </td>
 
@@ -446,6 +494,29 @@ export default function UsuariosPage() {
 
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {u.id !== usuarioLogadoId && u.role !== 'GESTOR_EMPRESA' && (
+                            <button
+                              type="button"
+                              title="Configurar função e módulos"
+                              aria-label={`Configurar acessos de ${u.nome}`}
+                              onClick={() => abrirEdicaoAcessos(u)}
+                              className="rounded p-2 text-foreground-muted transition-colors hover:bg-white/5 hover:text-foreground"
+                            >
+                              <SlidersHorizontal size={14} />
+                            </button>
+                          )}
+                          {u.id !== usuarioLogadoId && u.role !== 'GESTOR_EMPRESA' && (
+                            <button
+                              type="button"
+                              title={u.ativo ? 'Desabilitar acesso' : 'Habilitar acesso'}
+                              aria-label={`${u.ativo ? 'Desabilitar' : 'Habilitar'} acesso de ${u.nome}`}
+                              disabled={alternandoStatusId === u.id}
+                              onClick={() => void alternarStatus(u)}
+                              className="rounded p-2 text-foreground-muted transition-colors hover:bg-white/5 hover:text-foreground disabled:opacity-50"
+                            >
+                              {alternandoStatusId === u.id ? <Loader2 size={14} className="animate-spin" /> : <Power size={14} />}
+                            </button>
+                          )}
                           {u.id !== usuarioLogadoId && u.role !== 'GESTOR_EMPRESA' && (
                             <button
                               type="button"
@@ -487,6 +558,65 @@ export default function UsuariosPage() {
         campos={CAMPOS_USUARIO}
         onSubmit={handleCriarUsuario}
       />
+
+      {usuarioEmEdicao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="presentation">
+          <div role="dialog" aria-modal="true" aria-labelledby="titulo-acessos-usuario" className="w-full max-w-xl border" style={{ backgroundColor: 'var(--background)', borderColor: primary }}>
+            <div className="flex items-start justify-between gap-4 border-b p-5" style={{ borderColor: 'var(--border)' }}>
+              <div>
+                <h2 id="titulo-acessos-usuario" className="font-rajdhani text-lg font-black uppercase">Acessos de {usuarioEmEdicao.nome}</h2>
+                <p className="mt-1 text-xs text-foreground-muted">As opções abaixo nunca ultrapassam os módulos contratados pela empresa.</p>
+              </div>
+              <button type="button" aria-label="Fechar configuração de acessos" onClick={() => setUsuarioEmEdicao(null)} className="p-2 text-foreground-muted hover:text-foreground"><X size={16} /></button>
+            </div>
+
+            <div className="max-h-[65vh] space-y-5 overflow-y-auto p-5 font-mono">
+              <label className="block">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-foreground-muted">Tipo de usuário</span>
+                <select value={roleEdicao} onChange={(event) => setRoleEdicao(event.target.value as 'OPERADOR' | 'VISUALIZADOR')} className="min-h-11 w-full border bg-transparent px-3 text-xs font-bold uppercase outline-none" style={{ borderColor: 'var(--border)', colorScheme: isLight ? 'light' : 'dark' }}>
+                  <option value="OPERADOR" style={OPTION_STYLE}>Operador — pode registrar e editar</option>
+                  <option value="VISUALIZADOR" style={OPTION_STYLE}>Visualizador — somente leitura</option>
+                </select>
+              </label>
+
+              <label className="flex cursor-pointer items-start gap-3 border p-3" style={{ borderColor: dashboardEdicao ? primary : 'var(--border)' }}>
+                <input type="checkbox" checked={dashboardEdicao} onChange={(event) => setDashboardEdicao(event.target.checked)} className="mt-0.5 h-4 w-4" style={{ accentColor: primary }} />
+                <span><strong className="block text-xs uppercase">Visão geral da empresa</strong><small className="mt-1 block text-[10px] leading-relaxed text-foreground-muted">Exibe indicadores consolidados dos módulos permitidos.</small></span>
+              </label>
+
+              <fieldset>
+                <legend className="mb-2 text-[10px] font-bold uppercase tracking-wider text-foreground-muted">Módulos permitidos</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {modulosDisponiveis.map((modulo) => {
+                    const permitido = modulosEdicao.includes(modulo)
+                    const obrigatorio = modulo === 'NOTIFICACOES'
+                    return (
+                      <label key={modulo} className="flex cursor-pointer items-start gap-3 border p-3" style={{ borderColor: permitido ? primary : 'var(--border)', backgroundColor: permitido ? `${primary}08` : 'transparent' }}>
+                        <input
+                          type="checkbox"
+                          checked={obrigatorio || permitido}
+                          disabled={obrigatorio}
+                          onChange={(event) => setModulosEdicao((atuais) => event.target.checked ? [...atuais, modulo] : atuais.filter((item) => item !== modulo))}
+                          className="mt-0.5 h-4 w-4"
+                          style={{ accentColor: primary }}
+                        />
+                        <span><strong className="block text-[10px] uppercase">{MODULOS_CONFIG[modulo].nome}{obrigatorio ? ' · essencial' : ''}</strong><small className="mt-1 block text-[9px] leading-relaxed text-foreground-muted">{MODULOS_CONFIG[modulo].descricao}</small></span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </fieldset>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t p-5" style={{ borderColor: 'var(--border)' }}>
+              <button type="button" disabled={salvandoAcessos} onClick={() => setUsuarioEmEdicao(null)} className="min-h-11 border px-4 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>Cancelar</button>
+              <button type="button" disabled={salvandoAcessos} onClick={() => void salvarAcessos()} className="flex min-h-11 items-center gap-2 px-5 text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}>
+                {salvandoAcessos && <Loader2 size={14} className="animate-spin" />} Salvar acessos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {credencialTemporaria && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="presentation">
@@ -547,6 +677,8 @@ interface UsuarioApi {
   email: string
   role: UsuarioLocal['role']
   acessoDashboardGeral: boolean
+  ativo: boolean
+  modulosAcesso: string[]
   criado_em: string
 }
 

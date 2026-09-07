@@ -50,6 +50,7 @@ interface NavEmpresaItem {
 interface PerfilEmpresaUsuario {
   role: 'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'
   acessoDashboardGeral: boolean
+  modulosAcesso: ModuloCodigo[]
 }
 
 const NAV_EMPRESA: NavEmpresaItem[] = [
@@ -128,7 +129,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
         const data = await response.json()
         if (!response.ok) throw new Error(data.erro || 'Acesso suspenso.')
         setNomeEmpresa(data.empresa.nome)
-        setModulosAtivos(normalizarModulos(data.empresa.modulos))
+        setModulosAtivos(normalizarModulos(data.usuario.modulosAcesso))
         setPerfilUsuario(data.usuario)
 
         const usuarioLocal = userData ? JSON.parse(userData) : {}

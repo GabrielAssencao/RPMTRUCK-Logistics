@@ -37,7 +37,7 @@ export async function POST(request: NextRequest, context: RouteContext<'/api/emp
   if (targetLimited) return targetLimited
 
   const usuario = await prisma.usuario.findFirst({
-    where: { id, empresaId: auth.session.empresaId },
+    where: { id, empresaId: auth.session.empresaId, excluidoEm: null },
     select: { id: true, nome: true, email: true, role: true },
   })
   if (!usuario) return NextResponse.json({ erro: 'Operador não encontrado.' }, { status: 404 })

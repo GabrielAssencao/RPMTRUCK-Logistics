@@ -27,7 +27,7 @@ function gestorAutorizado(role: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request)
+  const auth = await requireEmpresaAuth(request, { modulo: 'RELATORIOS', acao: 'GESTAO' })
   if (auth.error || !auth.session || !auth.empresaId || !auth.empresa) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
