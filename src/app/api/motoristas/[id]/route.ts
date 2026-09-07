@@ -13,7 +13,7 @@ const schema = z.object({
 
 export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'GESTAO' })
   if (auth.error || !auth.session?.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
@@ -54,14 +54,10 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
 
 export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'GESTAO' })
   if (auth.error || !auth.session?.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
-  if (!['GESTOR_EMPRESA', 'GESTOR'].includes(auth.session.role)) {
-    return NextResponse.json({ erro: 'Apenas o gestor pode excluir motoristas.' }, { status: 403 })
-  }
-
   const motorista = await prisma.motorista.findFirst({
     where: { id: params.id, empresaId: auth.session.empresaId },
     select: { id: true, foto_url: true },

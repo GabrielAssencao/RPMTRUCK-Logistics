@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useTheme } from '@/contexts/ThemeContext'
-import { MapPin, Plus, ArrowLeft, Pencil, Trash2, CheckCircle2 } from 'lucide-react'
+import { MapPin, Plus, ArrowLeft, Pencil, Trash2 } from 'lucide-react'
 
 export interface LocalizacaoBase {
   id: string

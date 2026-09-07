@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, Lock, Eye, EyeOff, ArrowLeft, Key, ShieldCheck, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, Key, CheckCircle, AlertTriangle } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import dynamic from 'next/dynamic'
 import TurnstileWidget from '@/components/security/TurnstileWidget'

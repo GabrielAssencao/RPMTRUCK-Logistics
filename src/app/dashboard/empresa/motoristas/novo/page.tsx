@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import NextImage from 'next/image'
 import { useTheme } from '@/contexts/ThemeContext'
 import { erroCPF, formatarCPF, formatarRG, normalizarDocumentoIdentidade, normalizarRegistroCNH, somenteNumeros } from '@/utils/documentos'
 import { ArrowLeft, Upload, CheckCircle2, User, X } from 'lucide-react'
@@ -344,7 +345,7 @@ export default function NovoMotoristaPage() {
               {/* 📸 Moldura Trava 3x4 (w-24 h-32 = 96px x 128px) */}
               <div className="w-24 h-32 border flex items-center justify-center shrink-0 overflow-hidden relative" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
                 {fotoUrl ? (
-                  <img src={fotoUrl} alt="Motorista" className="w-full h-full object-cover" />
+                  <NextImage src={fotoUrl} alt="Motorista" fill unoptimized sizes="96px" className="object-cover" />
                 ) : (
                   <User size={36} className="text-foreground-muted" />
                 )}

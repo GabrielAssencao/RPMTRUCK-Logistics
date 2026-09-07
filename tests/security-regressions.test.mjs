@@ -247,3 +247,28 @@ test('atalho de auditoria pode ser ocultado visualmente sem alterar autorizacao'
   assert.match(preferences, /usuario\.id \|\| 'local'/)
   assert.match(preferences, /ADMIN_SIDEBAR_UPDATED_EVENT/)
 })
+
+test('logout revoga a sessao no servidor e sempre remove o cookie do navegador', () => {
+  const auth = read('src/lib/auth.ts')
+  const adminLayout = read('src/app/dashboard/admin/_estrutura/AdminLayout.tsx')
+  const empresaLayout = read('src/app/dashboard/empresa/layout.tsx')
+
+  assert.match(auth, /finally \{[\s\S]*cookieStore\.delete\(SESSION_COOKIE_NAME\)/)
+  assert.match(adminLayout, /fetch\('\/api\/auth\/logout', \{ method: 'POST' \}\)/)
+  assert.match(empresaLayout, /fetch\('\/api\/auth\/logout', \{ method: 'POST' \}\)/)
+  assert.doesNotMatch(adminLayout, /window\.location\.href = '\/auth\/login'/)
+  assert.doesNotMatch(empresaLayout, /window\.location\.href = '\/auth\/login'/)
+})
+
+test('dados pessoais e mutacoes de motoristas exigem gestor no backend', () => {
+  const collection = read('src/app/api/motoristas/route.ts')
+  const item = read('src/app/api/motoristas/[id]/route.ts')
+  const photo = read('src/app/api/motoristas/[id]/foto/route.ts')
+
+  assert.match(collection, /export async function GET[\s\S]*acao: 'GESTAO'/)
+  assert.match(collection, /export async function POST[\s\S]*acao: 'GESTAO'/)
+  assert.equal((item.match(/acao: 'GESTAO'/g) || []).length, 2)
+  assert.equal((photo.match(/acao: 'GESTAO'/g) || []).length, 2)
+  assert.doesNotMatch(collection, /role === 'OPERADOR'/)
+  assert.doesNotMatch(photo, /role === 'OPERADOR'/)
+})

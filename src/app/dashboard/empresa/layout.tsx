@@ -2,7 +2,8 @@
 
 import { useCallback, useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import Image from 'next/image'
+import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { obterLogoPorTema } from '@/data/temasELogos'
@@ -96,6 +97,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
 }
 
 function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
   useSessionActivity()
   const { primary, isLight, themeReady, semanticColors } = useTheme()
   const pathname = usePathname()
@@ -138,10 +140,10 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {
         localStorage.removeItem('@rpmtruck:user')
-        window.location.replace('/auth/login')
+        router.replace('/auth/login')
       })
       .finally(() => setAcessoCarregado(true))
-  }, [])
+  }, [router])
 
   useEffect(() => {
     try {
@@ -207,9 +209,9 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
     const configuracaoBloqueada = pathname.startsWith(CONFIG_ITEM.path) && !eGestor
     if (configuracaoBloqueada || (pagina && !itemPermitido(pagina))) {
       const destino = NAV_EMPRESA.find(itemPermitido)?.path || '/auth/login'
-      window.location.replace(destino)
+      router.replace(destino)
     }
-  }, [acessoCarregado, eGestor, itemPermitido, pathname, perfilUsuario])
+  }, [acessoCarregado, eGestor, itemPermitido, pathname, perfilUsuario, router])
 
   const paginaAtual = [...NAV_EMPRESA, NOTIFICACOES_ITEM, SUPORTE_ITEM]
     .sort((a, b) => b.path.length - a.path.length)
@@ -221,9 +223,13 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
     && (!paginaAtual || itemPermitido(paginaAtual)),
   )
 
-  const handleLogout = () => {
-    localStorage.removeItem('@rpmtruck:user')
-    window.location.href = '/auth/login'
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } finally {
+      localStorage.removeItem('@rpmtruck:user')
+      router.replace('/auth/login')
+    }
   }
 
   // ─── Conteúdo Interno da Sidebar ───────────────────────────────────────────
@@ -241,9 +247,11 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
             {expandida ? (
               <div className="w-full px-2 flex flex-col justify-center">
                 <div className="flex items-center gap-2">
-                  <img
+                  <Image
                     src={`/logos/${obterLogoPorTema(primary)}`}
                     alt="RPMTRUCK"
+                    width={32}
+                    height={28}
                     className={`h-7 w-auto object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
                   />
                   <span className="font-black text-xl tracking-tight whitespace-nowrap" style={{ color: 'var(--foreground)' }}>
@@ -257,9 +265,11 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
             ) : (
               /* Logo em destaque quando a Sidebar está recolhida */
               <div className="w-10 h-10 flex items-center justify-center shrink-0 p-1 rounded bg-white/5 hover:bg-white/10 transition-all">
-                <img
+                <Image
                   src={`/logos/${obterLogoPorTema(primary)}`}
                   alt="RPMTRUCK"
+                  width={40}
+                  height={40}
                   className={`h-full w-full object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
                 />
               </div>
@@ -392,7 +402,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* ─── RODAPÉ: CONFIGURAÇÕES + SAIR ─── */}
-        <div className="space-y-1 pt-4 border-t border-white/10">
+        <div className="shrink-0 space-y-1 pt-4 border-t border-white/10">
           <Link
             href={NOTIFICACOES_ITEM.path}
             onClick={() => setMobileOpen(false)}
@@ -448,7 +458,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex transition-colors duration-300" style={{ backgroundColor: 'var(--background)' }}>
+    <div className="flex h-dvh overflow-hidden transition-colors duration-300" style={{ backgroundColor: 'var(--background)' }}>
       
       {/* SIDEBAR DESKTOP — RECOLHE QUANDO O MOUSE SAI, EXPANDE NO HOVER */}
       <aside 
@@ -467,11 +477,11 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* PAINEL DE CONTEÚDO PRINCIPAL */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         
         {/* HEADER TOP OPERACIONAL */}
         <header 
-          className="h-16 border-b flex items-center justify-between px-6 z-10"
+          className="z-10 flex h-16 shrink-0 items-center justify-between border-b px-6"
           style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}
         >
           {/* Menu Mobile Button */}
@@ -500,7 +510,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* ÁREA DE RENDERIZAÇÃO DA PÁGINA INTERNA */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-8">
+        <main className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5 md:p-8">
           {rotaAtualPermitida && <AlertasSistema />}
           <DashboardMotion>
             {rotaAtualPermitida ? children : <div className="py-16 text-center text-xs font-mono text-foreground-muted">Validando permissões...</div>}

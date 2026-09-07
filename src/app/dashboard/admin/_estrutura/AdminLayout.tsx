@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { useTheme } from '@/contexts/ThemeContext'
 import { obterLogoPorTema } from '@/data/temasELogos'
 import { 
@@ -61,6 +63,7 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children, activeTab, setActiveTab }: AdminLayoutProps) {
+  const router = useRouter()
   useSessionActivity()
   const { primary, isLight, themeReady } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -100,9 +103,14 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
     return () => { window.clearTimeout(initial); window.clearInterval(interval) }
   }, [atualizarResumoSuporte])
 
-  const handleLogout = () => {
-    localStorage.removeItem('@rpmtruck:admin')
-    window.location.href = '/auth/login'
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } finally {
+      localStorage.removeItem('@rpmtruck:admin')
+      localStorage.removeItem('@rpmtruck:user')
+      router.replace('/auth/login')
+    }
   }
 
   const changeTab = (tabId: AdminTab) => {
@@ -119,9 +127,11 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
             {expandida ? (
               <div className="w-full px-2 flex flex-col justify-center">
                 <div className="flex items-center gap-2">
-                  <img
+                  <Image
                     src={`/logos/${obterLogoPorTema(primary)}`}
                     alt="RPMTRUCK"
+                    width={32}
+                    height={28}
                     className={`h-7 w-auto object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
                   />
                   <span className="font-black text-xl tracking-tight whitespace-nowrap" style={{ color: 'var(--foreground)' }}>
@@ -134,9 +144,11 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
               </div>
             ) : (
               <div className="w-10 h-10 flex items-center justify-center shrink-0 p-1 rounded bg-white/5 hover:bg-white/10 transition-all">
-                <img
+                <Image
                   src={`/logos/${obterLogoPorTema(primary)}`}
                   alt="RPMTRUCK"
+                  width={40}
+                  height={40}
                   className={`h-full w-full object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
                 />
               </div>

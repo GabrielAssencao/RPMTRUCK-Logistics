@@ -13,18 +13,11 @@ import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-function podeGerenciarMotoristas(role: string) {
-  return role === 'GESTOR_EMPRESA' || role === 'GESTOR' || role === 'OPERADOR'
-}
-
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'GESTAO' })
   if (auth.error || !auth.session?.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
-  }
-  if (!podeGerenciarMotoristas(auth.session.role)) {
-    return NextResponse.json({ erro: 'Seu perfil não pode alterar fotos de motoristas.' }, { status: 403 })
   }
   const limited = await applyRateLimit(request, `upload:${auth.session.userId}`, RATE_LIMITS.FILE_UPLOAD.limit, RATE_LIMITS.FILE_UPLOAD.windowMs)
   if (limited) return limited
@@ -69,12 +62,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
 export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'GESTAO' })
   if (auth.error || !auth.session?.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
-  }
-  if (!podeGerenciarMotoristas(auth.session.role)) {
-    return NextResponse.json({ erro: 'Seu perfil não pode remover fotos de motoristas.' }, { status: 403 })
   }
 
   const motorista = await prisma.motorista.findFirst({

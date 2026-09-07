@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import Image from 'next/image'
+import { motion } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useContainers } from '@/contexts/ContainersContext'
 import { 
-  Users, 
   Plus, 
   ChevronLeft, 
   ChevronRight, 
@@ -120,10 +120,17 @@ export default function MotoristasPage() {
 
   // Motoristas sem veículo para o deck de cartas
   const motoristasSemVeiculo = motoristas.filter(m => !m.veiculoIdVinculado)
+  const veiculosOrdenados = veiculos.length > 0
+    ? [...veiculos.slice(indexCarrossel), ...veiculos.slice(0, indexCarrossel)]
+    : []
 
   // Controles do Carrossel
-  const handleAnterior = () => setIndexCarrossel(p => (p === 0 ? veiculos.length - 1 : p - 1))
-  const handleProximo = () => setIndexCarrossel(p => (p === veiculos.length - 1 ? 0 : p + 1))
+  const handleAnterior = () => {
+    if (veiculos.length > 0) setIndexCarrossel(p => (p === 0 ? veiculos.length - 1 : p - 1))
+  }
+  const handleProximo = () => {
+    if (veiculos.length > 0) setIndexCarrossel(p => (p === veiculos.length - 1 ? 0 : p + 1))
+  }
 
   // Drag and Drop
   const handleDropNoVeiculo = async (veiculoId: string) => {
@@ -211,7 +218,7 @@ export default function MotoristasPage() {
           </button>
 
           <div className="flex-1 overflow-x-auto hide-scrollbar flex gap-4 py-2">
-            {veiculos.map((v) => {
+            {veiculosOrdenados.map((v) => {
               const motoristaVinculado = motoristas.find(m => m.id === v.motoristaVinculadoId)
               const isHovered = hoveredVeiculoId === v.id
 
@@ -255,9 +262,9 @@ export default function MotoristasPage() {
                     {motoristaVinculado ? (
                       <div className="flex justify-between items-center p-2 border bg-white/5" style={{ borderColor: primary }}>
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 border rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-black/20" style={{ borderColor: 'var(--border)' }}>
+                          <div className="relative w-7 h-7 border rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-black/20" style={{ borderColor: 'var(--border)' }}>
                             {motoristaVinculado.fotoUrl ? (
-                              <img src={motoristaVinculado.fotoUrl} alt={motoristaVinculado.nomeAbreviado} className="w-full h-full object-cover" />
+                              <Image src={motoristaVinculado.fotoUrl} alt={motoristaVinculado.nomeAbreviado} fill unoptimized sizes="28px" className="object-cover" />
                             ) : (
                               <User size={14} className="text-foreground-muted" />
                             )}
@@ -320,9 +327,9 @@ export default function MotoristasPage() {
                 {/* Cabeçalho da Carta com Foto / Avatar */}
                 <div className="flex items-center gap-3 mb-3 border-b pb-2" style={{ borderColor: 'var(--border)' }}>
                   {/* Moldura 3x4 Pequena da Foto */}
-                  <div className="w-10 h-12 border overflow-hidden shrink-0 flex items-center justify-center" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+                  <div className="relative w-10 h-12 border overflow-hidden shrink-0 flex items-center justify-center" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
                     {m.fotoUrl ? (
-                      <img src={m.fotoUrl} alt={m.nomeAbreviado} className="w-full h-full object-cover" />
+                      <Image src={m.fotoUrl} alt={m.nomeAbreviado} fill unoptimized sizes="40px" className="object-cover" />
                     ) : (
                       <User size={20} className="text-foreground-muted" />
                     )}
@@ -383,9 +390,9 @@ export default function MotoristasPage() {
                     {/* Condutor + Mini Foto */}
                     <td className="px-6 py-4 font-bold text-xs">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 border rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-black/20" style={{ borderColor: 'var(--border)' }}>
+                        <div className="relative w-7 h-7 border rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-black/20" style={{ borderColor: 'var(--border)' }}>
                           {m.fotoUrl ? (
-                            <img src={m.fotoUrl} alt={m.nomeAbreviado} className="w-full h-full object-cover" />
+                            <Image src={m.fotoUrl} alt={m.nomeAbreviado} fill unoptimized sizes="28px" className="object-cover" />
                           ) : (
                             <User size={14} className="text-foreground-muted" />
                           )}

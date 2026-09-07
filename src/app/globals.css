@@ -31,9 +31,9 @@
   --border-strong: rgba(255, 255, 255, 0.15);
   --muted: #666666;
 
-  --font-display: 'Rajdhani', sans-serif;
-  --font-body: 'Outfit', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-display: var(--font-rajdhani), sans-serif;
+  --font-body: var(--font-outfit), sans-serif;
+  --font-mono: var(--font-jetbrains-mono), monospace;
 }
 
 /* =============================================

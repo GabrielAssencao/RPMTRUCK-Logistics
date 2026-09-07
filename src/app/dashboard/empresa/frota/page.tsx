@@ -9,7 +9,6 @@ import {
   Search, 
   Plus, 
   MoreVertical, 
-  CheckCircle2, 
   Wrench, 
   AlertCircle,
   Pencil,
@@ -19,7 +18,6 @@ import {
   Zap,
   X,
   Check,
-  Filter
 } from 'lucide-react'
 import GenericDrawer, { FieldConfig } from '@/components/dashboard/GenericDrawer'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
@@ -46,7 +44,7 @@ interface VeiculoApi extends Omit<VeiculoCompleto, 'localizacao' | 'motoristaAtu
 }
 
 export default function FrotaPage() {
-  const { primary, isLight } = useTheme()
+  const { primary } = useTheme()
   const [montado, setMontado] = useState(false)
   
   // Estado do Drawer e Edição
@@ -56,7 +54,6 @@ export default function FrotaPage() {
   // Seleção Múltipla e Ações em Lote
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const [modalAcoesAbertoId, setModalAcoesAbertoId] = useState<string | null>(null)
-  const [novoStatusEmLote, setNovoStatusEmLote] = useState<StatusVeiculo | null>(null)
   const [confirmandoExclusaoEmLote, setConfirmandoExclusaoEmLote] = useState(false)
   
   const [menuAcoesAberto, setMenuAcoesAberto] = useState<string | null>(null)
@@ -191,7 +188,6 @@ export default function FrotaPage() {
     setVeiculos(prev => prev.map(v => selecionados.has(v.id) ? { ...v, status: novoStatus } : v))
     sinalizarAtualizacaoDashboardEmpresa()
     setSelecionados(new Set())
-    setNovoStatusEmLote(null)
     mostrarFeedback(`Status de ${ids.length} veículo(s) atualizado.`, 'success')
   }
 
@@ -505,8 +501,6 @@ export default function FrotaPage() {
             {veiculosFiltrados.map((v, idx) => {
               const isSelected = selecionados.has(v.id)
               const statusColor = v.status === 'OPERACIONAL' ? '#22c55e' : v.status === 'OFICINA' ? '#eab308' : '#a1a1aa'
-              const statusIcon = v.status === 'OPERACIONAL' ? '●' : v.status === 'OFICINA' ? '⚠' : '○'
-
               return (
                 <motion.div
                   key={v.id}
