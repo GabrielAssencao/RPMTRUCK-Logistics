@@ -54,12 +54,8 @@ function valorDocumentoIdentidadeOpcional(formData: FormData, campo: string) {
   return valor ? normalizarDocumentoIdentidade(valor) : null
 }
 
-function podeGerenciarMotoristas(role: string) {
-  return role === 'GESTOR_EMPRESA' || role === 'GESTOR' || role === 'OPERADOR'
-}
-
 export async function GET(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'GESTAO' })
   if (auth.error || !auth.session?.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
@@ -90,12 +86,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'ESCRITA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'FROTA', acao: 'GESTAO' })
   if (auth.error || !auth.session?.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
-  }
-  if (!podeGerenciarMotoristas(auth.session.role)) {
-    return NextResponse.json({ erro: 'Seu perfil não pode cadastrar motoristas.' }, { status: 403 })
   }
 
   let formData: FormData

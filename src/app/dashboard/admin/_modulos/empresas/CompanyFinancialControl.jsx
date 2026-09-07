@@ -160,10 +160,10 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
       <div className="py-4">
         {tabAtiva === 'geral' && (
            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <StatCard label="VEÍCULOS" val={`${empresa._count?.veiculos_frota ?? 0} / ${config.veiculosBase + vExtra}`} sub="Frota atual" primary={primary}/>
-              <StatCard label="MOTORISTAS" val={empresa._count?.motoristas ?? 0} sub="Cadastrados" primary={primary}/>
-              <StatCard label="MENSALIDADE" val={plano === 'PREVIEW' ? 'GRÁTIS' : `R$ ${mensalidadeCalculada.toFixed(2)}`} sub="Valor recorrente" primary={primary} className={plano === 'PREVIEW' ? 'text-blue-500' : ''} />
-              <StatCard label="TOTAL PAGO" val={`R$ ${empresa.total_pago_historico || '0,00'}`} sub="Acumulado" primary={primary}/>
+              <StatCard label="VEÍCULOS" val={`${empresa._count?.veiculos_frota ?? 0} / ${config.veiculosBase + vExtra}`} sub="Frota atual" />
+              <StatCard label="MOTORISTAS" val={empresa._count?.motoristas ?? 0} sub="Cadastrados" />
+              <StatCard label="MENSALIDADE" val={plano === 'PREVIEW' ? 'GRÁTIS' : `R$ ${mensalidadeCalculada.toFixed(2)}`} sub="Valor recorrente" className={plano === 'PREVIEW' ? 'text-blue-500' : ''} />
+              <StatCard label="TOTAL PAGO" val={`R$ ${empresa.total_pago_historico || '0,00'}`} sub="Acumulado" />
            </div>
         )}
 
@@ -202,8 +202,8 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
         {tabAtiva === 'usuarios' && (
           <div className="space-y-6">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <CounterCard label="LICENÇAS EXTRAS" desc={`Custo: R$ ${Number(precoUsuarioAdicional).toFixed(2)}/cada`} val={uExtra} setVal={setUExtra} primary={primary} />
-                <CounterCard label="VEÍCULOS EXTRAS" desc={`Custo: R$ ${Number(precoVeiculoAdicional).toFixed(2)}/cada`} val={vExtra} setVal={setVExtra} primary={primary} />
+                <CounterCard label="LICENÇAS EXTRAS" desc={`Custo: R$ ${Number(precoUsuarioAdicional).toFixed(2)}/cada`} val={uExtra} setVal={setUExtra} />
+                <CounterCard label="VEÍCULOS EXTRAS" desc={`Custo: R$ ${Number(precoVeiculoAdicional).toFixed(2)}/cada`} val={vExtra} setVal={setVExtra} />
              </div>
              <CompanyUsersManager empresa={empresa} limiteTotal={config.usuariosBase + uExtra} primary={primary} />
           </div>
@@ -233,7 +233,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
                    </thead>
                    <tbody>
                       {faturas.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-xs opacity-50">Nenhuma fatura registrada para esta empresa.</td></tr>}
-                      {faturas.map((f, i) => (
+                      {faturas.map((f) => (
                          <tr key={f.id} className="border-b last:border-0 hover:bg-black/5 text-sm" style={{borderColor: 'var(--border)'}}>
                             <td className="px-5 py-4 font-mono font-bold">{f.mes} / {f.ano}</td>
                             <td className="px-5 py-4 text-[10px] font-black uppercase opacity-70">
@@ -309,7 +309,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
   );
 }
 
-function StatCard({ label, val, sub, primary, className = '' }) {
+function StatCard({ label, val, sub, className = '' }) {
   return (
     <div className="p-5 border bg-background-secondary" style={{borderColor: 'var(--border)'}}>
       <p className="text-[9px] font-black opacity-50 tracking-widest mb-2">{label}</p>
@@ -319,7 +319,7 @@ function StatCard({ label, val, sub, primary, className = '' }) {
   );
 }
 
-function CounterCard({ label, desc, val, setVal, primary }) {
+function CounterCard({ label, desc, val, setVal }) {
   return (
     <div className="p-6 border bg-background-secondary" style={{borderColor: 'var(--border)'}}>
       <h4 className="text-[10px] font-black mb-1">{label}</h4>

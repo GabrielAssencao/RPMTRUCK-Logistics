@@ -139,14 +139,17 @@ test('tema vermelho separa marca, criticidade e atenção nas manutenções', ()
   assert.match(manutencao, /stroke: semanticColors\.warning/)
 })
 
-test('historico de manutencoes pode ser consultado por mes sem alterar os totais do veiculo', () => {
+test('historico de manutencoes pode ser consultado e agrupado por mes sem alterar os totais do veiculo', () => {
   const manutencao = read('src/app/dashboard/empresa/frota/manutencao/page.tsx')
 
   assert.match(manutencao, /const \[periodoHistorico, setPeriodoHistorico\] = useState\(dataHoje\.slice\(0, 7\)\)/)
   assert.match(manutencao, /manutencoesFiltradas = periodoHistorico === 'TODOS'/)
   assert.match(manutencao, /custoTotalVeiculo = manutencoesDoVeiculo\.filter/)
   assert.match(manutencao, />Todo o histórico<\/option>/)
-  assert.match(manutencao, /manutencoesFiltradas\.map/)
+  assert.match(manutencao, /manutencoesOrdenadas = \[\.\.\.manutencoesFiltradas\]\.sort/)
+  assert.match(manutencao, /manutencoesOrdenadas\.flatMap/)
+  assert.match(manutencao, /iniciarGrupo = periodoHistorico === 'TODOS'/)
+  assert.match(manutencao, /totalPorPeriodo\[periodo\]/)
   assert.match(manutencao, /setPeriodoHistorico\(novoRegistro\.dataAgendada\.slice\(0, 7\)\)/)
 })
 

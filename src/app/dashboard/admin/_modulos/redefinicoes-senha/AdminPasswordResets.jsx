@@ -2,7 +2,7 @@
 'use client'
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, KeyRound, UserPlus, Copy, Calendar, Mail } from 'lucide-react';
+import { Check, X, KeyRound, UserPlus, Copy } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 
 export default function AdminRequestsAndResets() {

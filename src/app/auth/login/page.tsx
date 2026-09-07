@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, Lock, Eye, EyeOff, ArrowLeft, Truck, Key, ShieldCheck, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, Key, ShieldCheck, CheckCircle, AlertTriangle } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import dynamic from 'next/dynamic'
 import TurnstileWidget from '@/components/security/TurnstileWidget'
@@ -13,6 +14,7 @@ const TruckPanel = dynamic(() => import('@/app/auth/login/_componentes/TruckPane
 type Tab = 'login' | 'forgot'
 
 export default function LoginPage() {
+  const router = useRouter()
   const { primary, isLight } = useTheme()
   const [tab, setTab] = useState<Tab>('login')
   const [step, setStep] = useState(0) 
@@ -94,11 +96,11 @@ export default function LoginPage() {
         localStorage.setItem('@rpmtruck:user', JSON.stringify(data.usuario))
         
         if (data.usuario.role === 'ADMIN_RPM' || data.usuario.role === 'ADMIN') {
-          window.location.href = '/dashboard/admin'
+          router.replace('/dashboard/admin')
         } else {
-          window.location.href = '/dashboard/empresa' 
+          router.replace('/dashboard/empresa')
         }
-      } catch (err) {
+      } catch {
         setError('Erro de conexão com o servidor.')
         setStep(step === 3 ? 3 : 1)
       } finally {
@@ -141,10 +143,9 @@ export default function LoginPage() {
         setError('')
         if (step > 0) setStep(s => s === 3 ? 1 : s - 1) 
       }}
-      onForgot={() => { window.location.href = '/auth/recuperar-senha' }}
+      onForgot={() => router.push('/auth/recuperar-senha')}
       onReset={resetLogin}
       primary={primary}
-      isLight={isLight}
       turnstileVersion={turnstileVersion}
       onTurnstileToken={setTurnstileToken}
     />
@@ -233,7 +234,7 @@ export default function LoginPage() {
 // ═══════════════════════════════════════════════════════════════════════════════
 function LoginForm({
   step, email, setEmail, senha, setSenha, newPassword, setNewPassword, confirmPassword, setConfirmPassword, showPass, setShowPass,
-  loading, error, onNext, onBack, onForgot, onReset, primary, isLight,
+  loading, error, onNext, onBack, onForgot, onReset, primary,
   turnstileVersion, onTurnstileToken,
 }: {
   step: number
@@ -249,7 +250,6 @@ function LoginForm({
   onForgot: () => void
   onReset: () => void
   primary: string
-  isLight: boolean
   turnstileVersion: number
   onTurnstileToken: (token: string) => void
 }) {

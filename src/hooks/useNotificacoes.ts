@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 export interface Notificacao {
   id: string
@@ -47,6 +48,7 @@ interface ListaNotificacoes extends ResumoNotificacoes {
 }
 
 export function useNotificacoes(pollingInterval = 60000): UseNotificacoesReturn {
+  const router = useRouter()
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([])
   const [naoLidas, setNaoLidas] = useState(0)
   const [pendenciasPorModulo, setPendenciasPorModulo] = useState<Record<string, number>>({})
@@ -67,7 +69,7 @@ export function useNotificacoes(pollingInterval = 60000): UseNotificacoesReturn 
           setNaoLidas(data.naoLidas)
           setPendenciasPorModulo(data.pendenciasPorModulo)
         } else if (res.status === 401) {
-          window.location.href = '/auth/login'
+          router.replace('/auth/login')
         }
       } catch (err) {
         console.error('Erro ao carregar resumo de notificações:', err)
@@ -78,7 +80,7 @@ export function useNotificacoes(pollingInterval = 60000): UseNotificacoesReturn 
 
     resumoEmAndamento.current = requisicao
     return requisicao
-  }, [])
+  }, [router])
 
   const recarregar = useCallback(() => {
     if (listaEmAndamento.current) return listaEmAndamento.current
@@ -96,7 +98,7 @@ export function useNotificacoes(pollingInterval = 60000): UseNotificacoesReturn 
           setNaoLidas(data.naoLidas)
           setPendenciasPorModulo(data.pendenciasPorModulo)
         } else if (res.status === 401) {
-          window.location.href = '/auth/login'
+          router.replace('/auth/login')
         } else {
           setError('Erro ao carregar notificações')
         }
@@ -112,7 +114,7 @@ export function useNotificacoes(pollingInterval = 60000): UseNotificacoesReturn 
 
     listaEmAndamento.current = requisicao
     return requisicao
-  }, [])
+  }, [router])
 
   const marcarComoLida = useCallback(async (id: string) => {
     try {

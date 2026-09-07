@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useState, useEffect } from 'react'
+import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useSearchParams } from 'next/navigation'
@@ -104,6 +105,14 @@ function ManutencaoContent() {
   const manutencoesFiltradas = periodoHistorico === 'TODOS'
     ? manutencoesDoVeiculo
     : manutencoesDoVeiculo.filter(manutencao => manutencao.dataAgendada.startsWith(periodoHistorico))
+  const manutencoesOrdenadas = [...manutencoesFiltradas].sort((a, b) =>
+    b.dataAgendada.localeCompare(a.dataAgendada),
+  )
+  const totalPorPeriodo = manutencoesOrdenadas.reduce<Record<string, number>>((totais, manutencao) => {
+    const periodo = manutencao.dataAgendada.slice(0, 7)
+    totais[periodo] = (totais[periodo] ?? 0) + 1
+    return totais
+  }, {})
   const manutencoesOperacionaisDoVeiculo = manutencoesDoVeiculo.filter(h => !h.arquivado)
   const totalManutencoesArquivadas = manutencoesDoVeiculo.length - manutencoesOperacionaisDoVeiculo.length
   const custoTotalVeiculo = manutencoesDoVeiculo.filter(m => m.status === 'CONCLUIDA').reduce((acc, item) => acc + item.custo, 0)
@@ -405,8 +414,20 @@ function ManutencaoContent() {
         
         {/* LISTA DE MANUTENÇÕES (ESQUERDA) */}
         <div className="xl:col-span-2 border overflow-hidden relative flex flex-col" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
-          <div className="flex flex-col gap-3 border-b p-4 font-bold text-xs uppercase sm:flex-row sm:items-end sm:justify-between" style={{ borderColor: 'var(--border)' }}>
-            <span className="flex items-center gap-2"><History size={14} style={{ color: primary }}/> Histórico de Intervenções</span>
+          <div className="flex flex-col gap-4 border-b p-4 sm:flex-row sm:items-end sm:justify-between" style={{ borderColor: 'var(--border)', backgroundColor: `${primary}05` }}>
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center border" style={{ borderColor: `${primary}55`, backgroundColor: `${primary}10`, color: primary }}>
+                <History size={18} />
+              </span>
+              <div className="min-w-0">
+                <h2 className="font-rajdhani text-base font-black uppercase tracking-wide text-foreground sm:text-lg">
+                  Histórico de intervenções
+                </h2>
+                <p className="mt-0.5 text-[9px] font-normal uppercase tracking-wider text-foreground-muted sm:text-[10px]">
+                  Manutenções e custos registrados para {veiculoAtivo.placa}
+                </p>
+              </div>
+            </div>
             <div className="flex flex-col gap-2 sm:items-end">
               <label className="text-[9px] font-bold uppercase tracking-widest text-foreground-muted">
                 <span className="mb-1 block">Período da manutenção</span>
@@ -422,7 +443,7 @@ function ManutencaoContent() {
                   ))}
                 </select>
               </label>
-              <span className="text-[9px] font-normal normal-case text-foreground-muted" aria-live="polite">
+              <span className="border-l-2 pl-2 text-[9px] font-normal normal-case text-foreground-muted" style={{ borderColor: primary }} aria-live="polite">
                 {manutencoesFiltradas.length} de {manutencoesDoVeiculo.length} {manutencoesDoVeiculo.length === 1 ? 'registro' : 'registros'}
               </span>
             </div>
@@ -453,8 +474,35 @@ function ManutencaoContent() {
                       </td>
                     </tr>
                   ) : (
-                    manutencoesFiltradas.map((h) => (
-                      <motion.tr key={h.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="hover:bg-white/5 transition-colors font-mono">
+                    manutencoesOrdenadas.flatMap((h, index) => {
+                      const periodo = h.dataAgendada.slice(0, 7)
+                      const periodoAnterior = manutencoesOrdenadas[index - 1]?.dataAgendada.slice(0, 7)
+                      const iniciarGrupo = periodoHistorico === 'TODOS' && periodo !== periodoAnterior
+                      const quantidadeNoPeriodo = totalPorPeriodo[periodo]
+
+                      return [
+                        ...(iniciarGrupo ? [(
+                          <motion.tr
+                            key={`periodo-${periodo}`}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="border-y"
+                            style={{ borderColor: `${primary}45`, backgroundColor: `${primary}0D` }}
+                          >
+                            <td colSpan={6} className="px-4 py-2.5">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: primary }}>
+                                  <CalendarPlus size={13} /> {formatarMesAno(periodo)}
+                                </span>
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-foreground-muted">
+                                  {quantidadeNoPeriodo} {quantidadeNoPeriodo === 1 ? 'registro' : 'registros'}
+                                </span>
+                              </div>
+                            </td>
+                          </motion.tr>
+                        )] : []),
+                        <motion.tr key={h.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="hover:bg-white/5 transition-colors font-mono">
                         <td className="px-4 py-3 text-xs font-bold">{h.dataAgendada}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
@@ -514,8 +562,9 @@ function ManutencaoContent() {
                             <button onClick={() => setExcluindoId(h.id)} className="p-1 text-foreground-muted transition-colors hover:opacity-80" style={{ color: semanticColors.danger }}><Trash2 size={14} /></button>
                           )}
                         </td>
-                      </motion.tr>
-                    ))
+                        </motion.tr>,
+                      ]
+                    })
                   )}
                 </AnimatePresence>
               </tbody>
@@ -564,10 +613,11 @@ function ManutencaoContent() {
 
             {/* Caminhão detalhado original + sensores alinhados ao viewBox 736 × 736 */}
             <div className="relative z-10 w-full max-w-[560px] aspect-square" aria-label={`Raio-X diagnóstico do veículo ${veiculoAtivo.placa}`}>
-              <img
+              <Image
                 src="/images/caminhaoestilizado.svg"
                 alt=""
                 aria-hidden="true"
+                fill
                 className="absolute inset-0 w-full h-full object-contain opacity-55 select-none pointer-events-none"
                 style={{ filter: 'invert(1) contrast(1.35)', mixBlendMode: 'screen' }}
               />

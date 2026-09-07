@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import ArquivosContasPagar from '@/components/dashboard/ArquivosContasPagar'
 import { 
-  FilePieChart, 
   Download, 
   Calendar, 
   Filter, 
@@ -16,7 +15,6 @@ import {
   Trophy,
   FileSpreadsheet,
   Lock,
-  X,
   AlertCircle,
   Archive,
   CheckCircle2,

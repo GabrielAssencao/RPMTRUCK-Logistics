@@ -1,7 +1,7 @@
 // src/app/admin/modules/dashboard/DashboardChart.jsx
 'use client'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function DashboardChart({ data, selectedYear, onYearChange }) {
   const START_YEAR = 2026;

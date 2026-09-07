@@ -164,15 +164,19 @@ export async function requireAdminAuth(request: NextRequest): Promise<AuthResult
 }
 
 export async function clearSession(request?: NextRequest) {
-  if (request) {
-    const session = await verifySession(request)
-    if (session?.sessionId) {
-      await prisma.sessaoUsuario.updateMany({
-        where: { id: session.sessionId, usuarioId: session.userId, revogadaEm: null },
-        data: { revogadaEm: new Date() },
-      })
-    }
-  }
   const cookieStore = await cookies()
-  cookieStore.delete(SESSION_COOKIE_NAME)
+  try {
+    if (request) {
+      const session = await verifySession(request)
+      if (session?.sessionId) {
+        await prisma.sessaoUsuario.updateMany({
+          where: { id: session.sessionId, usuarioId: session.userId, revogadaEm: null },
+          data: { revogadaEm: new Date() },
+        })
+      }
+    }
+  } finally {
+    // Mesmo se o banco estiver indisponível, o navegador não deve manter o cookie de sessão.
+    cookieStore.delete(SESSION_COOKIE_NAME)
+  }
 }
