@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useTheme } from '@/contexts/ThemeContext'
-import { formatarCPF, formatarRG, normalizarDocumentoIdentidade, normalizarRegistroCNH, somenteNumeros } from '@/utils/documentos'
+import { erroCPF, formatarCPF, formatarRG, normalizarDocumentoIdentidade, normalizarRegistroCNH, somenteNumeros } from '@/utils/documentos'
 import { ArrowLeft, Upload, CheckCircle2, User, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -14,6 +14,7 @@ export default function NovoMotoristaPage() {
 
   const [nomeCompleto, setNomeCompleto] = useState('')
   const [cpf, setCpf] = useState('')
+  const [cpfErro, setCpfErro] = useState('')
   const [rg, setRg] = useState('')
   const [cnh, setCnh] = useState('')
   const [categoriaCNH, setCategoriaCNH] = useState('D')
@@ -23,6 +24,7 @@ export default function NovoMotoristaPage() {
   const [fotoInfo, setFotoInfo] = useState<{ largura: number; altura: number } | null>(null)
   const [fotoErro, setFotoErro] = useState('')
   const fotoInputRef = useRef<HTMLInputElement>(null)
+  const cpfInputRef = useRef<HTMLInputElement>(null)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -96,6 +98,13 @@ export default function NovoMotoristaPage() {
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault()
+    const erroCpfAtual = erroCPF(cpf)
+    if (erroCpfAtual) {
+      setErro('')
+      setCpfErro(erroCpfAtual)
+      cpfInputRef.current?.focus()
+      return
+    }
     setSalvando(true)
     setErro('')
     const formData = new FormData()
@@ -111,7 +120,13 @@ export default function NovoMotoristaPage() {
     const response = await fetch('/api/motoristas', { method: 'POST', body: formData })
     const data = await response.json()
     setSalvando(false)
-    if (!response.ok) return setErro(data.erro || 'Não foi possível cadastrar o motorista.')
+    if (!response.ok) {
+      if (data.campo === 'cpf') {
+        setCpfErro(data.erro || 'Revise o CPF informado.')
+        cpfInputRef.current?.focus()
+      }
+      return setErro(data.erro || 'Não foi possível cadastrar o motorista.')
+    }
     sinalizarAtualizacaoDashboardEmpresa()
     router.push('/dashboard/empresa/motoristas')
     router.refresh()
@@ -160,19 +175,34 @@ export default function NovoMotoristaPage() {
             <div>
               <label className="block text-[10px] uppercase font-bold mb-1">CPF *</label>
               <input 
+                ref={cpfInputRef}
                 type="text" 
                 required
                 inputMode="numeric"
-                pattern="[0-9]{3}[.][0-9]{3}[.][0-9]{3}-[0-9]{2}"
-                maxLength={14}
                 placeholder="000.000.000-00"
                 value={cpf}
-                onChange={(e) => setCpf(formatarCPF(e.target.value))}
-                aria-describedby="ajuda-cpf"
+                onChange={(e) => {
+                  const valor = e.target.value
+                  setErro('')
+                  if (/[^0-9.\-\s]/.test(valor)) {
+                    setCpfErro('Use somente os números do CPF.')
+                    return
+                  }
+                  if (somenteNumeros(valor).length > 11) {
+                    setCpfErro('O CPF deve ter exatamente 11 dígitos.')
+                    return
+                  }
+                  setCpf(formatarCPF(valor))
+                  setCpfErro('')
+                }}
+                onBlur={() => setCpfErro(erroCPF(cpf) ?? '')}
+                aria-describedby={cpfErro ? 'ajuda-cpf erro-cpf' : 'ajuda-cpf'}
+                aria-invalid={Boolean(cpfErro)}
                 className="w-full p-2.5 border bg-transparent outline-none text-xs"
-                style={{ borderColor: 'var(--border)' }}
+                style={{ borderColor: cpfErro ? '#ef4444' : 'var(--border)' }}
               />
               <p id="ajuda-cpf" className="mt-1 text-[9px] text-foreground-muted">11 números • pontos e traço são adicionados automaticamente</p>
+              {cpfErro && <p id="erro-cpf" role="alert" className="mt-1 text-[10px] font-bold text-red-500">{cpfErro}</p>}
             </div>
             <div>
               <label className="block text-[10px] uppercase font-bold mb-1">RG / CIN (Opcional)</label>

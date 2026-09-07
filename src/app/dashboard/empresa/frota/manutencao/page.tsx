@@ -53,6 +53,11 @@ interface RegistroManutencao {
   arquivado: boolean
 }
 
+const formatarMesAno = (periodo: string) => {
+  const [ano, mes] = periodo.split('-').map(Number)
+  return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date(ano, mes - 1, 1))
+}
+
 function ManutencaoContent() {
   const { primary, primaryIsRed, semanticColors } = useTheme()
   const searchParams = useSearchParams()
@@ -80,6 +85,7 @@ function ManutencaoContent() {
 
   const [indexSelecionado, setIndexSelecionado] = useState(0)
   const [historico, setHistorico] = useState<RegistroManutencao[]>([])
+  const [periodoHistorico, setPeriodoHistorico] = useState(dataHoje.slice(0, 7))
 
   useEffect(() => {
     queueMicrotask(() => setMontado(true))
@@ -91,6 +97,13 @@ function ManutencaoContent() {
 
   const veiculoAtivo = veiculos[indexSelecionado] || veiculos[0]
   const manutencoesDoVeiculo = historico.filter(h => h.veiculoPlaca === veiculoAtivo.placa)
+  const periodosDisponiveis = Array.from(new Set([
+    dataHoje.slice(0, 7),
+    ...manutencoesDoVeiculo.map(manutencao => manutencao.dataAgendada.slice(0, 7)),
+  ])).sort((a, b) => b.localeCompare(a))
+  const manutencoesFiltradas = periodoHistorico === 'TODOS'
+    ? manutencoesDoVeiculo
+    : manutencoesDoVeiculo.filter(manutencao => manutencao.dataAgendada.startsWith(periodoHistorico))
   const manutencoesOperacionaisDoVeiculo = manutencoesDoVeiculo.filter(h => !h.arquivado)
   const totalManutencoesArquivadas = manutencoesDoVeiculo.length - manutencoesOperacionaisDoVeiculo.length
   const custoTotalVeiculo = manutencoesDoVeiculo.filter(m => m.status === 'CONCLUIDA').reduce((acc, item) => acc + item.custo, 0)
@@ -121,6 +134,7 @@ function ManutencaoContent() {
     const novoRegistro = await response.json()
     if (!response.ok) { setFeedbackTone('error'); return setFeedback(novoRegistro.erro || 'Não foi possível salvar a manutenção.') }
     setHistorico(prev => [novoRegistro, ...prev])
+    setPeriodoHistorico(novoRegistro.dataAgendada.slice(0, 7))
     sinalizarAtualizacaoDashboardEmpresa()
     setModalInclusaoOpen(false)
     setFormManutencao({ dataAgendada: dataHoje, tipo: 'PREVENTIVA', pecas: '', custo: '', kmAtual: '' })
@@ -391,8 +405,27 @@ function ManutencaoContent() {
         
         {/* LISTA DE MANUTENÇÕES (ESQUERDA) */}
         <div className="xl:col-span-2 border overflow-hidden relative flex flex-col" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
-          <div className="p-4 border-b font-bold text-xs uppercase flex justify-between items-center" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex flex-col gap-3 border-b p-4 font-bold text-xs uppercase sm:flex-row sm:items-end sm:justify-between" style={{ borderColor: 'var(--border)' }}>
             <span className="flex items-center gap-2"><History size={14} style={{ color: primary }}/> Histórico de Intervenções</span>
+            <div className="flex flex-col gap-2 sm:items-end">
+              <label className="text-[9px] font-bold uppercase tracking-widest text-foreground-muted">
+                <span className="mb-1 block">Período da manutenção</span>
+                <select
+                  value={periodoHistorico}
+                  onChange={(event) => setPeriodoHistorico(event.target.value)}
+                  className="min-h-10 w-full min-w-52 border bg-background px-3 text-[10px] font-bold uppercase text-foreground outline-none sm:w-auto"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  <option value="TODOS">Todo o histórico</option>
+                  {periodosDisponiveis.map(periodo => (
+                    <option key={periodo} value={periodo}>{formatarMesAno(periodo)}</option>
+                  ))}
+                </select>
+              </label>
+              <span className="text-[9px] font-normal normal-case text-foreground-muted" aria-live="polite">
+                {manutencoesFiltradas.length} de {manutencoesDoVeiculo.length} {manutencoesDoVeiculo.length === 1 ? 'registro' : 'registros'}
+              </span>
+            </div>
           </div>
           <div className="overflow-x-auto flex-1">
             <table className="w-full text-left text-sm whitespace-nowrap">
@@ -408,14 +441,19 @@ function ManutencaoContent() {
               </thead>
               <tbody className="divide-y [&>tr]:border-[var(--border)]" style={{ color: 'var(--foreground)' }}>
                 <AnimatePresence>
-                  {manutencoesDoVeiculo.length === 0 ? (
+                  {manutencoesFiltradas.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-4 py-16 text-center text-sm font-mono text-foreground-muted">
-                        Nenhum registro encontrado. O Raio-X está limpo.
+                        <div>Nenhuma manutenção encontrada {periodoHistorico === 'TODOS' ? 'neste histórico.' : `em ${formatarMesAno(periodoHistorico)}.`}</div>
+                        {periodoHistorico !== 'TODOS' && manutencoesDoVeiculo.length > 0 && (
+                          <button type="button" onClick={() => setPeriodoHistorico('TODOS')} className="mt-3 min-h-10 border px-3 text-[10px] font-bold uppercase hover:text-foreground" style={{ borderColor: 'var(--border)' }}>
+                            Ver todo o histórico
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ) : (
-                    manutencoesDoVeiculo.map((h) => (
+                    manutencoesFiltradas.map((h) => (
                       <motion.tr key={h.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="hover:bg-white/5 transition-colors font-mono">
                         <td className="px-4 py-3 text-xs font-bold">{h.dataAgendada}</td>
                         <td className="px-4 py-3">

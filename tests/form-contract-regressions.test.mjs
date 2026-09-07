@@ -47,7 +47,11 @@ test('CPF, RG/CIN e CNH usam contratos compatíveis com os documentos apresentad
   const route = read('src/app/api/motoristas/route.ts')
   const documentos = read('src/utils/documentos.ts')
 
-  assert.match(page, /setCpf\(formatarCPF\(e\.target\.value\)\)/)
+  assert.match(page, /setCpf\(formatarCPF\(valor\)\)/)
+  assert.match(page, /onBlur=\{\(\) => setCpfErro\(erroCPF\(cpf\) \?\? ''\)\}/)
+  assert.match(page, /aria-invalid=\{Boolean\(cpfErro\)\}/)
+  assert.match(page, /somenteNumeros\(valor\)\.length > 11/)
+  assert.doesNotMatch(page, /maxLength=\{14\}[\s\S]{0,200}placeholder="000\.000\.000-00"/)
   assert.match(page, /setRg\(formatarRG\(e\.target\.value\)\)/)
   assert.match(page, /formData\.set\('cpf', somenteNumeros\(cpf, 11\)\)/)
   assert.match(page, /formData\.set\('rg', normalizarDocumentoIdentidade\(rg\)\)/)
@@ -56,10 +60,12 @@ test('CPF, RG/CIN e CNH usam contratos compatíveis com os documentos apresentad
   assert.match(documentos, /normalizarDocumentoIdentidade/)
   assert.match(documentos, /normalizarRegistroCNH/)
   assert.match(documentos, /cpfValido/)
+  assert.match(documentos, /export function erroCPF/)
   assert.match(route, /cpf: z\.string\(\)\.trim\(\)\.regex\(\/\^\\d\{11\}\$\//)
   assert.match(route, /rg: z\.string\(\)\.trim\(\)\.regex\(\/\^\[A-Z0-9\]\{7,14\}\$\//)
   assert.match(route, /cnh: z\.string\(\)\.trim\(\)\.regex\(\/\^\\d\{9,11\}\$\//)
-  assert.match(route, /valorDocumentoNumericoOpcional\(formData, 'cpf'\)/)
+  assert.match(route, /valorDocumentoNumericoObrigatorio\(formData, 'cpf'\)/)
+  assert.match(route, /campo: typeof issue\?\.path\[0\]/)
   assert.match(route, /valorDocumentoIdentidadeOpcional\(formData, 'rg'\)/)
 })
 
@@ -131,6 +137,17 @@ test('tema vermelho separa marca, criticidade e atenção nas manutenções', ()
   assert.match(temas, /warning: '#38bdf8'/)
   assert.match(manutencao, /stroke: semanticColors\.danger/)
   assert.match(manutencao, /stroke: semanticColors\.warning/)
+})
+
+test('historico de manutencoes pode ser consultado por mes sem alterar os totais do veiculo', () => {
+  const manutencao = read('src/app/dashboard/empresa/frota/manutencao/page.tsx')
+
+  assert.match(manutencao, /const \[periodoHistorico, setPeriodoHistorico\] = useState\(dataHoje\.slice\(0, 7\)\)/)
+  assert.match(manutencao, /manutencoesFiltradas = periodoHistorico === 'TODOS'/)
+  assert.match(manutencao, /custoTotalVeiculo = manutencoesDoVeiculo\.filter/)
+  assert.match(manutencao, />Todo o histórico<\/option>/)
+  assert.match(manutencao, /manutencoesFiltradas\.map/)
+  assert.match(manutencao, /setPeriodoHistorico\(novoRegistro\.dataAgendada\.slice\(0, 7\)\)/)
 })
 
 test('custos e containers permitem consolidar o mes ou o ano em grupos mensais', () => {

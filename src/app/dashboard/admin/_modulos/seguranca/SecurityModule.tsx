@@ -6,6 +6,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 
 type SecurityData = {
   resumo: { sessoesAtivas: number; falhasLogin24h: number; bloqueiosRateLimit24h: number }
+  empresas: Array<{ id: string; nome: string }>
   sessoes: Array<{
     id: string
     criadoEm: string
@@ -39,8 +40,9 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('pt-BR', {
   timeStyle: 'medium',
 }).format(new Date(value))
 
-async function fetchSecurityData(signal?: AbortSignal): Promise<SecurityData> {
-  const response = await fetch('/api/admin/seguranca', { cache: 'no-store', signal })
+async function fetchSecurityData(empresaId: string, signal?: AbortSignal): Promise<SecurityData> {
+  const query = empresaId === 'TODAS' ? '' : `?empresaId=${encodeURIComponent(empresaId)}`
+  const response = await fetch(`/api/admin/seguranca${query}`, { cache: 'no-store', signal })
   const body = await response.json()
   if (!response.ok) throw new Error(body.erro || 'Falha ao carregar os registros de segurança.')
   return body
@@ -51,22 +53,23 @@ export default function SecurityModule() {
   const [data, setData] = useState<SecurityData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [empresaFiltro, setEmpresaFiltro] = useState('TODAS')
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      setData(await fetchSecurityData())
+      setData(await fetchSecurityData(empresaFiltro))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Falha ao carregar os registros de segurança.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [empresaFiltro])
 
   useEffect(() => {
     const controller = new AbortController()
-    void fetchSecurityData(controller.signal)
+    void fetchSecurityData(empresaFiltro, controller.signal)
       .then(setData)
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
@@ -77,7 +80,7 @@ export default function SecurityModule() {
         if (!controller.signal.aborted) setLoading(false)
       })
     return () => controller.abort()
-  }, [])
+  }, [empresaFiltro])
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -87,9 +90,23 @@ export default function SecurityModule() {
           <h1 className="mt-2 text-2xl font-black font-rajdhani sm:text-3xl">CENTRAL DE LOGS</h1>
           <p className="mt-1 text-sm text-foreground-muted">Sessões com atividade nos últimos 5 minutos e trilhas sem dados pessoais sensíveis.</p>
         </div>
-        <button onClick={() => void load()} disabled={loading} className="flex items-center gap-2 border px-3 py-2 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar
-        </button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
+          <label className="min-w-64 text-[10px] font-bold uppercase tracking-widest text-foreground-muted">
+            <span className="mb-1 block">Filtrar logs por empresa</span>
+            <select value={empresaFiltro} onChange={(event) => {
+              setLoading(true)
+              setError('')
+              setEmpresaFiltro(event.target.value)
+            }} className="min-h-10 w-full border bg-background px-3 text-xs text-foreground outline-none" style={{ borderColor: 'var(--border)' }}>
+              <option value="TODAS">Todas as empresas</option>
+              <option value="SISTEMA">Somente RPMTruck / sistema</option>
+              {(data?.empresas || []).map((empresa) => <option key={empresa.id} value={empresa.id}>{empresa.nome}</option>)}
+            </select>
+          </label>
+          <button onClick={() => void load()} disabled={loading} className="flex min-h-10 items-center justify-center gap-2 border px-3 py-2 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar
+          </button>
+        </div>
       </div>
 
       {error && <div className="border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-500">{error}</div>}

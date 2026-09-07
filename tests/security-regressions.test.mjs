@@ -220,3 +220,30 @@ test('alertas globais e individuais são filtrados e lidos pelo usuário autenti
   assert.match(migration, /REVOKE ALL ON TABLE "conversas_suporte"/)
   assert.doesNotMatch(migration, /auditar_mensagens_suporte/)
 })
+
+test('central de seguranca filtra logs no servidor sem confiar no cliente', () => {
+  const route = read('src/app/api/admin/seguranca/route.ts')
+  const securityModule = read('src/app/dashboard/admin/_modulos/seguranca/SecurityModule.tsx')
+
+  assert.match(route, /requireAdminAuth\(request\)/)
+  assert.match(route, /searchParams\.get\('empresaId'\)/)
+  assert.match(route, /z\.union\(\[z\.literal\('SISTEMA'\), z\.string\(\)\.uuid\(\)\]\)/)
+  assert.match(route, /empresaExiste/)
+  assert.match(route, /where: \{ \.\.\.porEmpresa, tipo: 'LOGIN_FALHA'/)
+  assert.match(route, /prisma\.auditoriaLog\.findMany\(\{[\s\S]*where: porEmpresa/)
+  assert.match(securityModule, /Filtrar logs por empresa/)
+  assert.match(securityModule, /encodeURIComponent\(empresaId\)/)
+})
+
+test('atalho de auditoria pode ser ocultado visualmente sem alterar autorizacao', () => {
+  const layout = read('src/app/dashboard/admin/_estrutura/AdminLayout.tsx')
+  const settings = read('src/app/dashboard/admin/_modulos/configuracoes/SettingsModule.jsx')
+  const preferences = read('src/lib/adminSidebarPreferences.ts')
+
+  assert.match(layout, /item\.id !== 'security' \|\| atalhoSegurancaVisivel/)
+  assert.match(layout, /min-h-0 flex-1 overflow-y-auto/)
+  assert.match(settings, /Mostrar logs na sidebar/)
+  assert.match(settings, /somente visual e não altera suas permissões/)
+  assert.match(preferences, /usuario\.id \|\| 'local'/)
+  assert.match(preferences, /ADMIN_SIDEBAR_UPDATED_EVENT/)
+})
