@@ -201,3 +201,15 @@ export function obterModulosPadrao(plano: PlanoTipo): ModuloCodigo[] {
 export function possuiModulo(modulos: readonly string[], modulo: ModuloCodigo): boolean {
   return normalizarModulos(modulos).includes(modulo)
 }
+
+export function obterModulosEfetivosUsuario(
+  modulosEmpresa: readonly string[],
+  modulosUsuario: readonly string[],
+  acessoIntegral = false,
+): ModuloCodigo[] {
+  const contratados = normalizarModulos(modulosEmpresa)
+  if (acessoIntegral) return contratados
+
+  const permitidos = new Set(normalizarModulos(modulosUsuario))
+  return contratados.filter((modulo) => permitidos.has(modulo))
+}

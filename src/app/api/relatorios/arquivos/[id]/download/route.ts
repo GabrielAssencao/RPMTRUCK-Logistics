@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const auth = await requireEmpresaAuth(request)
+  const auth = await requireEmpresaAuth(request, { modulo: 'RELATORIOS' })
   if (auth.error || !auth.session || !auth.empresaId) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }

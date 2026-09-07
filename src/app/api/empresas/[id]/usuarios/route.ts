@@ -21,7 +21,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     // Busca todos os usuários vinculados a esta empresa
     const usuarios = await prisma.usuario.findMany({
       where: {
-        empresaId: id
+        empresaId: id,
+        excluidoEm: null,
       },
       select: {
         id: true,

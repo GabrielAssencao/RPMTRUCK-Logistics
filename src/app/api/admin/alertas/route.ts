@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       },
     }),
     prisma.usuario.findMany({
-      where: { role: { not: 'ADMIN_RPM' } },
+      where: { role: { not: 'ADMIN_RPM' }, ativo: true, excluidoEm: null },
       orderBy: [{ empresa: { nome: 'asc' } }, { nome: 'asc' }],
       take: 1000,
       select: { id: true, nome: true, email: true, role: true, empresa: { select: { nome: true } } },

@@ -34,7 +34,14 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
 
   if (parsed.data.responsavelId) {
     const responsavel = await prisma.usuario.findFirst({
-      where: { id: parsed.data.responsavelId, empresaId: auth.session.empresaId }, select: { id: true },
+      where: {
+        id: parsed.data.responsavelId,
+        empresaId: auth.session.empresaId,
+        ativo: true,
+        excluidoEm: null,
+        OR: [{ role: 'GESTOR_EMPRESA' }, { modulosAcesso: { has: 'TAREFAS' } }],
+      },
+      select: { id: true },
     })
     if (!responsavel) return NextResponse.json({ erro: 'Responsável inválido.' }, { status: 400 })
   }

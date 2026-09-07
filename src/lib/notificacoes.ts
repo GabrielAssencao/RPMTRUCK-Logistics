@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client'
 import type { SessionPayload } from '@/lib/auth'
 import { isAdminRole } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { isModuloCodigo } from '@/utils/planos'
 
 interface CriarNotificacaoInput {
   titulo: string
@@ -48,8 +49,17 @@ export async function notificarUsuariosDaEmpresa(
   roles?: Array<'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'>,
   database: Prisma.TransactionClient | typeof prisma = prisma,
 ) {
+  const filtroModulo: Prisma.UsuarioWhereInput = isModuloCodigo(input.modulo)
+    ? { OR: [{ role: 'GESTOR_EMPRESA' }, { modulosAcesso: { has: input.modulo } }] }
+    : {}
   const usuarios = await database.usuario.findMany({
-    where: { empresaId, ...(roles?.length ? { role: { in: roles } } : {}) },
+    where: {
+      empresaId,
+      ativo: true,
+      excluidoEm: null,
+      ...(roles?.length ? { role: { in: roles } } : {}),
+      ...filtroModulo,
+    },
     select: { id: true },
   })
   if (usuarios.length === 0) return { count: 0 }
@@ -73,7 +83,7 @@ export async function notificarAdmins(
   database: Prisma.TransactionClient | typeof prisma = prisma,
 ) {
   const admins = await database.usuario.findMany({
-    where: { role: 'ADMIN_RPM', empresaId: null },
+    where: { role: 'ADMIN_RPM', empresaId: null, ativo: true, excluidoEm: null },
     select: { id: true },
   })
   if (admins.length === 0) return { count: 0 }

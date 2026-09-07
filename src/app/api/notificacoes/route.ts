@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
   const { usuarioId, veiculoId, ...dados } = parsed.data
   if (usuarioId) {
     const destinatario = await prisma.usuario.findFirst({
-      where: { id: usuarioId, empresaId: empresaAuth.session.empresaId },
+      where: { id: usuarioId, empresaId: empresaAuth.session.empresaId, ativo: true, excluidoEm: null },
       select: { id: true },
     })
     if (!destinatario) return NextResponse.json({ erro: 'Destinatário inválido.' }, { status: 400 })

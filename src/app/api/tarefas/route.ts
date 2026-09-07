@@ -50,7 +50,13 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ erro: 'Dados da tarefa inválidos.' }, { status: 400 })
 
   const responsavel = await prisma.usuario.findFirst({
-    where: { id: parsed.data.responsavelId, empresaId: auth.session.empresaId },
+    where: {
+      id: parsed.data.responsavelId,
+      empresaId: auth.session.empresaId,
+      ativo: true,
+      excluidoEm: null,
+      OR: [{ role: 'GESTOR_EMPRESA' }, { modulosAcesso: { has: 'TAREFAS' } }],
+    },
     select: { id: true, nome: true },
   })
   if (!responsavel) return NextResponse.json({ erro: 'Responsável não pertence à empresa.' }, { status: 400 })

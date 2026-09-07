@@ -228,8 +228,9 @@ model Empresa {
   usuarios_adicionais Int @default(0)
   veiculos_adicionais Int @default(0)
 
-  portal_financeiro_nome String? @map("portal_financeiro_nome")
-  portal_financeiro_url  String? @map("portal_financeiro_url")
+  portal_financeiro_nome String?   @map("portal_financeiro_nome")
+  portal_financeiro_url  String?   @map("portal_financeiro_url")
+  excluidoEm             DateTime? @map("excluido_em")
 
   // Módulos ativos
   modulos String[] @default(["FROTA", "GESTAO", "CONTAS_PAGAR", "NOTIFICACOES"])
@@ -257,6 +258,7 @@ model Empresa {
   contas_pagar            ContaPagar[]
   conversas_suporte       ConversaSuporte[]
 
+  @@index([excluidoEm])
   @@map("empresas")
 }
 
@@ -267,6 +269,9 @@ model Usuario {
   senha_hash              String // Hash de segurança (bcrypt)
   role                    Role      @default(GESTOR_EMPRESA)
   acessoDashboardGeral    Boolean   @default(false) @map("acesso_dashboard_geral")
+  ativo                   Boolean   @default(true)
+  modulosAcesso           String[]  @default([]) @map("modulos_acesso")
+  excluidoEm              DateTime? @map("excluido_em")
   sessaoVersao            Int       @default(0) @map("sessao_versao")
   exigeTrocaSenha         Boolean   @default(false) @map("exige_troca_senha")
   senhaTemporariaExpiraEm DateTime? @map("senha_temporaria_expira_em")
@@ -299,6 +304,7 @@ model Usuario {
   atualizado_em DateTime @updatedAt
 
   @@index([empresaId, role])
+  @@index([empresaId, ativo, excluidoEm])
   @@map("usuarios")
 }
 

@@ -56,6 +56,9 @@ export interface AuthResult {
     role: AppRole
     empresaId: string | null
     acessoDashboardGeral: boolean
+    ativo: boolean
+    modulosAcesso: string[]
+    excluidoEm: Date | null
     sessaoVersao: number
     senhaAlteradaEm: Date
   }
@@ -76,6 +79,9 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
     role: true,
     empresaId: true,
     acessoDashboardGeral: true,
+    ativo: true,
+    modulosAcesso: true,
+    excluidoEm: true,
     sessaoVersao: true,
     senhaAlteradaEm: true,
   } as const
@@ -93,6 +99,8 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
 
   if (
     !usuario ||
+    !usuario.ativo ||
+    usuario.excluidoEm !== null ||
     usuario.email !== tokenSession.email ||
     usuario.role !== tokenSession.role ||
     (usuario.empresaId ?? undefined) !== tokenSession.empresaId ||

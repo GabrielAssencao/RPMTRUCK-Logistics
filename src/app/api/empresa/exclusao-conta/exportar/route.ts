@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     solicitacoes, relatorios, sessoes, eventos, auditoria,
   ] = await Promise.all([
     prisma.empresa.findUnique({ where: { id: empresaId } }),
-    prisma.usuario.findMany({ where: { empresaId }, select: { id: true, nome: true, email: true, role: true, acessoDashboardGeral: true, exigeTrocaSenha: true, criado_em: true, atualizado_em: true } }),
+    prisma.usuario.findMany({ where: { empresaId, excluidoEm: null }, select: { id: true, nome: true, email: true, role: true, acessoDashboardGeral: true, ativo: true, modulosAcesso: true, exigeTrocaSenha: true, criado_em: true, atualizado_em: true } }),
     prisma.veiculo.findMany({ where: { empresaId } }),
     prisma.motorista.findMany({ where: { empresaId } }),
     prisma.localizacao.findMany({ where: { empresaId } }),

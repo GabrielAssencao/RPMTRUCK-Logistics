@@ -28,12 +28,15 @@ export async function GET(request: NextRequest) {
     const usuarios = await prisma.usuario.findMany({
       where: {
         empresaId: session!.empresaId,
+        excluidoEm: null,
       },
       select: {
         id: true,
         nome: true,
         email: true,
         role: true,
+        ativo: true,
+        modulosAcesso: true,
         criado_em: true,
       },
     });

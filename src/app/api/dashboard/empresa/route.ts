@@ -41,15 +41,26 @@ export async function GET(request: NextRequest) {
   const empresaId = auth.session.empresaId
   const hoje = new Date(Date.UTC(agora.getFullYear(), agora.getMonth(), agora.getDate()))
   const limiteContasProximas = new Date(hoje.getTime() + 4 * 86_400_000)
+  const frotaHabilitada = auth.empresa.modulos.includes('FROTA')
+  const gestaoHabilitada = auth.empresa.modulos.includes('GESTAO')
+  const tarefasHabilitadas = auth.empresa.modulos.includes('TAREFAS')
 
-  const operadoresPromise = gestor
+  const operadoresPromise = gestor && tarefasHabilitadas
     ? prisma.usuario.findMany({
-        where: { empresaId, role: { in: ['GESTOR_EMPRESA', 'OPERADOR'] } },
+        where: {
+          empresaId,
+          ativo: true,
+          excluidoEm: null,
+          OR: [
+            { role: 'GESTOR_EMPRESA' },
+            { role: 'OPERADOR', modulosAcesso: { has: 'TAREFAS' } },
+          ],
+        },
         select: { id: true, nome: true, role: true },
         orderBy: { nome: 'asc' as const },
       })
     : Promise.resolve([])
-  const contasPagarHabilitadas = gestor && auth.empresa.modulos.includes('CONTAS_PAGAR')
+  const contasPagarHabilitadas = auth.empresa.modulos.includes('CONTAS_PAGAR')
   const resumoContasPagarPromise = contasPagarHabilitadas
     ? Promise.all([
         prisma.contaPagar.findMany({
@@ -91,45 +102,57 @@ export async function GET(request: NextRequest) {
     tarefasOperacionaisAtivas,
     resumoContasPagar,
   ] = await Promise.all([
-    prisma.veiculo.groupBy({
-      by: ['status'],
-      where: { empresaId },
-      _count: { _all: true },
-      _sum: { quilometragem: true },
-    }),
-    prisma.custo.findMany({
-      where: { empresaId, data: { gte: inicioCustos } },
-      select: { data: true, valor: true, categoria: true },
-    }),
-    prisma.historicoVeiculo.findMany({
-      where: { empresaId, status: 'PENDENTE', relatorioArquivoId: null },
-      include: { veiculo: { select: { modelo: true, placa: true } } },
-      orderBy: { data_agendada: 'asc' },
-      take: 20,
-    }),
-    prisma.motorista.findMany({
-      where: { empresaId, validade: { lte: limiteCnh } },
-      select: { id: true, nome: true, validade: true },
-      orderBy: { validade: 'asc' },
-      take: 20,
-    }),
+    frotaHabilitada
+      ? prisma.veiculo.groupBy({
+          by: ['status'],
+          where: { empresaId },
+          _count: { _all: true },
+          _sum: { quilometragem: true },
+        })
+      : Promise.resolve([]),
+    gestaoHabilitada
+      ? prisma.custo.findMany({
+          where: { empresaId, data: { gte: inicioCustos } },
+          select: { data: true, valor: true, categoria: true },
+        })
+      : Promise.resolve([]),
+    frotaHabilitada
+      ? prisma.historicoVeiculo.findMany({
+          where: { empresaId, status: 'PENDENTE', relatorioArquivoId: null },
+          include: { veiculo: { select: { modelo: true, placa: true } } },
+          orderBy: { data_agendada: 'asc' },
+          take: 20,
+        })
+      : Promise.resolve([]),
+    frotaHabilitada
+      ? prisma.motorista.findMany({
+          where: { empresaId, validade: { lte: limiteCnh } },
+          select: { id: true, nome: true, validade: true },
+          orderBy: { validade: 'asc' },
+          take: 20,
+        })
+      : Promise.resolve([]),
     operadoresPromise,
-    prisma.tarefa.count({
-      where: {
-        empresaId,
-        status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
-        ...(gestor ? {} : { responsavelId: auth.session.userId }),
-      },
-    }),
-    prisma.tarefa.findMany({
-      where: {
-        empresaId,
-        status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
-        origem_id: { not: null },
-      },
-      select: { origem_id: true },
-      take: 500,
-    }),
+    tarefasHabilitadas
+      ? prisma.tarefa.count({
+          where: {
+            empresaId,
+            status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
+            ...(gestor ? {} : { responsavelId: auth.session.userId }),
+          },
+        })
+      : Promise.resolve(0),
+    frotaHabilitada
+      ? prisma.tarefa.findMany({
+          where: {
+            empresaId,
+            status: { in: ['PENDENTE', 'EM_ANDAMENTO'] },
+            origem_id: { not: null },
+          },
+          select: { origem_id: true },
+          take: 500,
+        })
+      : Promise.resolve([]),
     resumoContasPagarPromise,
   ])
 

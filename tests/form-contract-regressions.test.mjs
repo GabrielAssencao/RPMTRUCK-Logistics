@@ -7,6 +7,13 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const read = (path) => readFileSync(resolve(root, path), 'utf8')
 
+test('login aponta a solicitação de acesso para a rota existente', () => {
+  const login = read('src/app/auth/login/page.tsx')
+
+  assert.match(login, /href="\/auth\/solicitar-acesso"/)
+  assert.doesNotMatch(login, /href="\/solicitar-acesso"/)
+})
+
 test('cadastro de veículo envia somente o contrato aceito pela API', () => {
   const page = read('src/app/dashboard/empresa/frota/page.tsx')
   const handler = page.match(/const handleSalvarVeiculo[\s\S]*?\/\/ 🗑️ EXCLUSÃO/)?.[0] ?? ''
