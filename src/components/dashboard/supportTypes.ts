@@ -30,3 +30,9 @@ export interface SupportAllowance {
   limite: number
   prazoRespostaHoras: number
 }
+
+export interface SupportAdminSummary {
+  ticketsAtivos: number
+  mensagensNaoLidas: number
+  extrasNoMes: number
+}

@@ -157,6 +157,10 @@ As principais decisões de segurança são:
   referência;
 - AES-256-GCM com chave derivada por empresa/campo e índices cegos HMAC;
 - auditoria transacional com identidade confiável e eventos pseudonimizados;
+- retenção automática diária: eventos de segurança por 6 meses, auditoria ativa
+  por 1, 2 ou 3 anos conforme o plano, trilhas do sistema por 12 meses,
+  cadastros anonimizados de contas excluídas por 6 meses e comprovantes mínimos
+  de exclusão por 5 anos;
 - buckets privados, URLs assinadas curtas e validação real de uploads;
 - RLS habilitada, privilégios revogados de `anon` e `authenticated` e Data API
   desativada para as tabelas internas.
@@ -164,6 +168,10 @@ As principais decisões de segurança são:
 O frontend nunca é uma barreira de segurança. Não use a chave
 `SUPABASE_SECRET_KEY`, credenciais do banco ou chaves de criptografia em
 variáveis `NEXT_PUBLIC_*`.
+
+A Vercel chama diariamente `/api/internal/retencao`. Configure `CRON_SECRET`
+com pelo menos 32 caracteres no ambiente de produção; a rota recusa execução
+quando o segredo está ausente ou não corresponde ao cabeçalho de autorização.
 
 Para reportar uma vulnerabilidade, consulte [SECURITY.md](SECURITY.md).
 

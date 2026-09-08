@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
   const ativoDesde = new Date(agora.getTime() - 5 * 60 * 1000)
   const ultimas24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000)
 
-  const [sessoes, eventos, auditoria, falhasLogin, bloqueiosRateLimit, sessoesAtivas, empresas] = await Promise.all([
+  const [sessoes, eventos, auditoria, exclusoes, falhasLogin, bloqueiosRateLimit, sessoesAtivas, empresas] = await Promise.all([
     prisma.sessaoUsuario.findMany({
       where: { ...porEmpresa, revogadaEm: null, expiraEm: { gt: agora }, ultimaAtividade: { gte: ativoDesde } },
       orderBy: { ultimaAtividade: 'desc' },
@@ -83,10 +83,28 @@ export async function GET(request: NextRequest) {
         criadoEm: true,
       },
     }),
+    filtro.data === 'SISTEMA'
+      ? Promise.resolve([])
+      : prisma.exclusaoEmpresaJob.findMany({
+          where: filtro.data ? { empresaId: filtro.data } : undefined,
+          orderBy: { criadoEm: 'desc' },
+          take: 50,
+          select: {
+            id: true,
+            protocolo: true,
+            empresaId: true,
+            status: true,
+            resumo: true,
+            politicaVersao: true,
+            criadoEm: true,
+            concluidoEm: true,
+            reterAte: true,
+          },
+        }),
     prisma.eventoSeguranca.count({ where: { ...porEmpresa, tipo: 'LOGIN_FALHA', criadoEm: { gte: ultimas24h } } }),
     prisma.eventoSeguranca.count({ where: { ...porEmpresa, tipo: 'RATE_LIMIT', criadoEm: { gte: ultimas24h } } }),
     prisma.sessaoUsuario.count({ where: { ...porEmpresa, revogadaEm: null, expiraEm: { gt: agora }, ultimaAtividade: { gte: ativoDesde } } }),
-    prisma.empresa.findMany({ orderBy: { nome: 'asc' }, select: { id: true, nome: true } }),
+    prisma.empresa.findMany({ orderBy: { nome: 'asc' }, select: { id: true, nome: true, excluidoEm: true } }),
   ])
 
   const userIds = [...new Set(auditoria.map((item) => item.usuarioId).filter((id): id is string => Boolean(id)))]
@@ -97,11 +115,23 @@ export async function GET(request: NextRequest) {
   ])
   const usuariosPorId = new Map(usuariosAuditoria.map((item) => [item.id, item]))
   const empresasPorId = new Map(empresasAuditoria.map((item) => [item.id, item]))
+  const exclusaoPorEmpresa = new Map<string, (typeof exclusoes)[number]>()
+  for (const exclusao of exclusoes) {
+    if (!exclusaoPorEmpresa.has(exclusao.empresaId)) exclusaoPorEmpresa.set(exclusao.empresaId, exclusao)
+  }
+
+  const identificarEmpresa = (empresa: { id: string; nome: string; excluidoEm?: Date | null }) => {
+    if (!empresa.excluidoEm && empresa.nome !== 'Empresa removida') return { id: empresa.id, nome: empresa.nome }
+    const exclusao = exclusaoPorEmpresa.get(empresa.id)
+    const referencia = exclusao?.protocolo || `ID ${empresa.id.slice(0, 8)}`
+    const data = empresa.excluidoEm?.toISOString().slice(0, 10)
+    return { id: empresa.id, nome: `Empresa removida · ${referencia}${data ? ` · ${data}` : ''}` }
+  }
 
   return NextResponse.json(
     {
       resumo: { sessoesAtivas, falhasLogin24h: falhasLogin, bloqueiosRateLimit24h: bloqueiosRateLimit },
-      empresas,
+      empresas: empresas.map(identificarEmpresa),
       sessoes,
       eventos: eventos.map((evento) => ({
         ...evento,
@@ -111,7 +141,21 @@ export async function GET(request: NextRequest) {
       auditoria: auditoria.map((item) => ({
         ...item,
         usuario: item.usuarioId ? usuariosPorId.get(item.usuarioId) || null : null,
-        empresa: item.empresaId ? empresasPorId.get(item.empresaId) || null : null,
+        empresa: item.empresaId
+          ? empresasPorId.has(item.empresaId)
+            ? identificarEmpresa(empresasPorId.get(item.empresaId)!)
+            : null
+          : null,
+      })),
+      exclusoes: exclusoes.map((exclusao) => ({
+        id: exclusao.id,
+        protocolo: exclusao.protocolo,
+        status: exclusao.status,
+        resumo: exclusao.resumo,
+        politicaVersao: exclusao.politicaVersao,
+        criadoEm: exclusao.criadoEm,
+        concluidoEm: exclusao.concluidoEm,
+        reterAte: exclusao.reterAte,
       })),
     },
     { headers: { 'Cache-Control': 'private, no-store' } },

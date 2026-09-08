@@ -11,6 +11,12 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { CONTAS_PAGAR_BUCKET } from '@/lib/financeiro/contasPagar'
 import { MOTORISTAS_FOTOS_BUCKET } from '@/lib/motoristaFotos'
 import { randomUUID } from 'node:crypto'
+import {
+  adicionarAnosUtc,
+  ANOS_RETENCAO_COMPROVANTE_EXCLUSAO,
+  gerarProtocoloExclusao,
+  POLITICA_RETENCAO_VERSAO,
+} from '@/lib/retencao'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -89,12 +95,36 @@ export async function POST(request: NextRequest) {
       .map((caminho) => ({ bucket: MOTORISTAS_FOTOS_BUCKET, caminho })),
   ]
 
+  const [usuariosTotal, veiculosTotal, motoristasTotal, registrosOperacionais, ticketsTotal] = await Promise.all([
+    prisma.usuario.count({ where: { empresaId } }),
+    prisma.veiculo.count({ where: { empresaId } }),
+    prisma.motorista.count({ where: { empresaId } }),
+    Promise.all([
+      prisma.container.count({ where: { empresaId } }),
+      prisma.custo.count({ where: { empresaId } }),
+      prisma.historicoVeiculo.count({ where: { empresaId } }),
+      prisma.tarefa.count({ where: { empresaId } }),
+      prisma.contaPagar.count({ where: { empresaId } }),
+    ]).then((totais) => totais.reduce((total, quantidade) => total + quantidade, 0)),
+    prisma.conversaSuporte.count({ where: { empresaId } }),
+  ])
+
   const job = await prisma.exclusaoEmpresaJob.create({
     data: {
+      protocolo: gerarProtocoloExclusao(),
       empresaId,
       solicitadoPorId: auth.session.userId,
       status: 'PREPARADO',
       arquivos: arquivos as unknown as Prisma.InputJsonValue,
+      politicaVersao: POLITICA_RETENCAO_VERSAO,
+      resumo: {
+        usuarios: usuariosTotal,
+        veiculos: veiculosTotal,
+        motoristas: motoristasTotal,
+        registrosOperacionais,
+        tickets: ticketsTotal,
+        arquivosPrivados: arquivos.length,
+      },
     },
   })
   const agora = new Date()
@@ -177,9 +207,16 @@ export async function POST(request: NextRequest) {
   let storagePendente = false
   try {
     await removerArquivos(arquivos)
+    const concluidoEm = new Date()
     await prisma.exclusaoEmpresaJob.update({
       where: { id: job.id },
-      data: { status: 'CONCLUIDO', arquivos: [], erro: null, concluidoEm: new Date() },
+      data: {
+        status: 'CONCLUIDO',
+        arquivos: [],
+        erro: null,
+        concluidoEm,
+        reterAte: adicionarAnosUtc(concluidoEm, ANOS_RETENCAO_COMPROVANTE_EXCLUSAO),
+      },
     })
   } catch (error) {
     storagePendente = true

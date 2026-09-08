@@ -4,16 +4,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PrioridadeTicketSuporte, StatusTicketSuporte } from '@prisma/client'
 import { Headset, RefreshCw } from 'lucide-react'
 import ChatWorkspace from '@/components/dashboard/ChatWorkspace'
-import type { SupportTicket } from '@/components/dashboard/supportTypes'
+import type { SupportAdminSummary, SupportTicket } from '@/components/dashboard/supportTypes'
 import { useTheme } from '@/contexts/ThemeContext'
 import { CATEGORIA_TICKET_LABEL, PRIORIDADE_TICKET_LABEL, STATUS_TICKET_LABEL } from '@/lib/suporteConfig'
 
 const STATUS = ['ABERTO', 'EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE', 'RESOLVIDO', 'FECHADO'] as const
 const PRIORIDADES = ['BAIXA', 'NORMAL', 'ALTA', 'URGENTE'] as const
+const RESUMO_INICIAL: SupportAdminSummary = { ticketsAtivos: 0, mensagensNaoLidas: 0, extrasNoMes: 0 }
 
 export default function ChatModule({ initialTicketId = null }: { initialTicketId?: string | null }) {
   const { primary } = useTheme()
   const [tickets, setTickets] = useState<SupportTicket[]>([])
+  const [resumo, setResumo] = useState<SupportAdminSummary>(RESUMO_INICIAL)
   const [selecionado, setSelecionado] = useState<SupportTicket | null>(null)
   const [filtro, setFiltro] = useState<'ATIVOS' | 'TODOS' | 'EXTRAS'>('ATIVOS')
   const [loading, setLoading] = useState(true)
@@ -29,6 +31,7 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
       if (!response.ok) throw new Error(body.erro || 'Não foi possível carregar os tickets.')
       const lista = Array.isArray(body.tickets) ? body.tickets as SupportTicket[] : []
       setTickets(lista)
+      setResumo(body.resumo ?? RESUMO_INICIAL)
       const alvo = ticketInicial.current
       ticketInicial.current = null
       setSelecionado((atual) => (alvo ? lista.find((item) => item.id === alvo) : null)
@@ -80,12 +83,9 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
     return true
   }), [filtro, tickets])
 
-  const naoLidos = tickets.reduce((total, ticket) => total + ticket.naoLidas, 0)
-  const extras = tickets.filter((ticket) => ticket.cobravelExtra).length
-
   return <div className="space-y-5">
     <header className="flex flex-col justify-between gap-4 border-b pb-5 sm:flex-row sm:items-end" style={{ borderColor: 'var(--border)' }}><div><p className="text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: primary }}>Central de atendimento</p><h1 className="mt-1 text-2xl font-black font-rajdhani sm:text-3xl">TICKETS DAS EMPRESAS</h1><p className="mt-1 text-sm text-foreground-muted">Triagem, respostas, prioridade e controle de atendimentos adicionais.</p></div><button type="button" onClick={() => void carregar()} disabled={loading} aria-label="Atualizar tickets" className="min-h-11 min-w-11 border p-3 disabled:opacity-50" style={{ borderColor: 'var(--border)' }}><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button></header>
-    <div className="grid gap-3 sm:grid-cols-3"><Resumo label="Tickets ativos" value={String(tickets.filter((ticket) => ticket.status !== 'RESOLVIDO' && ticket.status !== 'FECHADO').length)} /><Resumo label="Mensagens não lidas" value={String(naoLidos)} /><Resumo label="Atendimentos extras" value={String(extras)} /></div>
+    <div className="grid gap-3 sm:grid-cols-3"><Resumo label="Tickets ativos" value={String(resumo.ticketsAtivos)} /><Resumo label="Mensagens não lidas" value={String(resumo.mensagensNaoLidas)} /><Resumo label="Extras no mês" value={String(resumo.extrasNoMes)} /></div>
     {error && <p role="alert" className="border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-500">{error}</p>}
     <div className="flex flex-wrap gap-2">{(['ATIVOS', 'TODOS', 'EXTRAS'] as const).map((item) => <button key={item} type="button" onClick={() => setFiltro(item)} className="border px-3 py-2 text-[10px] font-black uppercase" style={{ borderColor: filtro === item ? primary : 'var(--border)', color: filtro === item ? primary : 'var(--foreground-muted)' }}>{item}</button>)}</div>
     <div className="grid min-h-[600px] gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">

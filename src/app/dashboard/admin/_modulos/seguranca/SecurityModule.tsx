@@ -33,6 +33,16 @@ type SecurityData = {
     usuario: { nome: string; email: string } | null
     empresa: { nome: string } | null
   }>
+  exclusoes: Array<{
+    id: string
+    protocolo: string
+    status: string
+    resumo: Record<string, number> | null
+    politicaVersao: string
+    criadoEm: string
+    concluidoEm: string | null
+    reterAte: string | null
+  }>
 }
 
 const formatDate = (value: string) => new Intl.DateTimeFormat('pt-BR', {
@@ -88,7 +98,7 @@ export default function SecurityModule() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: primary }}>Segurança e auditoria</p>
           <h1 className="mt-2 text-2xl font-black font-rajdhani sm:text-3xl">CENTRAL DE LOGS</h1>
-          <p className="mt-1 text-sm text-foreground-muted">Sessões com atividade nos últimos 5 minutos e trilhas sem dados pessoais sensíveis.</p>
+          <p className="mt-1 text-sm text-foreground-muted">Sessões recentes, trilhas com retenção controlada e comprovantes mínimos de exclusão.</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
           <label className="min-w-64 text-[10px] font-bold uppercase tracking-widest text-foreground-muted">
@@ -131,11 +141,20 @@ export default function SecurityModule() {
         formatDate(item.criadoEm),
       ])} />
 
-      <LogTable title="Trilha imutável de auditoria" empty="Nenhuma ação auditada." columns={['Ação', 'Recurso', 'Responsável', 'Data']} rows={(data?.auditoria || []).map((item) => [
+      <LogTable title="Auditoria operacional · retenção de 1 a 3 anos conforme o plano" empty="Nenhuma ação auditada." columns={['Ação', 'Recurso', 'Responsável', 'Data']} rows={(data?.auditoria || []).map((item) => [
         `${item.acao} · ${item.origem}`,
         `${item.tabela}${item.registroId ? ` · ${item.registroId.slice(0, 8)}` : ''}`,
         item.usuario?.nome || item.empresa?.nome || 'Processo do sistema',
         formatDate(item.criadoEm),
+      ])} />
+
+      <LogTable title="Histórico de exclusões · comprovante mínimo" empty="Nenhuma exclusão registrada." columns={['Protocolo', 'Status', 'Resumo', 'Conclusão / retenção']} rows={(data?.exclusoes || []).map((item) => [
+        item.protocolo,
+        item.status.replaceAll('_', ' '),
+        item.resumo
+          ? Object.entries(item.resumo).map(([chave, valor]) => `${chave}: ${valor}`).join(' · ')
+          : 'Registro legado',
+        `${item.concluidoEm ? formatDate(item.concluidoEm) : `Solicitado em ${formatDate(item.criadoEm)}`}${item.reterAte ? ` · até ${formatDate(item.reterAte)}` : ''} · política ${item.politicaVersao}`,
       ])} />
     </div>
   )
