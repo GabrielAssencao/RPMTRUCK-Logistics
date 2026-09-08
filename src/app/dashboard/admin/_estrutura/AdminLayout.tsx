@@ -91,7 +91,10 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
       if (!response.ok) return
       const body = await response.json()
       const tickets = Array.isArray(body.tickets) ? body.tickets : []
-      setTicketsNaoLidos(tickets.reduce((total: number, ticket: { naoLidas?: number }) => total + (ticket.naoLidas ?? 0), 0))
+      const totalNaoLidas = typeof body.resumo?.mensagensNaoLidas === 'number'
+        ? body.resumo.mensagensNaoLidas
+        : tickets.reduce((total: number, ticket: { naoLidas?: number }) => total + (ticket.naoLidas ?? 0), 0)
+      setTicketsNaoLidos(totalNaoLidas)
     } catch {
       // Falha do contador não impede a abertura da central.
     }

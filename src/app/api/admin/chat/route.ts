@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { inicioCompetencia } from '@/lib/suporte'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,10 +13,12 @@ export async function GET(request: NextRequest) {
   const limited = await applyRateLimit(request, `admin-chat:${auth.session.userId}`, RATE_LIMITS.CHAT_READ.limit, RATE_LIMITS.CHAT_READ.windowMs)
   if (limited) return limited
 
-  const tickets = await prisma.conversaSuporte.findMany({
-    orderBy: { atualizado_em: 'desc' },
-    take: 200,
-    select: {
+  const competenciaAtual = inicioCompetencia()
+  const [tickets, ticketsAtivos, mensagensNaoLidas, extrasNoMes] = await Promise.all([
+    prisma.conversaSuporte.findMany({
+      orderBy: { atualizado_em: 'desc' },
+      take: 200,
+      select: {
       id: true,
       protocolo: true,
       assunto: true,
@@ -42,8 +45,22 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-    },
-  })
+      },
+    }),
+    prisma.conversaSuporte.count({
+      where: { status: { notIn: ['RESOLVIDO', 'FECHADO'] } },
+    }),
+    prisma.mensagemSuporte.count({
+      where: {
+        lida_em: null,
+        tipo: 'USUARIO',
+        autor: { role: { not: 'ADMIN_RPM' } },
+      },
+    }),
+    prisma.conversaSuporte.count({
+      where: { competencia: competenciaAtual, cobravelExtra: true },
+    }),
+  ])
 
   return NextResponse.json({
     tickets: tickets.map(({ _count, mensagens, ...ticket }) => ({
@@ -51,5 +68,6 @@ export async function GET(request: NextRequest) {
       ultimaMensagem: mensagens[0] || null,
       naoLidas: _count.mensagens,
     })),
+    resumo: { ticketsAtivos, mensagensNaoLidas, extrasNoMes },
   }, { headers: { 'Cache-Control': 'private, no-store' } })
 }

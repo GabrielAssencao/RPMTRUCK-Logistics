@@ -902,17 +902,22 @@ model AuditoriaLog {
 
 model ExclusaoEmpresaJob {
   id              String    @id @default(uuid())
+  protocolo       String    @unique
   empresaId       String    @map("empresa_id")
   solicitadoPorId String    @map("solicitado_por_id")
   status          String    @default("PREPARADO")
   arquivos        Json
+  resumo          Json?
   erro            String?
+  politicaVersao  String    @default("2026-09") @map("politica_versao")
+  reterAte        DateTime? @map("reter_ate")
   criadoEm        DateTime  @default(now()) @map("criado_em")
   atualizadoEm    DateTime  @updatedAt @map("atualizado_em")
   concluidoEm     DateTime? @map("concluido_em")
 
   @@index([status, atualizadoEm])
   @@index([empresaId, criadoEm])
+  @@index([status, reterAte])
   @@map("exclusoes_empresa_jobs")
 }
 
