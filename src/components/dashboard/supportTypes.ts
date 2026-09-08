@@ -1,5 +1,6 @@
 import type {
   CategoriaTicketSuporte,
+  ClassificacaoCobrancaTicket,
   PlanoTipo,
   PrioridadeTicketSuporte,
   StatusTicketSuporte,
@@ -15,6 +16,8 @@ export interface SupportTicket {
   cobravelExtra: boolean
   franquiaNoMomento: number
   ordemNaCompetencia: number
+  classificacaoCobranca: ClassificacaoCobrancaTicket
+  classificadoEm?: string | null
   criado_em: string
   atualizado_em: string
   primeiraRespostaEm?: string | null
@@ -35,4 +38,5 @@ export interface SupportAdminSummary {
   ticketsAtivos: number
   mensagensNaoLidas: number
   extrasNoMes: number
+  bugsConfirmadosNoMes: number
 }

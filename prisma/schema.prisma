@@ -149,6 +149,11 @@ enum CategoriaTicketSuporte {
   FINANCEIRO
 }
 
+enum ClassificacaoCobrancaTicket {
+  ATENDIMENTO
+  BUG_SISTEMA_CONFIRMADO
+}
+
 enum StatusTicketSuporte {
   ABERTO
   EM_ATENDIMENTO
@@ -296,6 +301,7 @@ model Usuario {
   contas_pagar_criadas              ContaPagar[]            @relation("ContasPagarCriadasPor")
   contas_pagar_baixadas             ContaPagar[]            @relation("ContasPagarBaixadasPor")
   mensagens_suporte                 MensagemSuporte[]
+  tickets_suporte_classificados     ConversaSuporte[]       @relation("TicketsSuporteClassificadosPor")
   alertas_criados                   AlertaSistema[]         @relation("AlertasCriados")
   alertas_destinados                AlertaSistema[]         @relation("AlertasDestinados")
   alertas_lidos                     AlertaLeitura[]
@@ -518,23 +524,28 @@ model Notificacao {
 }
 
 model ConversaSuporte {
-  id                 String                  @id @default(uuid())
-  protocolo          String                  @unique
-  assunto            String
-  categoria          CategoriaTicketSuporte
-  status             StatusTicketSuporte     @default(ABERTO)
-  prioridade         PrioridadeTicketSuporte @default(NORMAL)
-  cobravelExtra      Boolean                 @default(false) @map("cobravel_extra")
-  franquiaNoMomento  Int                     @map("franquia_no_momento")
-  ordemNaCompetencia Int                     @map("ordem_na_competencia")
-  competencia        DateTime                @db.Date
-  primeiraRespostaEm DateTime?               @map("primeira_resposta_em")
-  encerradoEm        DateTime?               @map("encerrado_em")
+  id                    String                      @id @default(uuid())
+  protocolo             String                      @unique
+  assunto               String
+  categoria             CategoriaTicketSuporte
+  status                StatusTicketSuporte         @default(ABERTO)
+  prioridade            PrioridadeTicketSuporte     @default(NORMAL)
+  cobravelExtra         Boolean                     @default(false) @map("cobravel_extra")
+  franquiaNoMomento     Int                         @map("franquia_no_momento")
+  ordemNaCompetencia    Int                         @map("ordem_na_competencia")
+  competencia           DateTime                    @db.Date
+  classificacaoCobranca ClassificacaoCobrancaTicket @default(ATENDIMENTO) @map("classificacao_cobranca")
+  classificadoEm        DateTime?                   @map("classificado_em")
+  primeiraRespostaEm    DateTime?                   @map("primeira_resposta_em")
+  encerradoEm           DateTime?                   @map("encerrado_em")
+
+  classificadoPorId String?  @map("classificado_por_id")
+  classificadoPor   Usuario? @relation("TicketsSuporteClassificadosPor", fields: [classificadoPorId], references: [id], onDelete: SetNull)
 
   empresaId String
   empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
-  mensagens MensagemSuporte[]
+  mensagens    MensagemSuporte[]
   notificacoes Notificacao[]
 
   criado_em     DateTime @default(now())
@@ -542,6 +553,8 @@ model ConversaSuporte {
 
   @@index([empresaId, status, atualizado_em])
   @@index([empresaId, competencia])
+  @@index([empresaId, competencia, classificacaoCobranca])
+  @@index([classificadoPorId])
   @@index([atualizado_em])
   @@map("conversas_suporte")
 }
@@ -643,7 +656,7 @@ model Container {
   frete               Float    @default(0)
   comissao            Float    @default(0)
   percentual_comissao Float    @default(10)
-  comissao_ativa       Boolean  @default(true)
+  comissao_ativa      Boolean  @default(true)
   status              String   @default("AGENDADO")
   observacoes         String?
   itens_conteudo      Json?
@@ -693,10 +706,10 @@ model MovimentacaoContainerPermanente {
   criado_em            DateTime  @default(now())
   atualizado_em        DateTime  @updatedAt
 
+  @@unique([container_origem_id, versao], map: "mov_container_origem_versao_key")
   @@index([empresaId, codigo_container])
   @@index([empresaId, data_operacao])
   @@index([relatorioArquivoId])
-  @@unique([container_origem_id, versao], map: "mov_container_origem_versao_key")
   @@map("movimentacoes_container_permanentes")
 }
 

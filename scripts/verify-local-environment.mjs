@@ -31,6 +31,14 @@ function connectionIdentity(value) {
   }
 }
 
+function connectionUrl(value) {
+  try {
+    return new URL(value)
+  } catch {
+    return null
+  }
+}
+
 function fail(message) {
   console.error(`Ambiente local bloqueado: ${message}`)
   process.exitCode = 1
@@ -73,8 +81,14 @@ if (!existsSync(localPath)) {
     if (mesmaBase || mesmoSupabase) {
       fail('as credenciais locais apontam para o mesmo projeto configurado em produção.')
     } else {
+      const pooledUrl = connectionUrl(local.get('DATABASE_URL'))
+      const directUrl = connectionUrl(local.get('DIRECT_URL'))
       const siteUrl = local.get('NEXT_PUBLIC_SITE_URL')
-      if (!['http://127.0.0.1:5500', 'http://localhost:5500'].includes(siteUrl)) {
+      if (!pooledUrl || pooledUrl.port !== '6543' || pooledUrl.searchParams.get('pgbouncer') !== 'true') {
+        fail('DATABASE_URL deve usar o Transaction Pooler na porta 6543 com pgbouncer=true.')
+      } else if (!directUrl || directUrl.port !== '5432') {
+        fail('DIRECT_URL deve usar a conexão direta ou o Session Pooler na porta 5432.')
+      } else if (!['http://127.0.0.1:5500', 'http://localhost:5500'].includes(siteUrl)) {
         fail('NEXT_PUBLIC_SITE_URL deve usar http://127.0.0.1:5500 ou http://localhost:5500.')
       } else {
         console.log('Ambiente local validado: banco isolado e aplicação autorizada na porta 5500.')

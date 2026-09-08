@@ -10,7 +10,7 @@ function createContentSecurityPolicy(nonce: string) {
     "frame-ancestors 'none'",
     "frame-src https://challenges.cloudflare.com",
     "object-src 'none'",
-    `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://challenges.cloudflare.com${isDevelopment ? " 'unsafe-eval'" : ''}`,
+    `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://va.vercel-scripts.com${isDevelopment ? " 'unsafe-eval'" : ''}`,
     "script-src-attr 'none'",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",

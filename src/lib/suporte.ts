@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { CategoriaTicketSuporte, PlanoTipo } from '@prisma/client'
+import { Prisma, type CategoriaTicketSuporte, type PlanoTipo } from '@prisma/client'
 import { CATEGORIA_TICKET_LABEL, obterPoliticaSuporte } from '@/lib/suporteConfig'
 
 function anoMesSaoPaulo(data: Date) {
@@ -32,6 +32,37 @@ export function calcularCoberturaTicket(plano: PlanoTipo, ticketsJaAbertos: numb
     ordemNaCompetencia,
     cobravelExtra: ordemNaCompetencia > politica.limiteMensal,
   }
+}
+
+export async function recalcularCoberturaCompetencia(
+  tx: Prisma.TransactionClient,
+  empresaId: string,
+  competencia: Date,
+) {
+  await tx.$executeRaw(Prisma.sql`
+    WITH ordenados AS (
+      SELECT
+        "id",
+        "classificacao_cobranca",
+        SUM(CASE WHEN "classificacao_cobranca" = 'ATENDIMENTO' THEN 1 ELSE 0 END)
+          OVER (ORDER BY "criado_em", "id")::integer AS ordem
+      FROM "conversas_suporte"
+      WHERE "empresaId" = ${empresaId}
+        AND "competencia" = ${competencia}
+    )
+    UPDATE "conversas_suporte" AS conversa
+    SET
+      "ordem_na_competencia" = CASE
+        WHEN ordenados."classificacao_cobranca" = 'BUG_SISTEMA_CONFIRMADO' THEN 0
+        ELSE ordenados.ordem
+      END,
+      "cobravel_extra" = CASE
+        WHEN ordenados."classificacao_cobranca" = 'BUG_SISTEMA_CONFIRMADO' THEN false
+        ELSE ordenados.ordem > conversa."franquia_no_momento"
+      END
+    FROM ordenados
+    WHERE conversa."id" = ordenados."id"
+  `)
 }
 
 export function montarRespostaAutomatica(

@@ -40,6 +40,7 @@ jobs:
       - run: npm run test:forms
       - run: npm run test:billing
       - run: npm run test:environment
+      - run: npm run test:encryption
       - run: npm run prisma:validate
       - run: npm run build
       - run: npx playwright install --with-deps chromium

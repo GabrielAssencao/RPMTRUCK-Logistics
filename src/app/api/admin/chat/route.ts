@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   if (limited) return limited
 
   const competenciaAtual = inicioCompetencia()
-  const [tickets, ticketsAtivos, mensagensNaoLidas, extrasNoMes] = await Promise.all([
+  const [tickets, ticketsAtivos, mensagensNaoLidas, extrasNoMes, bugsConfirmadosNoMes] = await Promise.all([
     prisma.conversaSuporte.findMany({
       orderBy: { atualizado_em: 'desc' },
       take: 200,
@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
       cobravelExtra: true,
       franquiaNoMomento: true,
       ordemNaCompetencia: true,
+      classificacaoCobranca: true,
+      classificadoEm: true,
       criado_em: true,
       atualizado_em: true,
       primeiraRespostaEm: true,
@@ -60,6 +62,9 @@ export async function GET(request: NextRequest) {
     prisma.conversaSuporte.count({
       where: { competencia: competenciaAtual, cobravelExtra: true },
     }),
+    prisma.conversaSuporte.count({
+      where: { competencia: competenciaAtual, classificacaoCobranca: 'BUG_SISTEMA_CONFIRMADO' },
+    }),
   ])
 
   return NextResponse.json({
@@ -68,6 +73,6 @@ export async function GET(request: NextRequest) {
       ultimaMensagem: mensagens[0] || null,
       naoLidas: _count.mensagens,
     })),
-    resumo: { ticketsAtivos, mensagensNaoLidas, extrasNoMes },
+    resumo: { ticketsAtivos, mensagensNaoLidas, extrasNoMes, bugsConfirmadosNoMes },
   }, { headers: { 'Cache-Control': 'private, no-store' } })
 }

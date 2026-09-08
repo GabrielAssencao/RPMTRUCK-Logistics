@@ -14,6 +14,38 @@ test('login aponta a solicitação de acesso para a rota existente', () => {
   assert.doesNotMatch(login, /href="\/solicitar-acesso"/)
 })
 
+test('solicitação de acesso limita e valida telefone brasileiro no cliente e no servidor', () => {
+  const page = read('src/app/auth/solicitar-acesso/page.tsx')
+  const route = read('src/app/api/solicitacoes/route.ts')
+  const telefone = read('src/utils/telefone.ts')
+  const planos = read('src/utils/planos.ts')
+
+  assert.match(page, /formatarTelefoneBR\(e\.target\.value\)/)
+  assert.match(page, /type="tel" inputMode="tel" autoComplete="tel-national"/)
+  assert.match(page, /maxLength=\{15\}/)
+  assert.match(page, /somenteDigitosTelefoneBR\(form\.whatsapp\)/)
+  assert.match(route, /\.transform\(somenteDigitosTelefoneBR\)/)
+  assert.match(route, /telefoneBRValido\(valor\)/)
+  assert.match(route, /dados\.contatoPref === 'whatsapp' && !dados\.whatsapp/)
+  assert.match(telefone, /TELEFONE_BR_MAX_DIGITOS = 11/)
+  assert.match(telefone, /\^\[1-9\]\{2\}/)
+  assert.match(planos, /Leitura local de boletos por PDF, imagem e câmera/)
+})
+
+test('máscara de telefone preserva formatos brasileiros válidos e remove código do país colado', async () => {
+  const typescript = await import('typescript')
+  const javascript = typescript.transpileModule(read('src/utils/telefone.ts'), {
+    compilerOptions: { module: typescript.ModuleKind.ESNext, target: typescript.ScriptTarget.ES2022 },
+  }).outputText
+  const telefone = await import(`data:text/javascript;base64,${Buffer.from(javascript).toString('base64')}`)
+
+  assert.equal(telefone.formatarTelefoneBR('11999999999'), '(11) 99999-9999')
+  assert.equal(telefone.formatarTelefoneBR('1134567890'), '(11) 3456-7890')
+  assert.equal(telefone.somenteDigitosTelefoneBR('+55 (11) 99999-9999'), '11999999999')
+  assert.equal(telefone.telefoneBRValido('(11) 99999-9999'), true)
+  assert.equal(telefone.telefoneBRValido('(00) 00000-0000'), false)
+})
+
 test('cadastro de veículo envia somente o contrato aceito pela API', () => {
   const page = read('src/app/dashboard/empresa/frota/page.tsx')
   const handler = page.match(/const handleSalvarVeiculo[\s\S]*?\/\/ 🗑️ EXCLUSÃO/)?.[0] ?? ''

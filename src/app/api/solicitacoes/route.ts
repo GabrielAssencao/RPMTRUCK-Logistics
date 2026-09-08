@@ -11,18 +11,27 @@ import { executarComAuditoria } from '@/lib/auditoria';
 import { verifyBotToken } from '@/lib/botProtection';
 import { recordSecurityEvent } from '@/lib/securityEvents';
 import { obterPlanoComercial } from '@/lib/financeiro/planosComerciais';
+import { somenteDigitosTelefoneBR, telefoneBRValido } from '@/utils/telefone';
+
+const whatsappSchema = z.string().trim().max(20).optional().default('')
+  .transform(somenteDigitosTelefoneBR)
+  .refine((valor) => !valor || telefoneBRValido(valor), 'WhatsApp inválido.');
 
 const solicitacaoSchema = z.object({
   empresa: nomeOperacional(2, 150),
   responsavel: nomePessoa(3, 120),
   email: z.string().trim().email().max(254).toLowerCase(),
-  whatsapp: z.string().trim().regex(/^\+?[\d\s().-]{10,20}$/, 'WhatsApp inválido.').optional().or(z.literal('')),
+  whatsapp: whatsappSchema,
   plano: z.enum(['ESSENCIAL', 'AVANCADO', 'ENTERPRISE']),
   mensagem: textoOperacional(3, 1500).optional().or(z.literal('')),
   contatoPref: z.enum(['email', 'whatsapp']).default('email'),
   veiculos: z.coerce.number().int().min(0).max(100_000).optional(),
   turnstileToken: z.string().max(2048).optional(),
-}).strict();
+}).strict().superRefine((dados, contexto) => {
+  if (dados.contatoPref === 'whatsapp' && !dados.whatsapp) {
+    contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['whatsapp'], message: 'Informe o WhatsApp escolhido para contato.' });
+  }
+});
 
 // ─── 1. ROTA DO ADMIN: LISTAR SOLICITAÇÕES (GET) ───
 export async function GET(request: NextRequest) {

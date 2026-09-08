@@ -274,7 +274,7 @@ A aplicação ficará disponível em `http://localhost:3000`.
 | `TURNSTILE_SECRET_KEY` | servidor | Turnstile | validação do desafio |
 | `TURNSTILE_ALLOWED_HOSTNAMES` | servidor | Turnstile | hosts aceitos, separados por vírgula |
 | `TURNSTILE_REQUIRED` | servidor | não | exige desafio quando igual a `true` |
-| `DATA_ENCRYPTION_ACTIVE_VERSION` | servidor | criptografia | versão ativa: `v1` ou `v2` |
+| `DATA_ENCRYPTION_ACTIVE_VERSION` | servidor | criptografia | versão ativa no formato sequencial `vN` |
 | `DATA_ENCRYPTION_MASTER_KEY` | servidor | recomendado | chave Base64 de 32 bytes para AES-GCM |
 | `DATA_BLIND_INDEX_KEY` | servidor | recomendado | chave Base64 de 32 bytes para índices HMAC |
 | `DATA_ENCRYPTION_PREVIOUS_VERSION` | servidor | rotação | versão anterior temporária |
@@ -393,17 +393,31 @@ npm run security:encrypt-data
 npm run security:encrypt-data -- --apply
 ```
 
-Para migrar de `v1` para `v2`, preserve as duas chaves antigas nas variáveis
-`PREVIOUS_*`, configure as novas chaves ativas e interrompa escritas durante o
-processo:
+Para rotacionar (`v2` para `v3`, por exemplo), preserve as duas chaves antigas
+nas variáveis `PREVIOUS_*`, configure chaves novas como ativas e interrompa
+escritas durante o processo. O comando também cobre linhas digitáveis de contas
+a pagar e exige versões consecutivas; assim, a próxima rotação poderá usar
+`v3` para `v4` sem mudar o código:
 
 ```bash
-npm run security:rotate-data
-npm run security:rotate-data -- --apply
+# Gera o novo par no terminal; guarde-o em cofre e nunca em Git/chat.
+npm run security:generate-data-keys
+
+# Inventário somente leitura; execute antes e depois da rotação.
+npm run security:audit-data-versions:local
+npm run security:audit-data-versions:production
+
+npm run security:rotate-data:local
+npm run security:rotate-data:local -- --apply --confirm=ROTATE_V2_TO_V3
+
+# Produção: primeiro simule; o --apply exige backup recuperável confirmado.
+npm run security:rotate-data:production
+npm run security:rotate-data:production -- --apply --confirm=ROTATE_V2_TO_V3 --confirm-production=BACKUP_VERIFIED
 ```
 
-Remova as chaves anteriores do ambiente somente depois de verificar que não
-restam valores `enc:v1` e de confirmar um backup recuperável.
+Substitua as versões nos argumentos pela rotação vigente. Remova as chaves
+anteriores do ambiente somente depois de verificar que não restam valores da
+versão anterior e de confirmar um backup recuperável.
 
 ## Qualidade e testes
 

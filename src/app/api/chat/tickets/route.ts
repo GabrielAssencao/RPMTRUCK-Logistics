@@ -38,7 +38,9 @@ export async function POST(request: NextRequest) {
   for (let tentativa = 0; tentativa < 3; tentativa += 1) {
     try {
       const ticket = await prisma.$transaction(async (tx) => {
-        const usados = await tx.conversaSuporte.count({ where: { empresaId, competencia } })
+        const usados = await tx.conversaSuporte.count({
+          where: { empresaId, competencia, classificacaoCobranca: 'ATENDIMENTO' },
+        })
         const cobertura = calcularCoberturaTicket(auth.empresa!.plano, usados)
         const mensagemInicialEm = new Date()
         const criado = await tx.conversaSuporte.create({
@@ -75,6 +77,8 @@ export async function POST(request: NextRequest) {
             cobravelExtra: true,
             franquiaNoMomento: true,
             ordemNaCompetencia: true,
+            classificacaoCobranca: true,
+            classificadoEm: true,
             criado_em: true,
             atualizado_em: true,
           },
