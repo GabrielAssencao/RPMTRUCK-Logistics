@@ -7,6 +7,9 @@
   },
   "scripts": {
     "dev": "next dev",
+    "local:check": "node scripts/verify-local-environment.mjs",
+    "dev:local": "npm run local:check && next dev -H 127.0.0.1 -p 5500",
+    "start:e2e": "next start -H 127.0.0.1 -p 5500",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -14,7 +17,13 @@
     "test:security": "node --test tests/security-regressions.test.mjs",
     "test:forms": "node --test tests/form-contract-regressions.test.mjs",
     "test:billing": "node --test tests/contas-pagar-regressions.test.mjs",
+    "test:environment": "node --test tests/local-environment-regressions.test.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:local": "npm run typecheck && npm run lint && npm run test:security && npm run test:forms && npm run test:billing && npm run test:environment",
     "prisma:validate": "prisma validate",
+    "prisma:local:status": "npm run local:check && node --env-file=.env.local node_modules/prisma/build/index.js migrate status",
+    "prisma:local:deploy": "npm run local:check && node --env-file=.env.local node_modules/prisma/build/index.js migrate deploy",
     "vercel-build": "prisma generate && next build",
     "security:audit-git": "node scripts/audit-git-secrets.mjs",
     "security:encrypt-data": "node --env-file=.env scripts/encrypt-sensitive-data.mjs",
@@ -51,6 +60,7 @@
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^22.9.0",
     "@types/react": "^19.2.0",

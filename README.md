@@ -182,6 +182,54 @@ Para reportar uma vulnerabilidade, consulte [SECURITY.md](SECURITY.md).
 - PostgreSQL compatível com Prisma 6 ou um projeto Supabase;
 - projeto Supabase com Storage, caso relatórios e fotos sejam usados.
 
+## Desenvolvimento local isolado
+
+O ambiente local deve usar um projeto Supabase de desenvolvimento diferente de
+produção. O comando de segurança compara os destinos e bloqueia a inicialização
+quando `.env.local` estiver incompleto, ainda contiver exemplos ou reutilizar o
+projeto configurado em `.env`.
+
+1. Crie um projeto Supabase exclusivo para desenvolvimento.
+2. Use `.env.local.example` como referência e preencha `.env.local` com as
+   credenciais desse projeto. O arquivo real continua ignorado pelo Git.
+3. Valide e aplique as migrations somente no banco de desenvolvimento:
+
+```powershell
+npm run local:check
+npm run prisma:local:deploy
+```
+
+4. Inicie a aplicação no primeiro terminal:
+
+```powershell
+npm run dev:local
+```
+
+5. Acesse `http://127.0.0.1:5500`. Em outro terminal, execute:
+
+```powershell
+npm run test:local
+npm run test:e2e
+```
+
+O Playwright cobre desktop, mobile e preferência por movimento reduzido. Para
+abrir sua interface visual use `npm run test:e2e:ui` enquanto o servidor local
+estiver ativo.
+
+## Promoção até produção
+
+Cada etapa deve permanecer em uma branch própria e em commits pequenos. Depois
+da aprovação local, a branch é enviada ao GitHub e abre um pull request contra
+`main`. A CI repete typecheck, lint, testes, build e testes E2E. Mudanças com
+migration seguem implantação compatível: primeiro a migration aditiva no banco
+oficial, depois o merge. O merge em `main` dispara o deploy de produção pela
+Vercel. Variáveis novas são cadastradas na Vercel antes do merge e nunca entram
+no repositório.
+
+Voltar para `main` recupera imediatamente o código estável no computador. Para
+uma etapa já commitada, prefira `git revert <commit>`; migrations aplicadas não
+devem ser desfeitas com Git e precisam de uma migration corretiva própria.
+
 ## Instalação local
 
 ```bash
