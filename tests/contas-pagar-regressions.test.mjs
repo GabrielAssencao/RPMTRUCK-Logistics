@@ -25,6 +25,8 @@ test('linha digitável é validada e criptografada antes da persistência', () =
   assert.match(route, /linhaDigitavelValida\(linha\)/)
   assert.match(route, /linhaDigitavelEstruturalmenteValida\(linha\)/)
   assert.match(route, /!linhaDigitavelValida\(linha\) && !parsed\.data\.revisado/)
+  assert.match(route, /linhaDigitavelDoCodigoBarras\(somenteDigitosBoleto\(parsed\.data\.linhaDigitavel\)\)/)
+  assert.match(route, /linhaDigitavelDoCodigoBarras\(decryptSensitive/)
   assert.match(route, /encryptSensitive\(linha, auth\.empresaId!, 'contaPagar\.linhaDigitavel'\)/)
   assert.match(domain, /linha\.length === 47/)
   assert.match(domain, /linha\.length === 44/)
@@ -50,7 +52,7 @@ test('linha bancária de 47 dígitos preserva zeros e separa estrutura de dígit
   assert.equal(domain.linhaDigitavelEstruturalmenteValida(valida.slice(0, 46)), false)
 })
 
-test('leitura preserva exatamente 44, 47 ou 48 dígitos, inclusive zeros iniciais', async () => {
+test('leitura converte códigos de barras em linhas digitáveis e preserva zeros iniciais', async () => {
   const ts = await import('typescript')
   const compilar = (source) => ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
@@ -60,19 +62,24 @@ test('leitura preserva exatamente 44, 47 ou 48 dígitos, inclusive zeros iniciai
   const domain = await import(domainUrl)
   const reader = await import(url(compilar(read('src/app/dashboard/empresa/contas-pagar/_utils/leituraBoletoPdf.ts'))
     .replace("'@/lib/financeiro/contasPagar'", JSON.stringify(domainUrl))))
-  const codigos = [
-    '00193373700000001000500940144816060680935031',
-    '00190500954014481606906809350314337370000000100',
-    `8${'0'.repeat(47)}`,
-  ]
-  for (const codigo of codigos) {
+  const codigoBancario = '00193373700000001000500940144816060680935031'
+  const linhaBancaria = '00190500954014481606906809350314337370000000100'
+  const codigoArrecadacao = '82630000000812400970911183982743808737234883'
+  const linhaArrecadacao = '826300000005812400970917118398274381087372348836'
+
+  for (const codigo of [codigoBancario, linhaBancaria, codigoArrecadacao, linhaArrecadacao]) {
     assert.equal(domain.linhaDigitavelValida(codigo), true)
-    assert.equal(reader.extrairCodigoLido(codigo).linhaDigitavel, codigo)
   }
-  assert.equal(domain.identificarCodigoBoleto(codigos[0]).tipo, 'CODIGO_BARRAS_BANCARIO')
-  assert.equal(domain.identificarCodigoBoleto(codigos[1]).tipo, 'LINHA_DIGITAVEL_BANCARIA')
-  assert.equal(domain.identificarCodigoBoleto(`8${'1'.repeat(43)}`).tipo, 'CODIGO_BARRAS_ARRECADACAO')
-  assert.equal(domain.identificarCodigoBoleto(codigos[2]).tipo, 'LINHA_DIGITAVEL_ARRECADACAO')
+  assert.equal(domain.linhaDigitavelDoCodigoBarras(codigoBancario), linhaBancaria)
+  assert.equal(domain.codigoBarrasDoBoleto(linhaBancaria), codigoBancario)
+  assert.equal(domain.linhaDigitavelDoCodigoBarras(codigoArrecadacao), linhaArrecadacao)
+  assert.equal(domain.codigoBarrasDoBoleto(linhaArrecadacao), codigoArrecadacao)
+  assert.equal(reader.extrairCodigoLido(codigoArrecadacao).linhaDigitavel, linhaArrecadacao)
+  assert.equal(domain.identificarCodigoBoleto(codigoBancario).tipo, 'CODIGO_BARRAS_BANCARIO')
+  assert.equal(domain.identificarCodigoBoleto(linhaBancaria).tipo, 'LINHA_DIGITAVEL_BANCARIA')
+  assert.equal(domain.identificarCodigoBoleto(codigoArrecadacao).tipo, 'CODIGO_BARRAS_ARRECADACAO')
+  assert.equal(domain.identificarCodigoBoleto(linhaArrecadacao).tipo, 'LINHA_DIGITAVEL_ARRECADACAO')
+  assert.equal(domain.linhaDigitavelValida(`${linhaArrecadacao.slice(0, 11)}9${linhaArrecadacao.slice(12)}`), false)
   assert.equal(domain.identificarCodigoBoleto('123').valido, false)
 })
 
@@ -200,7 +207,24 @@ test('PDF usa texto e leitura visual com fallback para código de barras', () =>
   assert.match(camera, /facingMode: \{ exact: 'environment' \}/)
   assert.match(camera, /BarcodeFormat\.ITF/)
   assert.match(camera, /Capturar foto/)
+  assert.match(camera, /CAMERA_TRASEIRA_PREFERIDA/)
+  assert.match(camera, /localStorage\.setItem/)
   assert.match(pkg, /"@zxing\/browser"/)
+})
+
+test('edição é auditada, sincroniza integrações e bloqueia contas canceladas ou consolidadas', () => {
+  const route = read('src/app/api/contas-pagar/[id]/route.ts')
+  const page = read('src/app/dashboard/empresa/contas-pagar/page.tsx')
+
+  assert.match(route, /acao === 'EDITAR'/)
+  assert.match(route, /atual\.status === 'CANCELADO'/)
+  assert.match(route, /atual\.custo\?\.relatorioArquivoId \|\| atual\.historicoVeiculo\?\.relatorioArquivoId/)
+  assert.match(route, /where: \{ id, empresaId: auth\.empresaId!, status: atual\.status \}/)
+  assert.match(route, /tx\.custo\.updateMany/)
+  assert.match(route, /tx\.historicoVeiculo\.updateMany/)
+  assert.match(page, /conta\.status !== 'CANCELADO'/)
+  assert.match(page, /Editar conta a pagar/)
+  assert.match(page, /Categoria, veículo, anexos e situação do pagamento permanecem inalterados/)
 })
 
 test('formulario financeiro limpa dados e invalida leituras assincronas ao fechar', () => {

@@ -30,7 +30,7 @@ export function identificarCodigoBoleto(valor: string | null | undefined) {
   const codigo = (valor ?? '').replace(/\D/g, '')
   let tipo: TipoCodigoBoleto = 'DESCONHECIDO'
   if (codigo.length === 44) tipo = codigo.startsWith('8') ? 'CODIGO_BARRAS_ARRECADACAO' : 'CODIGO_BARRAS_BANCARIO'
-  else if (codigo.length === 47) tipo = 'LINHA_DIGITAVEL_BANCARIA'
+  else if (codigo.length === 47 && !codigo.startsWith('8')) tipo = 'LINHA_DIGITAVEL_BANCARIA'
   else if (codigo.length === 48 && codigo.startsWith('8')) tipo = 'LINHA_DIGITAVEL_ARRECADACAO'
 
   return {
@@ -65,20 +65,80 @@ function modulo10(campo: string) {
   return (10 - (soma % 10)) % 10
 }
 
+function modulo11Arrecadacao(campo: string) {
+  let soma = 0
+  let peso = 2
+  for (let indice = campo.length - 1; indice >= 0; indice -= 1) {
+    soma += Number(campo[indice]) * peso
+    peso = peso === 9 ? 2 : peso + 1
+  }
+  const resto = soma % 11
+  if (resto === 0 || resto === 1) return 0
+  if (resto === 10) return 1
+  return 11 - resto
+}
+
+function digitoArrecadacao(campo: string, identificador: string) {
+  if (identificador === '6' || identificador === '7') return modulo10(campo)
+  if (identificador === '8' || identificador === '9') return modulo11Arrecadacao(campo)
+  return null
+}
+
+function codigoBarrasArrecadacaoDaLinha(linha: string) {
+  return [0, 12, 24, 36].map((inicio) => linha.slice(inicio, inicio + 11)).join('')
+}
+
+export function codigoBarrasDoBoleto(valor: string | null | undefined) {
+  const linha = somenteDigitosBoleto(valor)
+  if (linha.length === 47) {
+    return `${linha.slice(0, 4)}${linha[32]}${linha.slice(33)}${linha.slice(4, 9)}${linha.slice(10, 20)}${linha.slice(21, 31)}`
+  }
+  if (linha.length === 48 && linha.startsWith('8')) return codigoBarrasArrecadacaoDaLinha(linha)
+  return linha.length === 44 ? linha : ''
+}
+
+/** Converte os 44 dígitos codificados nas barras para a representação digitável oficial. */
+export function linhaDigitavelDoCodigoBarras(valor: string | null | undefined) {
+  const codigo = somenteDigitosBoleto(valor)
+  if (codigo.length !== 44) return codigo
+
+  if (codigo.startsWith('8')) {
+    const identificador = codigo[2]
+    const blocos = [0, 11, 22, 33].map((inicio) => codigo.slice(inicio, inicio + 11))
+    const linha = blocos.map((bloco) => {
+      const digito = digitoArrecadacao(bloco, identificador)
+      return digito === null ? bloco : `${bloco}${digito}`
+    }).join('')
+    return linha.length === 48 ? linha : codigo
+  }
+
+  const campo1 = `${codigo.slice(0, 4)}${codigo.slice(19, 24)}`
+  const campo2 = codigo.slice(24, 34)
+  const campo3 = codigo.slice(34, 44)
+  return `${campo1}${modulo10(campo1)}${campo2}${modulo10(campo2)}${campo3}${modulo10(campo3)}${codigo[4]}${codigo.slice(5, 19)}`
+}
+
 /** Valida os três DVs de campo da linha bancária. O banco ainda deve conferir os dados finais. */
-export function linhaDigitavelValida(valor: string | null | undefined) {
+export function linhaDigitavelValida(valor: string | null | undefined): boolean {
   const linha = somenteDigitosBoleto(valor)
   if (linha.length === 47) {
     return modulo10(linha.slice(0, 9)) === Number(linha[9])
       && modulo10(linha.slice(10, 20)) === Number(linha[20])
       && modulo10(linha.slice(21, 31)) === Number(linha[31])
   }
-  // O código de barras bancário tem 44 posições. A validação final de valor,
-  // beneficiário e DV geral permanece obrigatória no aplicativo do banco.
-  if (linha.length === 44) return /^\d{44}$/.test(linha)
-  // Convênios/arrecadação usam 48 posições e regras de DV dependentes do segmento.
-  // Mantemos apenas a validação estrutural e exigimos revisão humana antes de copiar.
-  return linha.length === 48 && linha.startsWith('8')
+  if (linha.length === 44) {
+    if (!linha.startsWith('8')) return /^\d{44}$/.test(linha)
+    const digitoGeral = digitoArrecadacao(`${linha.slice(0, 3)}${linha.slice(4)}`, linha[2])
+    return digitoGeral !== null && digitoGeral === Number(linha[3])
+  }
+  if (linha.length !== 48 || !linha.startsWith('8')) return false
+  const identificador = linha[2]
+  const blocosValidos = [0, 12, 24, 36].every((inicio) => {
+    const bloco = linha.slice(inicio, inicio + 11)
+    const digito = digitoArrecadacao(bloco, identificador)
+    return digito !== null && digito === Number(linha[inicio + 11])
+  })
+  return blocosValidos && linhaDigitavelValida(codigoBarrasArrecadacaoDaLinha(linha))
 }
 
 export function formatarLinhaDigitavel(valor: string | null | undefined) {

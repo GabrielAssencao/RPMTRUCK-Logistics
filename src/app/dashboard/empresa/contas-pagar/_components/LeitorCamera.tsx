@@ -6,6 +6,7 @@ import { identificarCodigoBoleto } from '@/lib/financeiro/contasPagar'
 import { lerCodigoBarrasImagemLocalmente } from '../_utils/leituraBoletoPdf'
 
 export type ModoLeitorCamera = 'AO_VIVO' | 'FOTO'
+const CAMERA_TRASEIRA_PREFERIDA = 'rpmtruck:contas-pagar:camera-traseira'
 
 interface LeitorCameraProps {
   modo: ModoLeitorCamera
@@ -69,7 +70,15 @@ export default function LeitorCamera({ modo, onRead, onClose }: LeitorCameraProp
         } catch {
           // Foco contínuo não está disponível em todos os navegadores móveis.
         }
-        setCameras(camerasTraseiras(await navigator.mediaDevices.enumerateDevices()))
+        const traseiras = camerasTraseiras(await navigator.mediaDevices.enumerateDevices())
+        setCameras(traseiras)
+        if (!deviceId) {
+          const cameraPreferida = window.localStorage.getItem(CAMERA_TRASEIRA_PREFERIDA)
+          if (cameraPreferida && traseiras.some((camera) => camera.deviceId === cameraPreferida)) {
+            setDeviceId(cameraPreferida)
+            return
+          }
+        }
         setStatus(modo === 'FOTO'
           ? 'Câmera traseira ativa. Enquadre as barras e toque em Capturar.'
           : 'Câmera traseira ativa. A leitura será preenchida automaticamente.')
@@ -141,7 +150,13 @@ export default function LeitorCamera({ modo, onRead, onClose }: LeitorCameraProp
     </div>
     {!erro && <p aria-live="polite" className="text-[11px] text-foreground-muted">{status}</p>}
     {cameras.length > 1 && <label className="block text-xs">Câmera traseira
-      <select className="input-financeiro mt-1" value={deviceId} onChange={(event) => { setErro(''); setDeviceId(event.target.value) }}>
+      <select className="input-financeiro mt-1" value={deviceId} onChange={(event) => {
+        const novaCamera = event.target.value
+        setErro('')
+        setDeviceId(novaCamera)
+        if (novaCamera) window.localStorage.setItem(CAMERA_TRASEIRA_PREFERIDA, novaCamera)
+        else window.localStorage.removeItem(CAMERA_TRASEIRA_PREFERIDA)
+      }}>
         <option value="">Automática</option>
         {cameras.map((camera, index) => <option key={camera.deviceId} value={camera.deviceId}>{camera.label || `Câmera traseira ${index + 1}`}</option>)}
       </select>

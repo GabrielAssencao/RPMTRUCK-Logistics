@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Building2, Camera, Check, Copy, Download, ExternalLink, FileText, Plus, ReceiptText, RotateCcw, Trash2, Upload, X } from 'lucide-react'
+import { AlertTriangle, Building2, Camera, Check, Copy, Download, ExternalLink, FileText, Pencil, Plus, ReceiptText, RotateCcw, Trash2, Upload, X } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
-import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel, identificarCodigoBoleto, linhaDigitavelEstruturalmenteValida, linhaDigitavelValida, somenteDigitosBoleto } from '@/lib/financeiro/contasPagar'
+import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel, identificarCodigoBoleto, linhaDigitavelDoCodigoBarras, linhaDigitavelEstruturalmenteValida, linhaDigitavelValida, somenteDigitosBoleto } from '@/lib/financeiro/contasPagar'
 import { CATEGORIAS_CONTA_PAGAR, descricaoContaPagarEhSugestao, obterCategoriaContaPagar } from '@/lib/financeiro/categoriasContaPagar'
 import { extrairCodigoLido, lerBoletoPdfLocalmente, lerCodigoBarrasImagemLocalmente } from './_utils/leituraBoletoPdf'
 import LeitorCamera, { type ModoLeitorCamera } from './_components/LeitorCamera'
@@ -26,6 +26,7 @@ const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL
 type OrigemLeituraFormulario = 'MANUAL' | 'PDF_TEXTO' | 'CODIGO_BARRAS'
 const criarEstadoInicial = () => ({ descricao: '', fornecedor: '', vencimento: new Date().toISOString().slice(0, 10), valor: '', linhaDigitavel: '', origemLeitura: 'MANUAL' as OrigemLeituraFormulario, revisado: false, categoria: '', veiculoId: '' })
 type EstadoFormulario = ReturnType<typeof criarEstadoInicial>
+type EstadoEdicao = Pick<EstadoFormulario, 'descricao' | 'fornecedor' | 'vencimento' | 'valor' | 'linhaDigitavel'>
 
 export default function ContasPagarPage() {
   const { primary } = useTheme()
@@ -51,6 +52,8 @@ export default function ContasPagarPage() {
   const [baixando, setBaixando] = useState<Conta | null>(null)
   const [cancelando, setCancelando] = useState<Conta | null>(null)
   const [reabrindo, setReabrindo] = useState<Conta | null>(null)
+  const [editando, setEditando] = useState<Conta | null>(null)
+  const [formEdicao, setFormEdicao] = useState<EstadoEdicao>({ descricao: '', fornecedor: '', vencimento: '', valor: '', linhaDigitavel: '' })
   const [comprovante, setComprovante] = useState<File | null>(null)
   const [configurandoPortal, setConfigurandoPortal] = useState(false)
   const [portalForm, setPortalForm] = useState({ nome: '', url: '' })
@@ -64,10 +67,11 @@ export default function ContasPagarPage() {
       setFeedback('O conteúdo capturado não corresponde a um boleto bancário ou conta de arrecadação válido.')
       return
     }
-    const dados = extrairCodigoLido(codigo)
+    const linhaDigitavel = linhaDigitavelDoCodigoBarras(identificacao.codigo)
+    const dados = extrairCodigoLido(linhaDigitavel)
     setForm((atual) => ({ ...atual, linhaDigitavel: dados.linhaDigitavel, valor: dados.valor || atual.valor, vencimento: dados.vencimento || atual.vencimento, origemLeitura: 'CODIGO_BARRAS', revisado: false }))
     setCameraAberta(null)
-    setFeedback(`${identificacao.descricao} Confira os dados antes de salvar.`)
+    setFeedback(`${identificacao.descricao} Os verificadores foram conferidos e a linha digitável foi preenchida com ${linhaDigitavel.length} dígitos. Confira os dados antes de salvar.`)
   }, [])
 
   const carregar = useCallback(async () => {
@@ -127,6 +131,8 @@ export default function ContasPagarPage() {
   const linhaEstruturalmenteValida = !linhaSomenteDigitos || linhaDigitavelEstruturalmenteValida(linhaSomenteDigitos)
   const linhaComValidacaoDivergente = Boolean(linhaSomenteDigitos) && linhaEstruturalmenteValida && !linhaDigitavelValida(linhaSomenteDigitos)
   const exigeRevisao = form.origemLeitura !== 'MANUAL' || linhaComValidacaoDivergente
+  const linhaEdicao = somenteDigitosBoleto(formEdicao.linhaDigitavel)
+  const linhaEdicaoValida = !linhaEdicao || (linhaDigitavelEstruturalmenteValida(linhaEdicao) && linhaDigitavelValida(linhaEdicao))
 
   const limparCadastro = () => {
     setCameraAberta(null)
@@ -279,6 +285,37 @@ export default function ContasPagarPage() {
     finally { submitRef.current = false; setEnviando(false) }
   }
 
+  const abrirEdicao = (conta: Conta) => {
+    setFeedback('')
+    setEditando(conta)
+    setFormEdicao({
+      descricao: conta.descricao,
+      fornecedor: conta.fornecedor ?? '',
+      vencimento: conta.vencimento,
+      valor: String(conta.valor),
+      linhaDigitavel: conta.linhaDigitavel,
+    })
+  }
+
+  const salvarEdicao = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!editando || submitRef.current || !linhaEdicaoValida) return
+    submitRef.current = true; setEnviando(true); setFeedback('')
+    try {
+      const body = new FormData()
+      body.set('acao', 'EDITAR')
+      Object.entries(formEdicao).forEach(([chave, valor]) => body.set(chave, valor))
+      const response = await fetch(`/api/contas-pagar/${editando.id}`, { method: 'PATCH', body })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível atualizar a conta.')
+      setEditando(null)
+      setFeedback('Conta atualizada com segurança.')
+      sinalizarAtualizacaoDashboardEmpresa()
+      await carregar()
+    } catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível atualizar a conta.') }
+    finally { submitRef.current = false; setEnviando(false) }
+  }
+
   const abrirArquivo = async (contaId: string, tipo: 'boleto' | 'comprovante') => {
     const response = await fetch(`/api/contas-pagar/${contaId}/arquivo?tipo=${tipo}`, { cache: 'no-store' })
     const data = await response.json()
@@ -325,7 +362,7 @@ export default function ContasPagarPage() {
       </div>
 
       {carregando ? <p className="py-16 text-center text-xs uppercase tracking-widest text-foreground-muted">Carregando contas...</p> : exibidas.length === 0 ? <div className="border border-dashed py-16 text-center" style={{ borderColor: 'var(--border)' }}><ReceiptText className="mx-auto mb-3 text-foreground-muted" /><p className="text-sm font-bold">Nenhuma conta nesta categoria.</p><p className="mt-1 text-xs text-foreground-muted">Cadastre o primeiro vencimento para iniciar a organização.</p></div> : (
-        <div className="grid gap-3 xl:grid-cols-2">{exibidas.map((conta) => <ContaCard key={conta.id} conta={conta} capacidades={capacidades!} portal={portal} primary={primary} onCopiar={() => void copiarLinha(conta)} onArquivo={(tipo) => void abrirArquivo(conta.id, tipo)} onBaixar={() => abrirConfirmacaoBaixa(conta)} onCancelar={() => setCancelando(conta)} onReabrir={() => setReabrindo(conta)} />)}</div>
+        <div className="grid gap-3 xl:grid-cols-2">{exibidas.map((conta) => <ContaCard key={conta.id} conta={conta} capacidades={capacidades!} portal={portal} primary={primary} onCopiar={() => void copiarLinha(conta)} onArquivo={(tipo) => void abrirArquivo(conta.id, tipo)} onEditar={() => abrirEdicao(conta)} onBaixar={() => abrirConfirmacaoBaixa(conta)} onCancelar={() => setCancelando(conta)} onReabrir={() => setReabrindo(conta)} />)}</div>
       )}
 
       {abrirCadastro && (
@@ -391,6 +428,24 @@ export default function ContasPagarPage() {
 
       {reabrindo && <Modal titulo="Reverter baixa" onClose={() => !enviando && setReabrindo(null)}><div className="space-y-4"><p className="text-sm"><strong>{reabrindo.descricao}</strong><br /><span className="text-foreground-muted">{moeda.format(reabrindo.valor)} · vencimento {new Date(`${reabrindo.vencimento}T12:00:00`).toLocaleDateString('pt-BR')}</span></p><p role="alert" className="border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-500">A conta e o custo vinculado voltarão para pendente. O comprovante da baixa equivocada será removido, e a reversão ficará registrada na auditoria.</p><div className="grid gap-2 sm:grid-cols-2"><button type="button" disabled={enviando} onClick={() => setReabrindo(null)} className="min-h-12 border px-4 text-xs font-black uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>Manter como paga</button><button type="button" disabled={enviando} onClick={() => void confirmarReabertura()} className="min-h-12 border border-amber-500 bg-amber-500 px-4 text-xs font-black uppercase text-black disabled:opacity-50">{enviando ? 'Revertendo...' : 'Confirmar reversão'}</button></div></div></Modal>}
 
+      {editando && <Modal titulo="Editar conta a pagar" onClose={() => !enviando && setEditando(null)}>
+        <form onSubmit={salvarEdicao} className="space-y-4">
+          {editando.status === 'PAGO' && <p className="border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-500">Esta conta já foi paga. A edição não altera a baixa nem o comprovante e será bloqueada caso o lançamento faça parte de um relatório fechado.</p>}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Campo label="Descrição *"><input required minLength={3} maxLength={160} value={formEdicao.descricao} onChange={(event) => setFormEdicao({ ...formEdicao, descricao: event.target.value })} className="input-financeiro" /></Campo>
+            <Campo label="Beneficiário / fornecedor"><input maxLength={160} value={formEdicao.fornecedor} onChange={(event) => setFormEdicao({ ...formEdicao, fornecedor: event.target.value })} className="input-financeiro" /></Campo>
+            <Campo label="Vencimento *"><input type="date" required value={formEdicao.vencimento} onChange={(event) => setFormEdicao({ ...formEdicao, vencimento: event.target.value })} className="input-financeiro" /></Campo>
+            <Campo label="Valor *"><input type="number" inputMode="decimal" step="0.01" min="0.01" max="999999999.99" required value={formEdicao.valor} onChange={(event) => setFormEdicao({ ...formEdicao, valor: event.target.value })} className="input-financeiro" /></Campo>
+          </div>
+          <Campo label="Código de barras / linha digitável">
+            <input inputMode="numeric" autoComplete="off" maxLength={64} aria-invalid={!linhaEdicaoValida} value={formatarLinhaDigitavel(formEdicao.linhaDigitavel)} onChange={(event) => setFormEdicao({ ...formEdicao, linhaDigitavel: somenteDigitosBoleto(event.target.value) })} className="input-financeiro font-mono" />
+            {!linhaEdicaoValida && <span role="alert" className="mt-1.5 block text-[10px] text-amber-500">O código não passou na verificação. Confira todos os dígitos.</span>}
+          </Campo>
+          <p className="text-[11px] text-foreground-muted">Categoria, veículo, anexos e situação do pagamento permanecem inalterados.</p>
+          <button disabled={enviando || !linhaEdicaoValida} className="min-h-12 w-full text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}>{enviando ? 'Salvando...' : 'Salvar alterações'}</button>
+        </form>
+      </Modal>}
+
       {cancelando && <Modal titulo="Cancelar lançamento" onClose={() => !enviando && setCancelando(null)}><div className="space-y-4"><p className="text-sm"><strong>{cancelando.descricao}</strong><br /><span className="text-foreground-muted">{moeda.format(cancelando.valor)} · vencimento {new Date(`${cancelando.vencimento}T12:00:00`).toLocaleDateString('pt-BR')}</span></p><p role="alert" className="border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-400">O lançamento sairá das contas pendentes e dos custos operacionais vinculados. O registro será preservado como cancelado para auditoria.</p><div className="grid gap-2 sm:grid-cols-2"><button type="button" disabled={enviando} onClick={() => setCancelando(null)} className="min-h-12 border px-4 text-xs font-black uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>Manter lançamento</button><button type="button" disabled={enviando} onClick={() => void confirmarCancelamento()} className="min-h-12 border border-red-500 bg-red-500 px-4 text-xs font-black uppercase text-white disabled:opacity-50"><Trash2 size={15} className="mr-2 inline" />{enviando ? 'Cancelando...' : 'Confirmar cancelamento'}</button></div></div></Modal>}
 
       {configurandoPortal && <Modal titulo="Portal financeiro" onClose={() => !enviando && setConfigurandoPortal(false)}><div className="space-y-4"><p className="text-xs text-foreground-muted">Cadastre somente o endereço HTTPS oficial do internet banking ou ERP. O RPMTRUCK nunca recebe sua senha bancária.</p><Campo label="Nome"><input maxLength={80} value={portalForm.nome} onChange={(e) => setPortalForm({ ...portalForm, nome: e.target.value })} placeholder="Ex.: Banco do Brasil PJ" className="input-financeiro" /></Campo><Campo label="Endereço HTTPS"><input type="url" maxLength={500} value={portalForm.url} onChange={(e) => setPortalForm({ ...portalForm, url: e.target.value })} placeholder="https://..." className="input-financeiro" /></Campo><button type="button" disabled={enviando} onClick={() => void salvarPortal()} className="min-h-12 w-full text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}>Salvar portal</button></div></Modal>}
@@ -401,7 +456,7 @@ export default function ContasPagarPage() {
 function Resumo({ label, valor, cor }: { label: string; valor: string; cor: string }) { return <div className="min-w-0 border p-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}><p className="text-[9px] font-black uppercase tracking-widest text-foreground-muted">{label}</p><p className="mt-2 truncate font-rajdhani text-xl font-black" style={{ color: cor }}>{valor}</p></div> }
 function Campo({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider">{label}</span>{children}</label> }
 function Modal({ titulo, onClose, children }: { titulo: string; onClose: () => void; children: React.ReactNode }) { return <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-4"><div role="dialog" aria-modal="true" aria-label={titulo} className="max-h-[92dvh] w-full overflow-y-auto border p-4 sm:max-w-2xl sm:p-6" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}><div className="mb-5 flex items-center justify-between gap-4"><h2 className="font-rajdhani text-xl font-black uppercase">{titulo}</h2><button type="button" onClick={onClose} aria-label="Fechar" className="min-h-10 min-w-10 border" style={{ borderColor: 'var(--border)' }}><X size={17} className="mx-auto" /></button></div>{children}</div></div> }
-function ContaCard({ conta, capacidades, portal, primary, onCopiar, onArquivo, onBaixar, onCancelar, onReabrir }: { conta: Conta; capacidades: Capacidades; portal: Portal | null; primary: string; onCopiar: () => void; onArquivo: (tipo: 'boleto' | 'comprovante') => void; onBaixar: () => void; onCancelar: () => void; onReabrir: () => void }) {
+function ContaCard({ conta, capacidades, portal, primary, onCopiar, onArquivo, onEditar, onBaixar, onCancelar, onReabrir }: { conta: Conta; capacidades: Capacidades; portal: Portal | null; primary: string; onCopiar: () => void; onArquivo: (tipo: 'boleto' | 'comprovante') => void; onEditar: () => void; onBaixar: () => void; onCancelar: () => void; onReabrir: () => void }) {
   const cores = capacidades.alertasVisuais ? { VERDE: '#22c55e', AMARELO: '#f59e0b', VERMELHO: '#ef4444' } : { VERDE: primary, AMARELO: primary, VERMELHO: primary }
   const prazo = conta.status !== 'PENDENTE' ? conta.status : conta.diasParaVencer < 0 ? `Vencida há ${Math.abs(conta.diasParaVencer)} dia(s)` : conta.diasParaVencer === 0 ? 'Vence hoje' : `Vence em ${conta.diasParaVencer} dia(s)`
   return (
@@ -414,6 +469,7 @@ function ContaCard({ conta, capacidades, portal, primary, onCopiar, onArquivo, o
       <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {conta.possuiBoleto && <button type="button" onClick={() => onArquivo('boleto')} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><FileText size={13} className="mr-1 inline" />Boleto</button>}
         {conta.possuiComprovante && <button type="button" onClick={() => onArquivo('comprovante')} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><ReceiptText size={13} className="mr-1 inline" />Comprovante</button>}
+        {conta.status !== 'CANCELADO' && <button type="button" onClick={onEditar} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><Pencil size={13} className="mr-1 inline" />Editar</button>}
         {conta.status === 'PENDENTE' && capacidades.copiarEAbrirPortal && conta.linhaDigitavel && <button type="button" onClick={onCopiar} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}><Copy size={13} className="mr-1 inline" />Copiar código</button>}
         {conta.status === 'PENDENTE' && capacidades.copiarEAbrirPortal && portal && <a href={portal.url} target="_blank" rel="noopener noreferrer" onClick={onCopiar} className="flex min-h-10 items-center justify-center border px-3 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}><ExternalLink size={13} className="mr-1" />Abrir banco</a>}
         {conta.status === 'PENDENTE' && <button type="button" onClick={onCancelar} className="min-h-10 border border-red-500/60 px-3 text-[10px] font-bold uppercase text-red-400"><Trash2 size={13} className="mr-1 inline" />Cancelar</button>}

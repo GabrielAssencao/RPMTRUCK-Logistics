@@ -11,6 +11,7 @@ import {
   CAPACIDADES_CONTAS_PAGAR,
   diasAteVencimento,
   formatarLinhaDigitavel,
+  linhaDigitavelDoCodigoBarras,
   linhaDigitavelEstruturalmenteValida,
   linhaDigitavelValida,
   nivelVencimento,
@@ -45,7 +46,7 @@ function serializar(conta: {
   custo?: { id: string } | null
   veiculo?: { id: string; placa: string; modelo: string } | null
 }, empresaId: string) {
-  const linha = decryptSensitive(conta.linha_digitavel, empresaId, 'contaPagar.linhaDigitavel') ?? ''
+  const linha = linhaDigitavelDoCodigoBarras(decryptSensitive(conta.linha_digitavel, empresaId, 'contaPagar.linhaDigitavel'))
   return {
     id: conta.id,
     descricao: conta.descricao,
@@ -140,7 +141,7 @@ export async function POST(request: NextRequest) {
     if (parsed.data.categoria === 'MANUTENCAO' && !auth.empresa.modulos.includes('FROTA')) {
       return NextResponse.json({ erro: 'O módulo Frota precisa estar ativo para integrar uma manutenção.' }, { status: 403 })
     }
-    const linha = somenteDigitosBoleto(parsed.data.linhaDigitavel)
+    const linha = linhaDigitavelDoCodigoBarras(somenteDigitosBoleto(parsed.data.linhaDigitavel))
     if (linha && !linhaDigitavelEstruturalmenteValida(linha)) {
       return NextResponse.json({ erro: `O código informado possui ${linha.length} dígitos. Informe uma linha com 47 dígitos, um código de barras com 44 dígitos ou uma arrecadação com 48 dígitos.` }, { status: 422 })
     }

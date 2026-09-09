@@ -1,4 +1,4 @@
-import { linhaDigitavelValida, somenteDigitosBoleto } from '@/lib/financeiro/contasPagar'
+import { codigoBarrasDoBoleto, linhaDigitavelDoCodigoBarras, linhaDigitavelValida, somenteDigitosBoleto } from '@/lib/financeiro/contasPagar'
 
 export interface DadosExtraidosBoleto {
   textoEncontrado: boolean
@@ -45,8 +45,7 @@ function obterLeitorCodigoBarras() {
 }
 
 function codigoBarrasDaLinhaDigitavel(linha: string) {
-  if (linha.length !== 47) return linha.length === 44 ? linha : ''
-  return `${linha.slice(0, 4)}${linha[32]}${linha.slice(33)}${linha.slice(4, 9)}${linha.slice(10, 20)}${linha.slice(21, 31)}`
+  return codigoBarrasDoBoleto(linha)
 }
 
 function dataFatorVencimento(codigo: string) {
@@ -138,7 +137,7 @@ function extrairCampos(
   // PDF.js pode entregar o código do banco e a linha digitável em itens vizinhos.
   // Avaliar cada item primeiro evita concatenar 237-2 com os 47 dígitos do boleto.
   const linhaTexto = encontrarLinhaDigitavelEmSegmentos(segmentos) || encontrarLinhaDigitavel(texto)
-  const linha = codigoVisual || linhaTexto
+  const linha = linhaDigitavelDoCodigoBarras(codigoVisual || linhaTexto)
   const dataComRotulo = texto.match(/(?:vencimento|data\s+de\s+vencimento)\D{0,24}(0[1-9]|[12]\d|3[01])[\/.\-](0[1-9]|1[0-2])[\/.\-](20\d{2})/i)
   const datas = [...texto.matchAll(/\b(0[1-9]|[12]\d|3[01])[\/.\-](0[1-9]|1[0-2])[\/.\-](20\d{2})\b/g)]
   const data = dataComRotulo ?? datas.at(-1)
