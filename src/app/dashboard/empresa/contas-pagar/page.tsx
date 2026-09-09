@@ -6,7 +6,8 @@ import { AlertTriangle, Building2, Camera, Check, Copy, Download, ExternalLink, 
 import { useTheme } from '@/contexts/ThemeContext'
 import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel, linhaDigitavelEstruturalmenteValida, linhaDigitavelValida, somenteDigitosBoleto } from '@/lib/financeiro/contasPagar'
 import { CATEGORIAS_CONTA_PAGAR, descricaoContaPagarEhSugestao, obterCategoriaContaPagar } from '@/lib/financeiro/categoriasContaPagar'
-import { lerBoletoPdfLocalmente, lerCodigoBarrasImagemLocalmente } from './_utils/leituraBoletoPdf'
+import { extrairCodigoLido, lerBoletoPdfLocalmente, lerCodigoBarrasImagemLocalmente } from './_utils/leituraBoletoPdf'
+import LeitorCamera from './_components/LeitorCamera'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
@@ -56,6 +57,14 @@ export default function ContasPagarPage() {
   const submitRef = useRef(false)
   const leituraArquivoRef = useRef(0)
   const cameraInputRef = useRef<HTMLInputElement>(null)
+  const [cameraAberta, setCameraAberta] = useState(false)
+  const fecharCamera = useCallback(() => setCameraAberta(false), [])
+  const receberCodigo = useCallback((codigo: string) => {
+    const dados = extrairCodigoLido(codigo)
+    setForm((atual) => ({ ...atual, linhaDigitavel: dados.linhaDigitavel, valor: dados.valor || atual.valor, vencimento: dados.vencimento || atual.vencimento, origemLeitura: 'CODIGO_BARRAS', revisado: false }))
+    setCameraAberta(false)
+    setFeedback('Código reconhecido. Confira beneficiário, valor e vencimento no boleto original antes de salvar.')
+  }, [])
 
   const carregar = useCallback(async () => {
     try {
@@ -115,6 +124,7 @@ export default function ContasPagarPage() {
   const exigeRevisao = form.origemLeitura !== 'MANUAL' || linhaComValidacaoDivergente
 
   const limparCadastro = () => {
+    setCameraAberta(false)
     leituraArquivoRef.current += 1
     setForm(criarEstadoInicial())
     setBoleto(null)
@@ -388,6 +398,8 @@ export default function ContasPagarPage() {
             </Campo>
             {capacidades?.leituraAutomatica && (
               <div className="grid gap-2 sm:grid-cols-2">
+                <button type="button" disabled={lendoArquivo} onClick={() => setCameraAberta(true)} className="min-h-12 border px-3 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}><Camera size={15} className="mr-2 inline" />Ler código ao vivo</button>
+                {cameraAberta && <div className="sm:col-span-2"><LeitorCamera onRead={receberCodigo} onClose={fecharCamera} /></div>}
                 <button type="button" disabled={lendoArquivo} onClick={() => cameraInputRef.current?.click()} className="min-h-12 border px-3 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>
                   <Camera size={15} className="mr-2 inline" />{lendoArquivo ? 'Lendo código...' : 'Fotografar código'}
                 </button>

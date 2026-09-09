@@ -245,4 +245,7 @@ export async function lerCodigoBarrasImagemLocalmente(arquivo: File): Promise<Da
 }
 
 export const __testarExtracaoBoleto = extrairCampos
+export function extrairCodigoLido(codigo: string) {
+  return extrairCampos('', codigo, true)
+}
 export const __testarDadosCodigoBarras = dadosDoCodigoBarras
