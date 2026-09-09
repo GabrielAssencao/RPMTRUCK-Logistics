@@ -1,15 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
+import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { encryptSensitive } from '@/lib/fieldEncryption'
+import { linhaDigitavelDoCodigoBarras, linhaDigitavelEstruturalmenteValida, linhaDigitavelValida, somenteDigitosBoleto } from '@/lib/financeiro/contasPagar'
 import { ArquivoContaPagarError, removerArquivosContaPagar, salvarArquivoContaPagar } from '@/lib/financeiro/contasPagarStorage'
+
+const editarSchema = z.object({
+  descricao: z.string().trim().min(3).max(160),
+  fornecedor: z.string().trim().max(160).optional(),
+  vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  valor: z.coerce.number().positive().max(999_999_999.99),
+  linhaDigitavel: z.string().trim().max(80).optional(),
+}).strict()
+
+function dataLocal(valor: string) {
+  const data = new Date(`${valor}T00:00:00.000Z`)
+  if (Number.isNaN(data.getTime()) || data.toISOString().slice(0, 10) !== valor) return null
+  return data
+}
 
 export async function PATCH(request: NextRequest, context: RouteContext<'/api/contas-pagar/[id]'>) {
   const auth = await requireEmpresaAuth(request, { modulo: 'CONTAS_PAGAR', acao: 'ESCRITA' })
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
-  const limited = await applyRateLimit(request, `contas-pagar-baixa:${auth.session.userId}`, RATE_LIMITS.FILE_UPLOAD.limit, RATE_LIMITS.FILE_UPLOAD.windowMs)
+  const limited = await applyRateLimit(request, `contas-pagar-write:${auth.session.userId}`, RATE_LIMITS.FILE_UPLOAD.limit, RATE_LIMITS.FILE_UPLOAD.windowMs)
   if (limited) return limited
 
   const { id } = await context.params
@@ -17,12 +34,68 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/co
   try {
     const form = await request.formData()
     const acao = form.get('acao')
-    if (acao !== 'PAGAR' && acao !== 'CANCELAR' && acao !== 'REABRIR') return NextResponse.json({ erro: 'Ação inválida.' }, { status: 400 })
+    if (acao !== 'PAGAR' && acao !== 'CANCELAR' && acao !== 'REABRIR' && acao !== 'EDITAR') return NextResponse.json({ erro: 'Ação inválida.' }, { status: 400 })
     const atual = await prisma.contaPagar.findFirst({
       where: { id, empresaId: auth.empresaId! },
-      include: { custo: { select: { id: true, relatorioArquivoId: true } } },
+      include: {
+        custo: { select: { id: true, relatorioArquivoId: true } },
+        historicoVeiculo: { select: { id: true, relatorioArquivoId: true } },
+      },
     })
     if (!atual) return NextResponse.json({ erro: 'Conta não encontrada.' }, { status: 404 })
+
+    if (acao === 'EDITAR') {
+      if (atual.status === 'CANCELADO') return NextResponse.json({ erro: 'Contas canceladas são preservadas para auditoria e não podem ser editadas.' }, { status: 409 })
+      if (atual.custo?.relatorioArquivoId || atual.historicoVeiculo?.relatorioArquivoId) {
+        return NextResponse.json({ erro: 'Esta conta já faz parte de um relatório fechado e não pode ser alterada.' }, { status: 409 })
+      }
+      const parsed = editarSchema.safeParse({
+        descricao: form.get('descricao'),
+        fornecedor: form.get('fornecedor') || undefined,
+        vencimento: form.get('vencimento'),
+        valor: form.get('valor'),
+        linhaDigitavel: form.get('linhaDigitavel') || undefined,
+      })
+      if (!parsed.success) return NextResponse.json({ erro: 'Revise a descrição, o vencimento e o valor.' }, { status: 400 })
+      const vencimento = dataLocal(parsed.data.vencimento)
+      if (!vencimento) return NextResponse.json({ erro: 'Data de vencimento inválida.' }, { status: 400 })
+      const linha = linhaDigitavelDoCodigoBarras(somenteDigitosBoleto(parsed.data.linhaDigitavel))
+      if (linha && (!linhaDigitavelEstruturalmenteValida(linha) || !linhaDigitavelValida(linha))) {
+        return NextResponse.json({ erro: 'O código não passou na verificação. Confira todos os dígitos antes de salvar.' }, { status: 422 })
+      }
+
+      await executarComAuditoria({ usuarioId: auth.session.userId, origem: 'API' }, async (tx) => {
+        const resultado = await tx.contaPagar.updateMany({
+          where: { id, empresaId: auth.empresaId!, status: atual.status },
+          data: {
+            descricao: parsed.data.descricao,
+            fornecedor: parsed.data.fornecedor || null,
+            vencimento,
+            valor: parsed.data.valor,
+            linha_digitavel: linha ? encryptSensitive(linha, auth.empresaId!, 'contaPagar.linhaDigitavel') : null,
+          },
+        })
+        if (resultado.count !== 1) throw new Error('JA_PROCESSADA')
+        await tx.custo.updateMany({
+          where: { contaPagarId: id, empresaId: auth.empresaId!, relatorioArquivoId: null },
+          data: {
+            data: vencimento,
+            ano: vencimento.getUTCFullYear(),
+            mesIndex: vencimento.getUTCMonth(),
+            semanaIndex: Math.min(4, Math.floor((vencimento.getUTCDate() - 1) / 7) + 1),
+            descricao: `Boleto: ${parsed.data.descricao}`,
+            valor: parsed.data.valor,
+          },
+        })
+        if (atual.historicoVeiculoId) {
+          await tx.historicoVeiculo.updateMany({
+            where: { id: atual.historicoVeiculoId, empresaId: auth.empresaId!, relatorioArquivoId: null },
+            data: { data_agendada: vencimento, descricao: `Conta a pagar: ${parsed.data.descricao}`, custo: parsed.data.valor },
+          })
+        }
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+      return NextResponse.json({ sucesso: true, status: atual.status })
+    }
 
     if (acao === 'REABRIR') {
       if (atual.status !== 'PAGO') return NextResponse.json({ erro: 'Somente uma conta paga pode ter a baixa revertida.' }, { status: 409 })
