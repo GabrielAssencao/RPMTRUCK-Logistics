@@ -93,6 +93,8 @@ export async function GET(request: NextRequest) {
       cobravelExtra: true,
       franquiaNoMomento: true,
       ordemNaCompetencia: true,
+      classificacaoCobranca: true,
+      classificadoEm: true,
       criado_em: true,
       atualizado_em: true,
       primeiraRespostaEm: true,
@@ -149,7 +151,9 @@ export async function GET(request: NextRequest) {
 
   const competenciaAtual = inicioCompetencia()
   const [usadosNoMes, extrasNoMes] = await Promise.all([
-    prisma.conversaSuporte.count({ where: { empresaId: escopo.empresaId, competencia: competenciaAtual } }),
+    prisma.conversaSuporte.count({
+      where: { empresaId: escopo.empresaId, competencia: competenciaAtual, classificacaoCobranca: 'ATENDIMENTO' },
+    }),
     prisma.conversaSuporte.count({ where: { empresaId: escopo.empresaId, competencia: competenciaAtual, cobravelExtra: true } }),
   ])
   const politica = obterPoliticaSuporte(escopo.empresa.plano)

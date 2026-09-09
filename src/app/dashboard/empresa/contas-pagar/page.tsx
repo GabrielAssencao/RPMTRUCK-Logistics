@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Building2, Check, Copy, Download, ExternalLink, FileText, Plus, ReceiptText, RotateCcw, Trash2, Upload, X } from 'lucide-react'
+import { AlertTriangle, Building2, Camera, Check, Copy, Download, ExternalLink, FileText, Plus, ReceiptText, RotateCcw, Trash2, Upload, X } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
-import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel } from '@/lib/financeiro/contasPagar'
+import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel, linhaDigitavelEstruturalmenteValida, linhaDigitavelValida, somenteDigitosBoleto } from '@/lib/financeiro/contasPagar'
 import { CATEGORIAS_CONTA_PAGAR, descricaoContaPagarEhSugestao, obterCategoriaContaPagar } from '@/lib/financeiro/categoriasContaPagar'
 import { lerBoletoPdfLocalmente, lerCodigoBarrasImagemLocalmente } from './_utils/leituraBoletoPdf'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
@@ -55,6 +55,7 @@ export default function ContasPagarPage() {
   const [portalForm, setPortalForm] = useState({ nome: '', url: '' })
   const submitRef = useRef(false)
   const leituraArquivoRef = useRef(0)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   const carregar = useCallback(async () => {
     try {
@@ -108,6 +109,10 @@ export default function ContasPagarPage() {
     proximas: pendentes.filter((conta) => conta.nivel === 'AMARELO').length,
   }), [pendentes])
   const categoriaSelecionada = obterCategoriaContaPagar(form.categoria)
+  const linhaSomenteDigitos = somenteDigitosBoleto(form.linhaDigitavel)
+  const linhaEstruturalmenteValida = !linhaSomenteDigitos || linhaDigitavelEstruturalmenteValida(linhaSomenteDigitos)
+  const linhaComValidacaoDivergente = Boolean(linhaSomenteDigitos) && linhaEstruturalmenteValida && !linhaDigitavelValida(linhaSomenteDigitos)
+  const exigeRevisao = form.origemLeitura !== 'MANUAL' || linhaComValidacaoDivergente
 
   const limparCadastro = () => {
     leituraArquivoRef.current += 1
@@ -178,10 +183,45 @@ export default function ContasPagarPage() {
     }
   }
 
+  const digitalizarCodigoComCamera = async (arquivo: File | null) => {
+    const leituraId = ++leituraArquivoRef.current
+    setFeedback('')
+    if (!arquivo) return
+    if (arquivo.size > 15 * 1024 * 1024) {
+      setFeedback('A foto deve ter no máximo 15 MB para leitura local.')
+      return
+    }
+    setLendoArquivo(true)
+    try {
+      const dados = await lerCodigoBarrasImagemLocalmente(arquivo)
+      if (leituraArquivoRef.current !== leituraId) return
+      if (!dados.linhaDigitavel) {
+        setFeedback('Não foi possível reconhecer o código nessa foto. Tente novamente com boa iluminação e enquadre todas as barras.')
+        return
+      }
+      setForm((atual) => ({
+        ...atual,
+        linhaDigitavel: dados.linhaDigitavel,
+        vencimento: dados.vencimento || atual.vencimento,
+        valor: dados.valor || atual.valor,
+        origemLeitura: 'CODIGO_BARRAS',
+        revisado: false,
+      }))
+      setFeedback('Código lido pela câmera somente neste dispositivo. Confira código, vencimento e valor antes de salvar.')
+    } catch {
+      if (leituraArquivoRef.current === leituraId) {
+        setFeedback('Não foi possível processar a foto. Tente novamente ou informe a linha digitável manualmente.')
+      }
+    } finally {
+      if (leituraArquivoRef.current === leituraId) setLendoArquivo(false)
+      if (cameraInputRef.current) cameraInputRef.current.value = ''
+    }
+  }
+
   const cadastrar = async (event: React.FormEvent) => {
     event.preventDefault()
     if (submitRef.current) return
-    if (form.origemLeitura !== 'MANUAL' && !form.revisado) return setFeedback('Confirme que você comparou os dados extraídos com o boleto.')
+    if (exigeRevisao && !form.revisado) return setFeedback('Confirme que você comparou o código e os dados com o boleto original.')
     if (categoriaSelecionada?.requerVeiculo && !form.veiculoId) return setFeedback(`Selecione o veículo relacionado a ${categoriaSelecionada.rotulo.toLowerCase()}.`)
     submitRef.current = true
     setEnviando(true)
@@ -340,15 +380,29 @@ export default function ContasPagarPage() {
               {categoriaSelecionada && <Campo label={`Veículo ${categoriaSelecionada.requerVeiculo ? '*' : '(opcional)'}`}><select required={categoriaSelecionada.requerVeiculo} value={form.veiculoId} onChange={(event) => setForm({ ...form, veiculoId: event.target.value })} className="input-financeiro"><option value="">{categoriaSelecionada.requerVeiculo ? 'Selecione' : 'Despesa geral da empresa'}</option>{veiculos.map((veiculo) => <option key={veiculo.id} value={veiculo.id}>{veiculo.modelo} · {veiculo.placa}</option>)}</select></Campo>}
             </div>
 
-            <Campo label="Código de barras / linha digitável (44, 47 ou 48 dígitos)"><input inputMode="numeric" maxLength={64} value={formatarLinhaDigitavel(form.linhaDigitavel)} onChange={(e) => atualizarCampoAuditado('linhaDigitavel', e.target.value)} className="input-financeiro font-mono" /></Campo>
+            <Campo label="Código de barras / linha digitável (44, 47 ou 48 dígitos)">
+              <input inputMode="numeric" autoComplete="off" maxLength={64} aria-describedby="linha-digitavel-ajuda" aria-invalid={!linhaEstruturalmenteValida || linhaComValidacaoDivergente} value={formatarLinhaDigitavel(form.linhaDigitavel)} onChange={(e) => atualizarCampoAuditado('linhaDigitavel', somenteDigitosBoleto(e.target.value))} className="input-financeiro font-mono" />
+              <span id="linha-digitavel-ajuda" className={`mt-1.5 block text-[10px] ${!linhaEstruturalmenteValida || linhaComValidacaoDivergente ? 'text-amber-500' : 'text-foreground-muted'}`}>
+                {linhaSomenteDigitos.length} dígitos informados{linhaComValidacaoDivergente ? ' · a verificação de segurança divergiu; revise antes de salvar.' : linhaSomenteDigitos && linhaEstruturalmenteValida ? ' · formato reconhecido.' : ''}
+              </span>
+            </Campo>
+            {capacidades?.leituraAutomatica && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button type="button" disabled={lendoArquivo} onClick={() => cameraInputRef.current?.click()} className="min-h-12 border px-3 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>
+                  <Camera size={15} className="mr-2 inline" />{lendoArquivo ? 'Lendo código...' : 'Fotografar código'}
+                </button>
+                <p className="self-center text-[10px] text-foreground-muted">No celular, use a câmera traseira e enquadre todas as barras. A foto é processada localmente e não é enviada.</p>
+                <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="sr-only" aria-label="Fotografar código de barras" onChange={(event) => void digitalizarCodigoComCamera(event.target.files?.[0] ?? null)} />
+              </div>
+            )}
             <Campo label="Boleto (PDF/JPG/PNG/WebP, até 5 MB)"><label className="flex min-h-12 cursor-pointer items-center justify-center border border-dashed px-3 text-center text-xs" style={{ borderColor: 'var(--border)' }}><Upload size={15} className="mr-2" />{lendoArquivo ? 'Analisando arquivo localmente...' : boleto?.name ?? 'Selecionar arquivo'}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => void selecionarBoleto(e.target.files?.[0] ?? null)} /></label></Campo>
 
             {capacidades?.leituraAutomatica ? <p className="text-[11px] text-foreground-muted">A leitura ocorre localmente: primeiro pela camada de texto e, se necessário, pelo código de barras visível nas três primeiras páginas. PDFs sem dados reconhecíveis continuam com preenchimento manual.</p> : <p className="border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] text-amber-500">No Essencial, o boleto pode ser anexado, mas a leitura automática fica disponível a partir do Avançado.</p>}
             {categoriaSelecionada && <p className="border border-blue-500/30 bg-blue-500/5 p-3 text-[11px] text-blue-400">Integração: {categoriaSelecionada.integracao}. O lançamento será criado como despesa pendente e acompanhará a baixa do boleto.{categoriaSelecionada.valor === 'MANUTENCAO' ? ' Uma manutenção pendente também será criada para o veículo.' : ''}</p>}
             {categoriaSelecionada && !integracoes.custos && <p role="alert" className="border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] text-amber-500">O módulo Controle & Gestão precisa estar ativo para alimentar Custos & Despesas.</p>}
             {categoriaSelecionada?.valor === 'MANUTENCAO' && !integracoes.frota && <p role="alert" className="border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] text-amber-500">O módulo Frota precisa estar ativo para criar a manutenção.</p>}
-            {form.origemLeitura !== 'MANUAL' && <label className="flex items-start gap-2 border border-amber-500/30 p-3 text-xs"><input type="checkbox" checked={form.revisado} onChange={(e) => setForm({ ...form, revisado: e.target.checked })} className="mt-0.5" /><span><strong className="block">Verifique e ateste que os dados preenchidos estão corretos antes de concluir.</strong> Comparei beneficiário, vencimento, valor e código com o documento original.</span></label>}
-            <button disabled={enviando || lendoArquivo || (form.origemLeitura !== 'MANUAL' && !form.revisado) || Boolean(categoriaSelecionada && !integracoes.custos) || Boolean(categoriaSelecionada?.valor === 'MANUTENCAO' && !integracoes.frota)} className="min-h-12 w-full text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}>{enviando ? 'Salvando...' : 'Salvar conta'}</button>
+            {exigeRevisao && <label className="flex items-start gap-2 border border-amber-500/30 p-3 text-xs"><input type="checkbox" checked={form.revisado} onChange={(e) => setForm({ ...form, revisado: e.target.checked })} className="mt-0.5" /><span><strong className="block">Verifique e ateste que os dados preenchidos estão corretos antes de concluir.</strong> Comparei beneficiário, vencimento, valor e código com o documento original.</span></label>}
+            <button disabled={enviando || lendoArquivo || !linhaEstruturalmenteValida || (exigeRevisao && !form.revisado) || Boolean(categoriaSelecionada && !integracoes.custos) || Boolean(categoriaSelecionada?.valor === 'MANUTENCAO' && !integracoes.frota)} className="min-h-12 w-full text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}>{enviando ? 'Salvando...' : 'Salvar conta'}</button>
           </form>
         </Modal>
       )}

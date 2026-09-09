@@ -11,6 +11,7 @@ import {
   CAPACIDADES_CONTAS_PAGAR,
   diasAteVencimento,
   formatarLinhaDigitavel,
+  linhaDigitavelEstruturalmenteValida,
   linhaDigitavelValida,
   nivelVencimento,
   somenteDigitosBoleto,
@@ -140,7 +141,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ erro: 'O módulo Frota precisa estar ativo para integrar uma manutenção.' }, { status: 403 })
     }
     const linha = somenteDigitosBoleto(parsed.data.linhaDigitavel)
-    if (linha && !linhaDigitavelValida(linha)) return NextResponse.json({ erro: 'A linha digitável não passou na validação. Confira o boleto antes de salvar.' }, { status: 422 })
+    if (linha && !linhaDigitavelEstruturalmenteValida(linha)) {
+      return NextResponse.json({ erro: `O código informado possui ${linha.length} dígitos. Informe uma linha com 47 dígitos, um código de barras com 44 dígitos ou uma arrecadação com 48 dígitos.` }, { status: 422 })
+    }
+    if (linha && !linhaDigitavelValida(linha) && !parsed.data.revisado) {
+      return NextResponse.json({ erro: 'O código não passou na verificação de segurança. Revise todos os dígitos e confirme a conferência manual antes de salvar.' }, { status: 422 })
+    }
 
     const veiculo = parsed.data.veiculoId
       ? await prisma.veiculo.findFirst({

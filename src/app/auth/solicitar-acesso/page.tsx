@@ -21,6 +21,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext'
 import TurnstileWidget from '@/components/security/TurnstileWidget'
 import { usePlanosPublicos, type PlanoPublico } from '@/hooks/usePlanosPublicos'
+import { formatarTelefoneBR, somenteDigitosTelefoneBR, telefoneBRValido } from '@/utils/telefone'
 
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 
@@ -81,7 +82,8 @@ export default function SolicitarAcesso() {
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+    const valor = e.target.name === 'whatsapp' ? formatarTelefoneBR(e.target.value) : e.target.value
+    setForm(f => ({ ...f, [e.target.name]: valor }))
   }
 
   const handlePlanSelect = (planId: string) => {
@@ -96,6 +98,14 @@ export default function SolicitarAcesso() {
 
   const handleSubmit = async () => {
     if (!form.empresa || !form.responsavel || !form.email || !form.plano) return
+    if (form.whatsapp && !telefoneBRValido(form.whatsapp)) {
+      setErrorMessage('Informe um WhatsApp brasileiro válido com DDD.')
+      return
+    }
+    if (form.contatoPref === 'whatsapp' && !telefoneBRValido(form.whatsapp)) {
+      setErrorMessage('Informe um WhatsApp válido para receber o acesso por esse canal.')
+      return
+    }
     if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken) {
       setErrorMessage('Conclua a verificação de segurança.')
       return
@@ -107,7 +117,7 @@ export default function SolicitarAcesso() {
       const res = await fetch('/api/solicitacoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, turnstileToken: turnstileToken || undefined })
+        body: JSON.stringify({ ...form, whatsapp: somenteDigitosTelefoneBR(form.whatsapp), turnstileToken: turnstileToken || undefined })
       })
       const data = await res.json()
       setTurnstileToken('')
@@ -215,7 +225,7 @@ export default function SolicitarAcesso() {
                 <InputField icon={<Building2 size={14} />} label="Nome da empresa" name="empresa" placeholder="Transportadora XYZ" value={form.empresa} onChange={handleChange} primary={primary} maxLength={150} />
                 <InputField icon={<User size={14} />} label="Nome do responsável" name="responsavel" placeholder="João Silva" value={form.responsavel} onChange={handleChange} primary={primary} maxLength={120} />
                 <InputField icon={<Mail size={14} />} label="E-mail corporativo" name="email" type="email" placeholder="contato@empresa.com" value={form.email} onChange={handleChange} primary={primary} maxLength={254} />
-                <InputField icon={<Phone size={14} />} label="WhatsApp" name="whatsapp" placeholder="(11) 99999-9999" value={form.whatsapp} onChange={handleChange} primary={primary} maxLength={20} pattern="\+?[0-9\s().-]{10,20}" />
+                <InputField icon={<Phone size={14} />} label="WhatsApp (DDD + número)" name="whatsapp" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="(11) 99999-9999" value={form.whatsapp} onChange={handleChange} primary={primary} maxLength={15} ariaInvalid={Boolean(form.whatsapp) && !telefoneBRValido(form.whatsapp)} hint={`${somenteDigitosTelefoneBR(form.whatsapp).length}/11 dígitos · telefone fixo ou celular brasileiro`} />
                 <div className="sm:col-span-2 relative">
                   <InputField 
                     icon={<Truck size={14} />} 
@@ -260,7 +270,7 @@ export default function SolicitarAcesso() {
 
             <TurnstileWidget key={turnstileVersion} action="access_request" onTokenChange={setTurnstileToken} />
 
-            <motion.button onClick={handleSubmit} disabled={loading || carregandoPlanos || !form.empresa || !form.responsavel || !form.email || !form.plano} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} className="w-full py-5 font-black text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed font-rajdhani cursor-pointer" style={{ backgroundColor: primary, color: '#000', clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))' }}>
+            <motion.button onClick={handleSubmit} disabled={loading || carregandoPlanos || !form.empresa || !form.responsavel || !form.email || !form.plano || (Boolean(form.whatsapp) && !telefoneBRValido(form.whatsapp)) || (form.contatoPref === 'whatsapp' && !telefoneBRValido(form.whatsapp))} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} className="w-full py-5 font-black text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed font-rajdhani cursor-pointer" style={{ backgroundColor: primary, color: '#000', clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))' }}>
               {loading ? (<><span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> ENVIANDO...</>) : (<><Send size={16} /> ENVIAR SOLICITAÇÃO →</>)}
             </motion.button>
           </motion.div>
@@ -353,14 +363,15 @@ function FormSection({ label, primary, children }: { label: string; primary: str
   )
 }
 
-function InputField({ icon, label, name, placeholder, value, onChange, primary, type = 'text', readOnly = false, maxLength, pattern }: { icon: React.ReactNode; label: string; name: string; placeholder: string; value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; primary: string; type?: string; readOnly?: boolean; maxLength?: number; pattern?: string }) {
+function InputField({ icon, label, name, placeholder, value, onChange, primary, type = 'text', readOnly = false, maxLength, pattern, inputMode, autoComplete, ariaInvalid, hint }: { icon: React.ReactNode; label: string; name: string; placeholder: string; value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; primary: string; type?: string; readOnly?: boolean; maxLength?: number; pattern?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']; autoComplete?: string; ariaInvalid?: boolean; hint?: string }) {
   return (
     <div>
-      <label className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold mb-2 font-mono" style={{ color: 'var(--foreground-muted)' }}>
+      <label htmlFor={name} className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold mb-2 font-mono" style={{ color: 'var(--foreground-muted)' }}>
         <span style={{ color: primary }}>{icon}</span> {label}
       </label>
       <input 
-        type={type} 
+        type={type}
+        id={name}
         name={name} 
         placeholder={placeholder} 
         value={value} 
@@ -368,6 +379,10 @@ function InputField({ icon, label, name, placeholder, value, onChange, primary, 
         readOnly={readOnly}
         maxLength={maxLength}
         pattern={pattern}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        aria-invalid={ariaInvalid}
+        aria-describedby={hint ? `${name}-hint` : undefined}
         className="w-full px-4 py-3 text-sm outline-none transition-all duration-200 border font-sans" 
         style={{ 
           backgroundColor: readOnly ? 'var(--background)' : 'var(--background-secondary)', 
@@ -378,6 +393,7 @@ function InputField({ icon, label, name, placeholder, value, onChange, primary, 
         onFocus={e => !readOnly && (e.target.style.borderColor = primary)} 
         onBlur={e => e.target.style.borderColor = 'var(--border)'} 
       />
+      {hint && <p id={`${name}-hint`} className={`mt-1.5 text-[10px] ${ariaInvalid ? 'text-red-500' : 'text-foreground-muted'}`}>{ariaInvalid ? 'Confira o DDD e o número informado. ' : ''}{hint}</p>}
     </div>
   )
 }

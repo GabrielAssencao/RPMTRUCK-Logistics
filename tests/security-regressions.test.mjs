@@ -116,8 +116,11 @@ test('CSP usa nonce e não permite scripts inline em produção', () => {
 
   assert.match(scriptDirective, /nonce-\$\{nonce\}/)
   assert.doesNotMatch(scriptDirective, /unsafe-inline/)
+  assert.match(scriptDirective, /https:\/\/va\.vercel-scripts\.com/)
   assert.match(proxy, /script-src-attr 'none'/)
   assert.match(layout, /await connection\(\)/)
+  assert.match(layout, /process\.env\.VERCEL === '1'/)
+  assert.match(layout, /isVercelDeployment && <Analytics \/>/)
 })
 
 test('origens de loopback são aceitas apenas no ambiente de desenvolvimento', () => {
@@ -168,7 +171,7 @@ test('chat restringe empresas ao gestor e deriva o tenant da sessão', () => {
   assert.match(adminChat, /applyRateLimit\(/)
   assert.match(adminChat, /status: \{ notIn: \['RESOLVIDO', 'FECHADO'\] \}/)
   assert.match(adminChat, /competencia: competenciaAtual, cobravelExtra: true/)
-  assert.match(adminChat, /resumo: \{ ticketsAtivos, mensagensNaoLidas, extrasNoMes \}/)
+  assert.match(adminChat, /resumo: \{ ticketsAtivos, mensagensNaoLidas, extrasNoMes, bugsConfirmadosNoMes \}/)
   assert.match(tickets, /requireEmpresaAuth\(request, \{ acao: 'GESTAO' \}\)/)
   assert.match(tickets, /auth\.session\.empresaId/)
   assert.match(tickets, /TransactionIsolationLevel\.Serializable/)
@@ -176,6 +179,32 @@ test('chat restringe empresas ao gestor e deriva o tenant da sessão', () => {
   assert.match(adminTicket, /requireAdminAuth\(request\)/)
   assert.match(adminTicket, /where: \{ id: atual\.id \}/)
   assert.match(proxy, /\/dashboard\/empresa\/chat/)
+})
+
+test('franquia de suporte ignora apenas bugs confirmados pelo superadmin', () => {
+  const plans = read('src/utils/planos.ts')
+  const tickets = read('src/app/api/chat/tickets/route.ts')
+  const companyChat = read('src/app/api/chat/route.ts')
+  const adminTicket = read('src/app/api/admin/chat/[id]/route.ts')
+  const support = read('src/lib/suporte.ts')
+  const adminUi = read('src/app/dashboard/admin/_modulos/chat/ChatModule.tsx')
+  const migration = read('prisma/migrations/20260908130000_classificacao_bugs_suporte/migration.sql')
+
+  assert.match(plans, /ESSENCIAL:[\s\S]*ticketsSuporteMes: 25/)
+  assert.match(plans, /AVANCADO:[\s\S]*ticketsSuporteMes: 35/)
+  assert.match(plans, /ENTERPRISE:[\s\S]*ticketsSuporteMes: 50/)
+  assert.match(tickets, /classificacaoCobranca: 'ATENDIMENTO'/)
+  assert.match(companyChat, /classificacaoCobranca: 'ATENDIMENTO'/)
+  assert.match(adminTicket, /requireAdminAuth\(request\)/)
+  assert.match(adminTicket, /BUG_SISTEMA_CONFIRMADO/)
+  assert.match(adminTicket, /classificadoPorId:[\s\S]*auth\.session!\.userId/)
+  assert.match(adminTicket, /recalcularCoberturaCompetencia\(tx, atual\.empresaId, atual\.competencia\)/)
+  assert.match(support, /WHEN ordenados\."classificacao_cobranca" = 'BUG_SISTEMA_CONFIRMADO' THEN 0/)
+  assert.match(support, /ELSE ordenados\.ordem > conversa\."franquia_no_momento"/)
+  assert.doesNotMatch(support, /SET[\s\S]{0,80}"franquia_no_momento"\s*=/)
+  assert.match(adminUi, /window\.confirm/)
+  assert.match(migration, /CREATE TYPE "ClassificacaoCobrancaTicket"/)
+  assert.match(migration, /FOREIGN KEY \("classificado_por_id"\)/)
 })
 
 test('migração de tickets preserva histórico e corrige a ambiguidade do rate limit', () => {

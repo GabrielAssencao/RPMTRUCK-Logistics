@@ -19,6 +19,11 @@ export function somenteDigitosBoleto(valor: string | null | undefined) {
   return (valor ?? '').replace(/\D/g, '').slice(0, 48)
 }
 
+export function linhaDigitavelEstruturalmenteValida(valor: string | null | undefined) {
+  const linha = somenteDigitosBoleto(valor)
+  return linha.length === 44 || linha.length === 47 || (linha.length === 48 && linha.startsWith('8'))
+}
+
 function modulo10(campo: string) {
   let soma = 0
   let peso = 2

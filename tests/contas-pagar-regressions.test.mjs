@@ -23,10 +23,31 @@ test('linha digitável é validada e criptografada antes da persistência', () =
   const domain = read('src/lib/financeiro/contasPagar.ts')
 
   assert.match(route, /linhaDigitavelValida\(linha\)/)
+  assert.match(route, /linhaDigitavelEstruturalmenteValida\(linha\)/)
+  assert.match(route, /!linhaDigitavelValida\(linha\) && !parsed\.data\.revisado/)
   assert.match(route, /encryptSensitive\(linha, auth\.empresaId!, 'contaPagar\.linhaDigitavel'\)/)
   assert.match(domain, /linha\.length === 47/)
   assert.match(domain, /linha\.length === 44/)
   assert.match(domain, /linha\.length === 48 && linha\.startsWith\('8'\)/)
+})
+
+test('linha bancária de 47 dígitos preserva zeros e separa estrutura de dígitos verificadores', async () => {
+  const typescript = await import('typescript')
+  const source = read('src/lib/financeiro/contasPagar.ts')
+  const javascript = typescript.transpileModule(source, {
+    compilerOptions: { module: typescript.ModuleKind.ESNext, target: typescript.ScriptTarget.ES2022 },
+  }).outputText
+  const domain = await import(`data:text/javascript;base64,${Buffer.from(javascript).toString('base64')}`)
+  const valida = '00190500954014481606906809350314337370000000100'
+  const dvDivergente = `${valida.slice(0, 9)}0${valida.slice(10)}`
+
+  assert.equal(domain.somenteDigitosBoleto(`  ${valida}  `), valida)
+  assert.equal(domain.formatarLinhaDigitavel(valida), '00190.50095 40144.816069 06809.350314 3 37370000000100')
+  assert.equal(domain.linhaDigitavelEstruturalmenteValida(valida), true)
+  assert.equal(domain.linhaDigitavelValida(valida), true)
+  assert.equal(domain.linhaDigitavelEstruturalmenteValida(dvDivergente), true)
+  assert.equal(domain.linhaDigitavelValida(dvDivergente), false)
+  assert.equal(domain.linhaDigitavelEstruturalmenteValida(valida.slice(0, 46)), false)
 })
 
 test('upload é limitado no cliente e no servidor e valida assinatura do conteúdo', () => {
@@ -147,6 +168,9 @@ test('PDF usa texto e leitura visual com fallback para código de barras', () =>
   assert.match(reader, /fornecedorPorPosicao/)
   assert.match(reader, /encontrarLinhaDigitavelEmSegmentos\(segmentos\)/)
   assert.match(page, /dados\.origemLeitura/)
+  assert.match(page, /capture="environment"/)
+  assert.match(page, /digitalizarCodigoComCamera/)
+  assert.match(page, /A foto é processada localmente e não é enviada/)
   assert.match(pkg, /"@zxing\/browser"/)
 })
 

@@ -95,12 +95,14 @@ export default function SupportTicketCenter() {
     </header>
 
     <div className="grid gap-3 sm:grid-cols-3">
-      <Resumo label="Franquia mensal" value={`${franquia.usados}/${franquia.limite}`} detail="tickets abertos no mês" />
+      <Resumo label="Franquia mensal" value={`${franquia.usados}/${franquia.limite}`} detail="tickets contabilizados no mês" />
       <Resumo label="Prazo inicial" value={`${franquia.prazoRespostaHoras}h úteis`} detail="conforme o plano atual" />
       <Resumo label="Atendimentos extras" value={String(franquia.extras)} detail="sinalizados neste mês" />
     </div>
 
     {error && <p role="alert" className="border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-500">{error}</p>}
+
+    {selecionado?.classificacaoCobranca === 'BUG_SISTEMA_CONFIRMADO' && <p className="border border-blue-500/30 bg-blue-500/5 p-3 text-xs text-blue-400">O Superadmin confirmou este chamado como bug do sistema. Ele não consome a franquia mensal da empresa.</p>}
 
     {novoAberto && <form onSubmit={criarTicket} className="grid gap-4 border p-5 md:grid-cols-2" style={{ borderColor: primary, backgroundColor: 'var(--background-secondary)' }}>
       <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-foreground-muted">Tipo do atendimento</span><select value={form.categoria} onChange={(event) => setForm({ ...form, categoria: event.target.value })} className="w-full border bg-background p-3 text-sm outline-none" style={{ borderColor: 'var(--border)' }}>{CATEGORIAS_TICKET.map((categoria) => <option key={categoria} value={categoria}>{CATEGORIA_TICKET_LABEL[categoria]}</option>)}</select></label>

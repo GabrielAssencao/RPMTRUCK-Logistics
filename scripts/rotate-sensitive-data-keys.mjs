@@ -1,54 +1,54 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHmac,
-  hkdfSync,
-  randomBytes,
-  timingSafeEqual,
-} from 'node:crypto'
+import { timingSafeEqual } from 'node:crypto'
 import { PrismaClient } from '@prisma/client'
+import {
+  assertSequentialRotation,
+  blindIndexWithKey,
+  decodeEncryptionKey,
+  decryptWithKey,
+  encryptedValueVersion,
+  encryptWithKey,
+  parseEncryptionVersion,
+} from '../src/lib/dataEncryptionCore.mjs'
 
-const APPLY_CONFIRMATION = '--confirm=ROTATE_TO_V2'
+const environmentArgument = process.argv.find((argument) => argument.startsWith('--environment='))
+const targetEnvironment = environmentArgument?.slice('--environment='.length)
+if (!['development', 'production'].includes(targetEnvironment)) {
+  throw new Error('Informe explicitamente --environment=development ou --environment=production.')
+}
+if (targetEnvironment === 'development' && process.env.LOCAL_ENVIRONMENT !== 'development') {
+  throw new Error('Rotação local bloqueada: LOCAL_ENVIRONMENT deve ser development.')
+}
+
+const activeVersion = parseEncryptionVersion(process.env.DATA_ENCRYPTION_ACTIVE_VERSION)
+const previousVersion = parseEncryptionVersion(process.env.DATA_ENCRYPTION_PREVIOUS_VERSION)
+assertSequentialRotation(previousVersion, activeVersion)
+
 const apply = process.argv.includes('--apply')
-const confirmed = process.argv.includes(APPLY_CONFIRMATION)
-const activeVersion = process.env.DATA_ENCRYPTION_ACTIVE_VERSION
-const previousVersion = process.env.DATA_ENCRYPTION_PREVIOUS_VERSION
-
-if (activeVersion !== 'v2' || previousVersion !== 'v1') {
-  throw new Error('Para esta rotação, configure DATA_ENCRYPTION_ACTIVE_VERSION=v2 e DATA_ENCRYPTION_PREVIOUS_VERSION=v1.')
+const rotationConfirmation = `--confirm=ROTATE_${previousVersion.toUpperCase()}_TO_${activeVersion.toUpperCase()}`
+const productionConfirmation = '--confirm-production=BACKUP_VERIFIED'
+if (apply && !process.argv.includes(rotationConfirmation)) {
+  throw new Error(`Aplicação bloqueada. Após backup e simulação, informe ${rotationConfirmation}.`)
 }
-if (apply && !confirmed) {
-  throw new Error(`Aplicação bloqueada. Repita com --apply ${APPLY_CONFIRMATION} após backup e simulação.`)
+if (apply && targetEnvironment === 'production' && !process.argv.includes(productionConfirmation)) {
+  throw new Error(`Produção bloqueada. Confirme um backup recuperável com ${productionConfirmation}.`)
 }
 
-function requiredKey(name) {
-  const value = process.env[name]
-  const normalized = value?.trim() || ''
-  const key = Buffer.from(normalized, 'base64')
-  if (key.length !== 32 || key.toString('base64') !== normalized) {
-    throw new Error(`${name} deve conter exatamente 32 bytes em Base64 válido.`)
-  }
-  return key
-}
-
-const activeMaster = requiredKey('DATA_ENCRYPTION_MASTER_KEY')
-const activeBlind = requiredKey('DATA_BLIND_INDEX_KEY')
-const previousMaster = requiredKey('DATA_ENCRYPTION_PREVIOUS_MASTER_KEY')
-const previousBlind = requiredKey('DATA_BLIND_INDEX_PREVIOUS_KEY')
+const activeMaster = decodeEncryptionKey(process.env.DATA_ENCRYPTION_MASTER_KEY, 'DATA_ENCRYPTION_MASTER_KEY')
+const activeBlind = decodeEncryptionKey(process.env.DATA_BLIND_INDEX_KEY, 'DATA_BLIND_INDEX_KEY')
+const previousMaster = decodeEncryptionKey(
+  process.env.DATA_ENCRYPTION_PREVIOUS_MASTER_KEY,
+  'DATA_ENCRYPTION_PREVIOUS_MASTER_KEY',
+)
+const previousBlind = decodeEncryptionKey(
+  process.env.DATA_BLIND_INDEX_PREVIOUS_KEY,
+  'DATA_BLIND_INDEX_PREVIOUS_KEY',
+)
 
 if (timingSafeEqual(activeMaster, previousMaster) || timingSafeEqual(activeBlind, previousBlind)) {
-  throw new Error('As chaves v2 devem ser novas e diferentes das chaves v1.')
+  throw new Error(`As chaves ${activeVersion} devem ser novas e diferentes das chaves ${previousVersion}.`)
 }
 
 const prisma = new PrismaClient()
-const supportedVersions = new Set(['v1', 'v2'])
-
-function versionOf(value) {
-  if (!value || !value.startsWith('enc:')) return null
-  const version = value.split(':', 3)[1]
-  if (!supportedVersions.has(version)) throw new Error('Foi encontrado um registro com versão de criptografia desconhecida.')
-  return version
-}
 
 function keyFor(version) {
   if (version === activeVersion) return activeMaster
@@ -56,70 +56,27 @@ function keyFor(version) {
   throw new Error(`Não existe chave disponível para a versão ${version}.`)
 }
 
-function derivedKey(master, tenantId, field, version) {
-  return Buffer.from(
-    hkdfSync('sha256', master, Buffer.from(tenantId), Buffer.from(`rpmtruck:${field}:${version}`), 32),
-  )
-}
-
-function aad(tenantId, field, version) {
-  return Buffer.from(`rpmtruck:${tenantId}:${field}:${version}`)
-}
-
 function decrypt(value, tenantId, field) {
   if (!value) return value
-  const version = versionOf(value)
+  const version = encryptedValueVersion(value)
   if (!version) return value
-  const parts = value.split(':')
-  if (parts.length !== 5) throw new Error('Foi encontrado um registro criptografado com formato inválido.')
-
-  const decipher = createDecipheriv(
-    'aes-256-gcm',
-    derivedKey(keyFor(version), tenantId, field, version),
-    Buffer.from(parts[2], 'base64url'),
-  )
-  decipher.setAAD(aad(tenantId, field, version))
-  decipher.setAuthTag(Buffer.from(parts[3], 'base64url'))
-  return Buffer.concat([
-    decipher.update(Buffer.from(parts[4], 'base64url')),
-    decipher.final(),
-  ]).toString('utf8')
+  return decryptWithKey(value, keyFor(version), tenantId, field)
 }
 
 function encryptActive(value, plaintext, tenantId, field) {
-  if (!value || versionOf(value) === activeVersion) return value
-  const iv = randomBytes(12)
-  const cipher = createCipheriv(
-    'aes-256-gcm',
-    derivedKey(activeMaster, tenantId, field, activeVersion),
-    iv,
-  )
-  cipher.setAAD(aad(tenantId, field, activeVersion))
-  const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
-  return [
-    'enc',
-    activeVersion,
-    iv.toString('base64url'),
-    cipher.getAuthTag().toString('base64url'),
-    ciphertext.toString('base64url'),
-  ].join(':')
-}
-
-function blindIndexWith(key, value, tenantId, field) {
-  if (!value) return null
-  const normalized = value.normalize('NFKC').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
-  return createHmac('sha256', key).update(`${tenantId}:${field}:${normalized}`).digest('hex')
+  if (!value || encryptedValueVersion(value) === activeVersion) return value
+  return encryptWithKey(plaintext, activeMaster, tenantId, field, activeVersion)
 }
 
 function activeBlindIndex(value, tenantId, field) {
-  return blindIndexWith(activeBlind, value, tenantId, field)
+  return blindIndexWithKey(activeBlind, value, tenantId, field)
 }
 
 function assertExistingBlindIndex(existing, value, tenantId, field) {
   if (!existing) return
   const validIndexes = [
-    blindIndexWith(previousBlind, value, tenantId, field),
-    blindIndexWith(activeBlind, value, tenantId, field),
+    blindIndexWithKey(previousBlind, value, tenantId, field),
+    blindIndexWithKey(activeBlind, value, tenantId, field),
   ]
   if (!validIndexes.includes(existing)) {
     throw new Error('A verificação de integridade encontrou um índice cego incompatível. A rotação foi interrompida.')
@@ -127,15 +84,18 @@ function assertExistingBlindIndex(existing, value, tenantId, field) {
 }
 
 function countVersions(values) {
-  return values.reduce(
-    (result, value) => {
-      if (!value) return result
-      const version = versionOf(value)
-      result[version || 'plaintext'] += 1
-      return result
-    },
-    { v1: 0, v2: 0, plaintext: 0 },
-  )
+  const result = { [previousVersion]: 0, [activeVersion]: 0, plaintext: 0 }
+  for (const value of values) {
+    if (!value) continue
+    const version = encryptedValueVersion(value)
+    const key = version || 'plaintext'
+    result[key] = (result[key] || 0) + 1
+  }
+  return result
+}
+
+function versionSummary(versions) {
+  return Object.entries(versions).map(([version, count]) => `${version}=${count}`).join(', ')
 }
 
 function assertUnique(values, message) {
@@ -143,7 +103,7 @@ function assertUnique(values, message) {
   if (new Set(present).size !== present.length) throw new Error(message)
 }
 
-function prepare(empresas, motoristas) {
+function prepare(empresas, motoristas, contasPagar) {
   const preparedEmpresas = empresas.map((empresa) => {
     const cnpj = decrypt(empresa.cnpj, empresa.id, 'empresa.cnpj')
     const telefone = decrypt(empresa.telefone, empresa.id, 'empresa.telefone')
@@ -173,13 +133,26 @@ function prepare(empresas, motoristas) {
     }
   })
 
+  const preparedContasPagar = contasPagar.map((conta) => {
+    const linhaDigitavel = decrypt(conta.linha_digitavel, conta.empresaId, 'contaPagar.linhaDigitavel')
+    return {
+      id: conta.id,
+      linha_digitavel: encryptActive(
+        conta.linha_digitavel,
+        linhaDigitavel,
+        conta.empresaId,
+        'contaPagar.linhaDigitavel',
+      ),
+    }
+  })
+
   assertUnique(preparedEmpresas.map((empresa) => empresa.cnpjHash), 'Existem CNPJs duplicados após normalização.')
   for (const empresaId of new Set(preparedMotoristas.map((motorista) => motorista.empresaId))) {
     const tenant = preparedMotoristas.filter((motorista) => motorista.empresaId === empresaId)
     assertUnique(tenant.map((motorista) => motorista.cpfHash), 'Existem CPFs duplicados em uma empresa após normalização.')
     assertUnique(tenant.map((motorista) => motorista.cnhHash), 'Existem CNHs duplicadas em uma empresa após normalização.')
   }
-  return { preparedEmpresas, preparedMotoristas }
+  return { preparedEmpresas, preparedMotoristas, preparedContasPagar }
 }
 
 async function readData(client) {
@@ -188,6 +161,7 @@ async function readData(client) {
     client.motorista.findMany({
       select: { id: true, empresaId: true, cpf: true, rg: true, cnh: true, cpfHash: true, cnhHash: true },
     }),
+    client.contaPagar.findMany({ select: { id: true, empresaId: true, linha_digitavel: true } }),
   ])
 }
 
@@ -198,10 +172,14 @@ async function acquireRotationLock(client) {
   `
 }
 
-function verifyRotated(empresas, motoristas) {
+function assertActiveVersion(value, message) {
+  if (value && encryptedValueVersion(value) !== activeVersion) throw new Error(message)
+}
+
+function verifyRotated(empresas, motoristas, contasPagar) {
   for (const empresa of empresas) {
     for (const [field, value] of [['empresa.cnpj', empresa.cnpj], ['empresa.telefone', empresa.telefone]]) {
-      if (value && versionOf(value) !== activeVersion) throw new Error('A verificação final encontrou dados empresariais fora da v2.')
+      assertActiveVersion(value, `A verificação final encontrou dados empresariais fora da ${activeVersion}.`)
       decrypt(value, empresa.id, field)
     }
     const cnpj = decrypt(empresa.cnpj, empresa.id, 'empresa.cnpj')
@@ -216,7 +194,7 @@ function verifyRotated(empresas, motoristas) {
       ['motorista.rg', motorista.rg],
       ['motorista.cnh', motorista.cnh],
     ]) {
-      if (value && versionOf(value) !== activeVersion) throw new Error('A verificação final encontrou dados de motorista fora da v2.')
+      assertActiveVersion(value, `A verificação final encontrou dados de motorista fora da ${activeVersion}.`)
       decrypt(value, motorista.empresaId, field)
     }
     const cpf = decrypt(motorista.cpf, motorista.empresaId, 'motorista.cpf')
@@ -228,33 +206,43 @@ function verifyRotated(empresas, motoristas) {
       throw new Error('A verificação final encontrou um índice de CNH incompatível.')
     }
   }
+
+  for (const conta of contasPagar) {
+    assertActiveVersion(
+      conta.linha_digitavel,
+      `A verificação final encontrou uma linha digitável fora da ${activeVersion}.`,
+    )
+    decrypt(conta.linha_digitavel, conta.empresaId, 'contaPagar.linhaDigitavel')
+  }
 }
 
 try {
-  const [empresas, motoristas] = await readData(prisma)
+  const [empresas, motoristas, contasPagar] = await readData(prisma)
   const versions = countVersions([
     ...empresas.flatMap((empresa) => [empresa.cnpj, empresa.telefone]),
     ...motoristas.flatMap((motorista) => [motorista.cpf, motorista.rg, motorista.cnh]),
+    ...contasPagar.map((conta) => conta.linha_digitavel),
   ])
-  prepare(empresas, motoristas)
+  prepare(empresas, motoristas, contasPagar)
 
   process.stdout.write(
-    `Rotação ${apply ? 'APLICAR' : 'SIMULAÇÃO'}: ${empresas.length} empresas, ${motoristas.length} motoristas; `
-      + `campos v1=${versions.v1}, v2=${versions.v2}, texto legado=${versions.plaintext}.\n`,
+    `Rotação ${previousVersion} -> ${activeVersion} ${apply ? 'APLICAR' : 'SIMULAÇÃO'} em ${targetEnvironment}: `
+      + `${empresas.length} empresas, ${motoristas.length} motoristas, ${contasPagar.length} contas a pagar; `
+      + `${versionSummary(versions)}.\n`,
   )
 
   if (!apply) {
     await prisma.$transaction(async (tx) => {
       await acquireRotationLock(tx)
-      const [lockedEmpresas, lockedMotoristas] = await readData(tx)
-      prepare(lockedEmpresas, lockedMotoristas)
+      const lockedData = await readData(tx)
+      prepare(...lockedData)
     }, { isolationLevel: 'Serializable', maxWait: 15_000, timeout: 120_000 })
-    process.stdout.write(`Nenhum dado foi alterado. Após o backup, use --apply ${APPLY_CONFIRMATION}.\n`)
+    process.stdout.write(`Nenhum dado foi alterado. Após o backup, use --apply ${rotationConfirmation}.\n`)
   } else {
     await prisma.$transaction(async (tx) => {
       await acquireRotationLock(tx)
-      const [currentEmpresas, currentMotoristas] = await readData(tx)
-      const current = prepare(currentEmpresas, currentMotoristas)
+      const currentData = await readData(tx)
+      const current = prepare(...currentData)
 
       for (const empresa of current.preparedEmpresas) {
         await tx.empresa.update({
@@ -274,15 +262,26 @@ try {
           },
         })
       }
+      for (const conta of current.preparedContasPagar) {
+        await tx.contaPagar.update({
+          where: { id: conta.id },
+          data: { linha_digitavel: conta.linha_digitavel },
+        })
+      }
 
-      const [rotatedEmpresas, rotatedMotoristas] = await readData(tx)
-      verifyRotated(rotatedEmpresas, rotatedMotoristas)
-    }, { isolationLevel: 'Serializable', maxWait: 15_000, timeout: 120_000 })
+      const rotatedData = await readData(tx)
+      verifyRotated(...rotatedData)
+    }, { isolationLevel: 'Serializable', maxWait: 15_000, timeout: 300_000 })
 
-    process.stdout.write('Rotação para v2 concluída e verificada. As chaves v1 ainda devem ser preservadas no backup seguro.\n')
+    process.stdout.write(
+      `Rotação para ${activeVersion} concluída e verificada. Preserve as chaves ${previousVersion} no backup seguro.\n`,
+    )
   }
 } catch (error) {
-  console.error('Rotação cancelada sem exibir dados pessoais:', error instanceof Error ? error.message : 'erro desconhecido')
+  console.error(
+    'Rotação cancelada sem exibir dados pessoais:',
+    error instanceof Error ? error.message : 'erro desconhecido',
+  )
   process.exitCode = 1
 } finally {
   await prisma.$disconnect()

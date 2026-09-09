@@ -44,6 +44,8 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // A CSP usa nonce por requisição; páginas estáticas não possuem esse contexto.
   await connection()
+  const isVercelDeployment = process.env.VERCEL === '1'
+
   return (
     <html lang="pt-BR" suppressHydrationWarning data-scroll-behavior="smooth" className={`${rajdhani.variable} ${outfit.variable} ${jetBrainsMono.variable}`}>
       <body className="antialiased overflow-x-hidden">
@@ -51,8 +53,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <ThemeProvider>
           {children}
         </ThemeProvider>
-        <Analytics />
-        {process.env.ENABLE_SPEED_INSIGHTS === 'true' && <SpeedInsights />}
+        {isVercelDeployment && <Analytics />}
+        {isVercelDeployment && process.env.ENABLE_SPEED_INSIGHTS === 'true' && <SpeedInsights />}
       </body>
     </html>
   )
