@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Building2, Camera, Check, Copy, Download, ExternalLink, FileText, Plus, ReceiptText, RotateCcw, Trash2, Upload, X } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
-import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel, linhaDigitavelEstruturalmenteValida, linhaDigitavelValida, somenteDigitosBoleto } from '@/lib/financeiro/contasPagar'
+import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel, identificarCodigoBoleto, linhaDigitavelEstruturalmenteValida, linhaDigitavelValida, somenteDigitosBoleto } from '@/lib/financeiro/contasPagar'
 import { CATEGORIAS_CONTA_PAGAR, descricaoContaPagarEhSugestao, obterCategoriaContaPagar } from '@/lib/financeiro/categoriasContaPagar'
 import { extrairCodigoLido, lerBoletoPdfLocalmente, lerCodigoBarrasImagemLocalmente } from './_utils/leituraBoletoPdf'
-import LeitorCamera from './_components/LeitorCamera'
+import LeitorCamera, { type ModoLeitorCamera } from './_components/LeitorCamera'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
@@ -56,16 +56,18 @@ export default function ContasPagarPage() {
   const [portalForm, setPortalForm] = useState({ nome: '', url: '' })
   const submitRef = useRef(false)
   const leituraArquivoRef = useRef(0)
-  const cameraInputRef = useRef<HTMLInputElement>(null)
-  const [cameraAberta, setCameraAberta] = useState(false)
-  const fecharCamera = useCallback(() => setCameraAberta(false), [])
+  const [cameraAberta, setCameraAberta] = useState<ModoLeitorCamera | null>(null)
+  const fecharCamera = useCallback(() => setCameraAberta(null), [])
   const receberCodigo = useCallback((codigo: string) => {
+    const identificacao = identificarCodigoBoleto(codigo)
+    if (!identificacao.valido) {
+      setFeedback('O conteúdo capturado não corresponde a um boleto bancário ou conta de arrecadação válido.')
+      return
+    }
     const dados = extrairCodigoLido(codigo)
     setForm((atual) => ({ ...atual, linhaDigitavel: dados.linhaDigitavel, valor: dados.valor || atual.valor, vencimento: dados.vencimento || atual.vencimento, origemLeitura: 'CODIGO_BARRAS', revisado: false }))
-    setCameraAberta(false)
-    setFeedback(codigo.length === 44
-      ? 'Código de barras bancário lido corretamente: 44 dígitos. A linha digitável impressa equivalente possui 47. Confira os dados antes de salvar.'
-      : `Linha de ${codigo.length} dígitos reconhecida. Confira os dados antes de salvar.`)
+    setCameraAberta(null)
+    setFeedback(`${identificacao.descricao} Confira os dados antes de salvar.`)
   }, [])
 
   const carregar = useCallback(async () => {
@@ -121,12 +123,13 @@ export default function ContasPagarPage() {
   }), [pendentes])
   const categoriaSelecionada = obterCategoriaContaPagar(form.categoria)
   const linhaSomenteDigitos = somenteDigitosBoleto(form.linhaDigitavel)
+  const identificacaoLinha = identificarCodigoBoleto(linhaSomenteDigitos)
   const linhaEstruturalmenteValida = !linhaSomenteDigitos || linhaDigitavelEstruturalmenteValida(linhaSomenteDigitos)
   const linhaComValidacaoDivergente = Boolean(linhaSomenteDigitos) && linhaEstruturalmenteValida && !linhaDigitavelValida(linhaSomenteDigitos)
   const exigeRevisao = form.origemLeitura !== 'MANUAL' || linhaComValidacaoDivergente
 
   const limparCadastro = () => {
-    setCameraAberta(false)
+    setCameraAberta(null)
     leituraArquivoRef.current += 1
     setForm(criarEstadoInicial())
     setBoleto(null)
@@ -179,7 +182,8 @@ export default function ContasPagarPage() {
         revisado: false,
       }))
       if (dados.codigoBarrasLido) {
-        setFeedback('Código de barras lido na imagem. Confira código, vencimento e valor antes de salvar.')
+        const identificacao = identificarCodigoBoleto(dados.linhaDigitavel)
+        setFeedback(`${identificacao.descricao} Confira código, vencimento e valor antes de salvar.`)
       } else if (dados.textoEncontrado) {
         setFeedback('Camada de texto lida. Compare todos os campos preenchidos com o boleto antes de salvar.')
       } else if (!dados.leitorVisualDisponivel) {
@@ -192,43 +196,6 @@ export default function ContasPagarPage() {
       setFeedback('Não foi possível analisar o arquivo. Preencha os dados manualmente; o documento continuará anexado.')
     } finally {
       if (leituraArquivoRef.current === leituraId) setLendoArquivo(false)
-    }
-  }
-
-  const digitalizarCodigoComCamera = async (arquivo: File | null) => {
-    const leituraId = ++leituraArquivoRef.current
-    setFeedback('')
-    if (!arquivo) return
-    if (arquivo.size > 15 * 1024 * 1024) {
-      setFeedback('A foto deve ter no máximo 15 MB para leitura local.')
-      return
-    }
-    setLendoArquivo(true)
-    try {
-      const dados = await lerCodigoBarrasImagemLocalmente(arquivo)
-      if (leituraArquivoRef.current !== leituraId) return
-      if (!dados.linhaDigitavel) {
-        setFeedback('Não foi possível reconhecer o código nessa foto. Tente novamente com boa iluminação e enquadre todas as barras.')
-        return
-      }
-      setForm((atual) => ({
-        ...atual,
-        linhaDigitavel: dados.linhaDigitavel,
-        vencimento: dados.vencimento || atual.vencimento,
-        valor: dados.valor || atual.valor,
-        origemLeitura: 'CODIGO_BARRAS',
-        revisado: false,
-      }))
-      setFeedback(dados.linhaDigitavel.length === 44
-        ? 'Código de barras bancário lido corretamente: 44 dígitos. A linha digitável impressa equivalente possui 47. Confira os dados antes de salvar.'
-        : `Linha de ${dados.linhaDigitavel.length} dígitos reconhecida. Confira os dados antes de salvar.`)
-    } catch {
-      if (leituraArquivoRef.current === leituraId) {
-        setFeedback('Não foi possível processar a foto. Tente novamente ou informe a linha digitável manualmente.')
-      }
-    } finally {
-      if (leituraArquivoRef.current === leituraId) setLendoArquivo(false)
-      if (cameraInputRef.current) cameraInputRef.current.value = ''
     }
   }
 
@@ -397,18 +364,15 @@ export default function ContasPagarPage() {
             <Campo label="Código de barras / linha digitável (44, 47 ou 48 dígitos)">
               <input inputMode="numeric" autoComplete="off" maxLength={64} aria-describedby="linha-digitavel-ajuda" aria-invalid={!linhaEstruturalmenteValida || linhaComValidacaoDivergente} value={formatarLinhaDigitavel(form.linhaDigitavel)} onChange={(e) => atualizarCampoAuditado('linhaDigitavel', somenteDigitosBoleto(e.target.value))} className="input-financeiro font-mono" />
               <span id="linha-digitavel-ajuda" className={`mt-1.5 block text-[10px] ${!linhaEstruturalmenteValida || linhaComValidacaoDivergente ? 'text-amber-500' : 'text-foreground-muted'}`}>
-                {linhaSomenteDigitos.length} dígitos informados{linhaComValidacaoDivergente ? ' · a verificação de segurança divergiu; revise antes de salvar.' : linhaSomenteDigitos && linhaEstruturalmenteValida ? ' · formato reconhecido.' : ''}
+                {linhaSomenteDigitos.length} dígitos informados{linhaComValidacaoDivergente ? ' · a verificação de segurança divergiu; revise antes de salvar.' : identificacaoLinha.valido ? ` · ${identificacaoLinha.descricao}` : ''}
               </span>
             </Campo>
             {capacidades?.leituraAutomatica && (
               <div className="grid gap-2 sm:grid-cols-2">
-                <button type="button" disabled={lendoArquivo} onClick={() => setCameraAberta(true)} className="min-h-12 border px-3 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}><Camera size={15} className="mr-2 inline" />Ler código ao vivo</button>
-                {cameraAberta && <div className="sm:col-span-2"><LeitorCamera onRead={receberCodigo} onClose={fecharCamera} /></div>}
-                <button type="button" disabled={lendoArquivo} onClick={() => cameraInputRef.current?.click()} className="min-h-12 border px-3 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>
-                  <Camera size={15} className="mr-2 inline" />{lendoArquivo ? 'Lendo código...' : 'Fotografar código'}
-                </button>
-                <p className="self-center text-[10px] text-foreground-muted">No celular, use a câmera traseira e enquadre todas as barras. A foto é processada localmente e não é enviada.</p>
-                <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="sr-only" aria-label="Fotografar código de barras" onChange={(event) => void digitalizarCodigoComCamera(event.target.files?.[0] ?? null)} />
+                <button type="button" disabled={lendoArquivo} onClick={() => setCameraAberta('AO_VIVO')} className="min-h-12 border px-3 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}><Camera size={15} className="mr-2 inline" />Ler código ao vivo</button>
+                <button type="button" disabled={lendoArquivo} onClick={() => setCameraAberta('FOTO')} className="min-h-12 border px-3 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}><Camera size={15} className="mr-2 inline" />Fotografar código</button>
+                <p className="sm:col-span-2 text-[10px] text-foreground-muted">Os dois modos usam a câmera traseira dentro do sistema. São reconhecidos boletos bancários e contas de água, luz, telefone, gás e tributos.</p>
+                {cameraAberta && <div className="sm:col-span-2"><LeitorCamera key={cameraAberta} modo={cameraAberta} onRead={receberCodigo} onClose={fecharCamera} /></div>}
               </div>
             )}
             <Campo label="Boleto (PDF/JPG/PNG/WebP, até 5 MB)"><label className="flex min-h-12 cursor-pointer items-center justify-center border border-dashed px-3 text-center text-xs" style={{ borderColor: 'var(--border)' }}><Upload size={15} className="mr-2" />{lendoArquivo ? 'Analisando arquivo localmente...' : boleto?.name ?? 'Selecionar arquivo'}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => void selecionarBoleto(e.target.files?.[0] ?? null)} /></label></Campo>

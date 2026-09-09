@@ -69,6 +69,11 @@ test('leitura preserva exatamente 44, 47 ou 48 dígitos, inclusive zeros iniciai
     assert.equal(domain.linhaDigitavelValida(codigo), true)
     assert.equal(reader.extrairCodigoLido(codigo).linhaDigitavel, codigo)
   }
+  assert.equal(domain.identificarCodigoBoleto(codigos[0]).tipo, 'CODIGO_BARRAS_BANCARIO')
+  assert.equal(domain.identificarCodigoBoleto(codigos[1]).tipo, 'LINHA_DIGITAVEL_BANCARIA')
+  assert.equal(domain.identificarCodigoBoleto(`8${'1'.repeat(43)}`).tipo, 'CODIGO_BARRAS_ARRECADACAO')
+  assert.equal(domain.identificarCodigoBoleto(codigos[2]).tipo, 'LINHA_DIGITAVEL_ARRECADACAO')
+  assert.equal(domain.identificarCodigoBoleto('123').valido, false)
 })
 
 test('upload é limitado no cliente e no servidor e valida assinatura do conteúdo', () => {
@@ -178,6 +183,7 @@ test('leitura automática exige ateste no servidor e integração de manutençã
 test('PDF usa texto e leitura visual com fallback para código de barras', () => {
   const reader = read('src/app/dashboard/empresa/contas-pagar/_utils/leituraBoletoPdf.ts')
   const page = read('src/app/dashboard/empresa/contas-pagar/page.tsx')
+  const camera = read('src/app/dashboard/empresa/contas-pagar/_components/LeitorCamera.tsx')
   const pkg = read('package.json')
 
   assert.match(reader, /BarcodeDetector/)
@@ -189,9 +195,11 @@ test('PDF usa texto e leitura visual com fallback para código de barras', () =>
   assert.match(reader, /fornecedorPorPosicao/)
   assert.match(reader, /encontrarLinhaDigitavelEmSegmentos\(segmentos\)/)
   assert.match(page, /dados\.origemLeitura/)
-  assert.match(page, /capture="environment"/)
-  assert.match(page, /digitalizarCodigoComCamera/)
-  assert.match(page, /A foto é processada localmente e não é enviada/)
+  assert.match(page, /setCameraAberta\('AO_VIVO'\)/)
+  assert.match(page, /setCameraAberta\('FOTO'\)/)
+  assert.match(camera, /facingMode: \{ exact: 'environment' \}/)
+  assert.match(camera, /BarcodeFormat\.ITF/)
+  assert.match(camera, /Capturar foto/)
   assert.match(pkg, /"@zxing\/browser"/)
 })
 
