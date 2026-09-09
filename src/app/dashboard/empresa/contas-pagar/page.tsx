@@ -63,7 +63,9 @@ export default function ContasPagarPage() {
     const dados = extrairCodigoLido(codigo)
     setForm((atual) => ({ ...atual, linhaDigitavel: dados.linhaDigitavel, valor: dados.valor || atual.valor, vencimento: dados.vencimento || atual.vencimento, origemLeitura: 'CODIGO_BARRAS', revisado: false }))
     setCameraAberta(false)
-    setFeedback('Código reconhecido. Confira beneficiário, valor e vencimento no boleto original antes de salvar.')
+    setFeedback(codigo.length === 44
+      ? 'Código de barras bancário lido corretamente: 44 dígitos. A linha digitável impressa equivalente possui 47. Confira os dados antes de salvar.'
+      : `Linha de ${codigo.length} dígitos reconhecida. Confira os dados antes de salvar.`)
   }, [])
 
   const carregar = useCallback(async () => {
@@ -217,7 +219,9 @@ export default function ContasPagarPage() {
         origemLeitura: 'CODIGO_BARRAS',
         revisado: false,
       }))
-      setFeedback('Código lido pela câmera somente neste dispositivo. Confira código, vencimento e valor antes de salvar.')
+      setFeedback(dados.linhaDigitavel.length === 44
+        ? 'Código de barras bancário lido corretamente: 44 dígitos. A linha digitável impressa equivalente possui 47. Confira os dados antes de salvar.'
+        : `Linha de ${dados.linhaDigitavel.length} dígitos reconhecida. Confira os dados antes de salvar.`)
     } catch {
       if (leituraArquivoRef.current === leituraId) {
         setFeedback('Não foi possível processar a foto. Tente novamente ou informe a linha digitável manualmente.')
