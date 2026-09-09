@@ -45,7 +45,7 @@ export function linhaDigitavelValida(valor: string | null | undefined) {
   }
   // O código de barras bancário tem 44 posições. A validação final de valor,
   // beneficiário e DV geral permanece obrigatória no aplicativo do banco.
-  if (linha.length === 44) return /^[1-9]\d{43}$/.test(linha)
+  if (linha.length === 44) return /^\d{44}$/.test(linha)
   // Convênios/arrecadação usam 48 posições e regras de DV dependentes do segmento.
   // Mantemos apenas a validação estrutural e exigimos revisão humana antes de copiar.
   return linha.length === 48 && linha.startsWith('8')

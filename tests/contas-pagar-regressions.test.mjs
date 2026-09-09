@@ -50,6 +50,27 @@ test('linha bancária de 47 dígitos preserva zeros e separa estrutura de dígit
   assert.equal(domain.linhaDigitavelEstruturalmenteValida(valida.slice(0, 46)), false)
 })
 
+test('leitura preserva exatamente 44, 47 ou 48 dígitos, inclusive zeros iniciais', async () => {
+  const ts = await import('typescript')
+  const compilar = (source) => ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  }).outputText
+  const url = (source) => `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
+  const domainUrl = url(compilar(read('src/lib/financeiro/contasPagar.ts')))
+  const domain = await import(domainUrl)
+  const reader = await import(url(compilar(read('src/app/dashboard/empresa/contas-pagar/_utils/leituraBoletoPdf.ts'))
+    .replace("'@/lib/financeiro/contasPagar'", JSON.stringify(domainUrl))))
+  const codigos = [
+    '00193373700000001000500940144816060680935031',
+    '00190500954014481606906809350314337370000000100',
+    `8${'0'.repeat(47)}`,
+  ]
+  for (const codigo of codigos) {
+    assert.equal(domain.linhaDigitavelValida(codigo), true)
+    assert.equal(reader.extrairCodigoLido(codigo).linhaDigitavel, codigo)
+  }
+})
+
 test('upload é limitado no cliente e no servidor e valida assinatura do conteúdo', () => {
   const page = read('src/app/dashboard/empresa/contas-pagar/page.tsx')
   const storage = read('src/lib/financeiro/contasPagarStorage.ts')
