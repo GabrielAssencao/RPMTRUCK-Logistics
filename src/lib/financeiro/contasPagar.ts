@@ -19,6 +19,36 @@ export function somenteDigitosBoleto(valor: string | null | undefined) {
   return (valor ?? '').replace(/\D/g, '').slice(0, 48)
 }
 
+export type TipoCodigoBoleto =
+  | 'CODIGO_BARRAS_BANCARIO'
+  | 'LINHA_DIGITAVEL_BANCARIA'
+  | 'CODIGO_BARRAS_ARRECADACAO'
+  | 'LINHA_DIGITAVEL_ARRECADACAO'
+  | 'DESCONHECIDO'
+
+export function identificarCodigoBoleto(valor: string | null | undefined) {
+  const codigo = (valor ?? '').replace(/\D/g, '')
+  let tipo: TipoCodigoBoleto = 'DESCONHECIDO'
+  if (codigo.length === 44) tipo = codigo.startsWith('8') ? 'CODIGO_BARRAS_ARRECADACAO' : 'CODIGO_BARRAS_BANCARIO'
+  else if (codigo.length === 47) tipo = 'LINHA_DIGITAVEL_BANCARIA'
+  else if (codigo.length === 48 && codigo.startsWith('8')) tipo = 'LINHA_DIGITAVEL_ARRECADACAO'
+
+  return {
+    codigo,
+    tipo,
+    valido: tipo !== 'DESCONHECIDO' && linhaDigitavelValida(codigo),
+    descricao: tipo === 'CODIGO_BARRAS_ARRECADACAO'
+      ? 'Código de barras de conta de consumo/arrecadação: 44 dígitos. A linha digitável impressa correspondente possui 48.'
+      : tipo === 'CODIGO_BARRAS_BANCARIO'
+        ? 'Código de barras de boleto bancário: 44 dígitos. A linha digitável impressa correspondente possui 47.'
+        : tipo === 'LINHA_DIGITAVEL_ARRECADACAO'
+          ? 'Linha digitável de conta de consumo/arrecadação: 48 dígitos.'
+          : tipo === 'LINHA_DIGITAVEL_BANCARIA'
+            ? 'Linha digitável de boleto bancário: 47 dígitos.'
+            : 'Código não reconhecido como boleto bancário ou conta de arrecadação.',
+  }
+}
+
 export function linhaDigitavelEstruturalmenteValida(valor: string | null | undefined) {
   const linha = somenteDigitosBoleto(valor)
   return linha.length === 44 || linha.length === 47 || (linha.length === 48 && linha.startsWith('8'))

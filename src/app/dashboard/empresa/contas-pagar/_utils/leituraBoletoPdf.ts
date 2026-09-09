@@ -173,8 +173,10 @@ async function detectarCodigoEmCanvas(canvas: HTMLCanvasElement, leitor: LeitorC
   }
 
   try {
-    const { BrowserMultiFormatOneDReader } = await import('@zxing/browser')
-    const resultado = new BrowserMultiFormatOneDReader().decodeFromCanvas(canvas)
+    const { BarcodeFormat, BrowserMultiFormatReader } = await import('@zxing/browser')
+    const reader = new BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 100 })
+    reader.possibleFormats = [BarcodeFormat.ITF, BarcodeFormat.CODE_128]
+    const resultado = reader.decodeFromCanvas(canvas)
     const codigo = somenteDigitosBoleto(resultado.getText())
     return [44, 47, 48].includes(codigo.length) && linhaDigitavelValida(codigo) ? codigo : ''
   } catch {
