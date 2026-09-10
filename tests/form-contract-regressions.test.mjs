@@ -159,12 +159,15 @@ test('central de notificações fica disponível na navegação sem regra de pla
 
 test('personalização da sidebar é visual, persistente por usuário e posterior à autorização', () => {
   const layout = read('src/app/dashboard/empresa/layout.tsx')
+  const preferences = read('src/lib/empresaPreferences.ts')
 
   assert.match(layout, /const itensPermitidos = NAV_EMPRESA\.filter\(itemPermitido\)/)
   assert.match(layout, /const itensVisiveis = itensPermitidos\.filter/)
   assert.match(layout, /Atalhos compactos/)
   assert.match(layout, /Apenas visual: permissões e acesso permanecem iguais/)
-  assert.match(layout, /usuario\.id \|\| usuario\.email/)
+  assert.match(preferences, /usuario\.id \|\| usuario\.email/)
+  assert.match(preferences, /rotasValidas\.has\(path\)/)
+  assert.match(layout, /if \(item\.modulo && !modulosAtivos\.includes\(item\.modulo\)\) return false/)
 })
 
 test('tema vermelho separa marca, criticidade e atenção nas manutenções', () => {

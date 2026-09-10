@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { Bot, MessageSquare, RefreshCw, Send } from 'lucide-react'
+import { Bot, Check, MessageSquare, Pencil, RefreshCw, Send, X } from 'lucide-react'
 import type { StatusTicketSuporte } from '@prisma/client'
 import { useTheme } from '@/contexts/ThemeContext'
 import { STATUS_TICKET_LABEL } from '@/lib/suporteConfig'
@@ -13,6 +13,7 @@ type ChatMessage = {
   automatica: boolean
   criado_em: string
   lida_em: string | null
+  editado_em: string | null
   autor: { id: string; nome: string; role: string } | null
 }
 
@@ -31,9 +32,27 @@ export default function ChatWorkspace({ ticketId, empresaId, title, protocolo, s
   const [texto, setTexto] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [textoEdicao, setTextoEdicao] = useState('')
+  const [usuarioAtualId, setUsuarioAtualId] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const fimRef = useRef<HTMLDivElement>(null)
+  const mensagensRef = useRef<HTMLDivElement>(null)
+  const assinaturaMensagensRef = useRef('')
+  const ultimaMensagemIdRef = useRef<string | null>(null)
+  const carregouMensagensRef = useRef(false)
+  const rolarAoFinalRef = useRef(false)
+  const frameRolagemRef = useRef<number | null>(null)
   const encerrado = status === 'FECHADO' || status === 'RESOLVIDO'
+
+  useEffect(() => {
+    try {
+      const usuario = JSON.parse(localStorage.getItem('@rpmtruck:user') || '{}') as { id?: string }
+      queueMicrotask(() => setUsuarioAtualId(typeof usuario.id === 'string' ? usuario.id : null))
+    } catch {
+      queueMicrotask(() => setUsuarioAtualId(null))
+    }
+  }, [])
 
   const carregar = useCallback(async (silencioso = false) => {
     if (!silencioso) setLoading(true)
@@ -43,7 +62,22 @@ export default function ChatWorkspace({ ticketId, empresaId, title, protocolo, s
       const response = await fetch(`/api/chat?${query}`, { cache: 'no-store' })
       const body = await response.json()
       if (!response.ok) throw new Error(body.erro || 'Não foi possível carregar o ticket.')
-      setMensagens(body.mensagens)
+
+      const lista = Array.isArray(body.mensagens) ? body.mensagens as ChatMessage[] : []
+      const assinatura = lista.map((item) => `${item.id}:${item.editado_em ?? ''}:${item.conteudo}`).join('|')
+      const ultimoId = lista.at(-1)?.id ?? null
+      const caixa = mensagensRef.current
+      const estavaProximoDoFim = !caixa || caixa.scrollHeight - caixa.scrollTop - caixa.clientHeight < 96
+      const primeiraCarga = !carregouMensagensRef.current
+      const recebeuMensagem = !primeiraCarga && ultimoId !== ultimaMensagemIdRef.current
+
+      if (assinatura !== assinaturaMensagensRef.current) {
+        assinaturaMensagensRef.current = assinatura
+        setMensagens(lista)
+      }
+      if (!silencioso || (recebeuMensagem && estavaProximoDoFim)) rolarAoFinalRef.current = true
+      ultimaMensagemIdRef.current = ultimoId
+      carregouMensagensRef.current = true
       setError('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível carregar o ticket.')
@@ -59,8 +93,24 @@ export default function ChatWorkspace({ ticketId, empresaId, title, protocolo, s
   }, [carregar])
 
   useEffect(() => {
-    fimRef.current?.scrollIntoView({ behavior: loading ? 'auto' : 'smooth', block: 'end' })
+    if (!rolarAoFinalRef.current) return
+    rolarAoFinalRef.current = false
+    frameRolagemRef.current = window.requestAnimationFrame(() => {
+      frameRolagemRef.current = null
+      const caixa = mensagensRef.current
+      if (caixa) caixa.scrollTo({ top: caixa.scrollHeight, behavior: 'auto' })
+    })
+    return () => {
+      if (frameRolagemRef.current !== null) window.cancelAnimationFrame(frameRolagemRef.current)
+      frameRolagemRef.current = null
+    }
   }, [loading, mensagens])
+
+  const interromperRolagemAutomatica = () => {
+    rolarAoFinalRef.current = false
+    if (frameRolagemRef.current !== null) window.cancelAnimationFrame(frameRolagemRef.current)
+    frameRolagemRef.current = null
+  }
 
   const enviar = async (event: FormEvent) => {
     event.preventDefault()
@@ -76,6 +126,8 @@ export default function ChatWorkspace({ ticketId, empresaId, title, protocolo, s
       })
       const body = await response.json()
       if (!response.ok) throw new Error(body.erro || 'Não foi possível enviar a mensagem.')
+      rolarAoFinalRef.current = true
+      assinaturaMensagensRef.current = ''
       setMensagens((atuais) => [...atuais, body.mensagem])
       setTexto('')
       onMessageSent?.()
@@ -86,8 +138,44 @@ export default function ChatWorkspace({ ticketId, empresaId, title, protocolo, s
     }
   }
 
+  const iniciarEdicao = (mensagem: ChatMessage) => {
+    setEditandoId(mensagem.id)
+    setTextoEdicao(mensagem.conteudo)
+    setError('')
+  }
+
+  const cancelarEdicao = () => {
+    setEditandoId(null)
+    setTextoEdicao('')
+  }
+
+  const salvarEdicao = async (event: FormEvent) => {
+    event.preventDefault()
+    const mensagem = textoEdicao.trim()
+    if (!editandoId || !mensagem || savingEdit) return
+    setSavingEdit(true)
+    setError('')
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mensagemId: editandoId, mensagem, ...(empresaId ? { empresaId } : {}) }),
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.erro || 'Não foi possível editar a mensagem.')
+      assinaturaMensagensRef.current = ''
+      setMensagens((atuais) => atuais.map((item) => item.id === editandoId ? body.mensagem : item))
+      cancelarEdicao()
+      onMessageSent?.()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível editar a mensagem.')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   return (
-    <section className="flex min-h-[560px] flex-col border" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+    <section className="flex h-[clamp(32rem,72dvh,45rem)] min-h-0 flex-col overflow-hidden border" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
       <header className="flex items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: 'var(--border)' }}>
         <div className="flex min-w-0 items-center gap-3">
           <MessageSquare size={18} className="shrink-0" style={{ color: primary }} />
@@ -101,22 +189,52 @@ export default function ChatWorkspace({ ticketId, empresaId, title, protocolo, s
         </button>
       </header>
 
-      <div className="flex-1 space-y-3 overflow-y-auto p-4 custom-scrollbar" aria-live="polite">
+      <div
+        ref={mensagensRef}
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 custom-scrollbar"
+        aria-live="polite"
+        onWheelCapture={interromperRolagemAutomatica}
+        onTouchStart={interromperRolagemAutomatica}
+        style={{ scrollbarGutter: 'stable', overflowAnchor: 'none', overscrollBehaviorY: 'auto' }}
+      >
         {loading ? <p className="py-16 text-center text-xs text-foreground-muted">Carregando ticket...</p> : mensagens.length === 0 ? (
           <div className="py-16 text-center"><MessageSquare className="mx-auto mb-3 opacity-30" /><p className="text-sm font-bold">Nenhuma mensagem</p></div>
         ) : mensagens.map((mensagem) => {
           if (mensagem.tipo === 'SISTEMA') {
             return <article key={mensagem.id} className="mx-auto flex max-w-2xl items-start gap-2 border px-3 py-2 text-xs text-foreground-muted" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}><Bot size={14} className="mt-0.5 shrink-0" style={{ color: primary }} /><div><strong className="text-foreground">Automação de suporte</strong><p className="mt-1 whitespace-pre-wrap leading-relaxed">{mensagem.conteudo}</p></div></article>
           }
-          const propria = empresaId ? mensagem.autor?.role === 'ADMIN_RPM' : mensagem.autor?.role !== 'ADMIN_RPM'
+          const propria = usuarioAtualId
+            ? mensagem.autor?.id === usuarioAtualId
+            : empresaId ? mensagem.autor?.role === 'ADMIN_RPM' : mensagem.autor?.role !== 'ADMIN_RPM'
+          const podeEditar = mensagem.autor?.id === usuarioAtualId && !mensagem.automatica
           return <article key={mensagem.id} className={`flex ${propria ? 'justify-end' : 'justify-start'}`}>
             <div className="max-w-[85%] border px-3 py-2 sm:max-w-[70%]" style={{ borderColor: propria ? primary : 'var(--border)', backgroundColor: propria ? `${primary}12` : 'var(--background)' }}>
-              <div className="mb-1 flex flex-wrap items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-foreground-muted"><span>{mensagem.autor?.nome || 'Usuário removido'}</span><time>{new Date(mensagem.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</time></div>
-              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{mensagem.conteudo}</p>
+              <div className="mb-1 flex flex-wrap items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-foreground-muted">
+                <span>{mensagem.autor?.nome || 'Usuário removido'}</span>
+                <time>{new Date(mensagem.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</time>
+                {mensagem.editado_em && <span aria-label={`Editada em ${new Date(mensagem.editado_em).toLocaleString('pt-BR')}`}>(editada)</span>}
+                {podeEditar && editandoId !== mensagem.id && (
+                  <button type="button" onClick={() => iniciarEdicao(mensagem)} className="ml-auto inline-flex min-h-8 min-w-8 items-center justify-center border transition-colors hover:text-foreground" style={{ borderColor: 'var(--border)' }} aria-label="Editar esta mensagem" title="Editar mensagem">
+                    <Pencil size={12} />
+                  </button>
+                )}
+              </div>
+              {editandoId === mensagem.id ? (
+                <form onSubmit={salvarEdicao} className="space-y-2">
+                  <label className="sr-only" htmlFor={`edit-message-${mensagem.id}`}>Editar mensagem</label>
+                  <textarea id={`edit-message-${mensagem.id}`} autoFocus value={textoEdicao} onChange={(event) => setTextoEdicao(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') cancelarEdicao() }} maxLength={2000} rows={3} disabled={savingEdit} className="w-full resize-y border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 disabled:opacity-60" style={{ borderColor: primary, '--tw-ring-color': primary } as React.CSSProperties} />
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[9px] text-foreground-muted">{textoEdicao.length}/2.000</span>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={cancelarEdicao} disabled={savingEdit} className="inline-flex min-h-9 items-center gap-1 border px-3 text-[9px] font-black uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}><X size={12} />Cancelar</button>
+                      <button type="submit" disabled={savingEdit || !textoEdicao.trim() || textoEdicao.trim() === mensagem.conteudo} className="inline-flex min-h-9 items-center gap-1 px-3 text-[9px] font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}><Check size={12} />Salvar</button>
+                    </div>
+                  </div>
+                </form>
+              ) : <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{mensagem.conteudo}</p>}
             </div>
           </article>
         })}
-        <div ref={fimRef} />
       </div>
 
       <form onSubmit={enviar} className="border-t p-3" style={{ borderColor: 'var(--border)' }}>

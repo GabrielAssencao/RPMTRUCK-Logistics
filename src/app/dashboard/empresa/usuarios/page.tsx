@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useState, useEffect, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import Link from 'next/link'
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { 
   UserSquare2, 
@@ -19,8 +20,10 @@ import {
   X,
   Power,
   SlidersHorizontal,
+  Palette,
 } from 'lucide-react'
 import GenericDrawer, { FieldConfig } from '@/components/dashboard/GenericDrawer'
+import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { MODULOS_CONFIG, normalizarModulos, type ModuloCodigo } from '@/utils/planos'
 
 interface UsuarioLocal {
@@ -33,6 +36,10 @@ interface UsuarioLocal {
   modulosAcesso: ModuloCodigo[]
   status: 'ATIVO' | 'INATIVO'
   criadoEm: string
+  corTema: string | null
+  temaClaro: boolean | null
+  rotuloEquipe: string | null
+  podePersonalizarTema: boolean
 }
 
 type OrdenacaoOperadores = 'HIERARQUIA' | 'NOME_ASC' | 'NOME_DESC' | 'CADASTRO_RECENTE' | 'CADASTRO_ANTIGO'
@@ -43,6 +50,16 @@ interface CredencialTemporaria {
   email: string
   senha: string
   expiraEm: string
+}
+
+type ConfirmacaoOperador = {
+  tipo: 'STATUS' | 'SENHA_TEMPORARIA'
+  usuario: UsuarioLocal
+}
+
+type FeedbackOperador = {
+  mensagem: string
+  tom: 'success' | 'error' | 'warning'
 }
 
 const PESO_HIERARQUIA: Record<UsuarioLocal['role'], number> = {
@@ -117,6 +134,10 @@ export default function UsuariosPage() {
   const [alternandoStatusId, setAlternandoStatusId] = useState<string | null>(null)
   const [redefinindoId, setRedefinindoId] = useState<string | null>(null)
   const [credencialTemporaria, setCredencialTemporaria] = useState<CredencialTemporaria | null>(null)
+  const [confirmacaoOperador, setConfirmacaoOperador] = useState<ConfirmacaoOperador | null>(null)
+  const [erroConfirmacao, setErroConfirmacao] = useState('')
+  const [feedbackOperador, setFeedbackOperador] = useState<FeedbackOperador | null>(null)
+  const [senhaCopiada, setSenhaCopiada] = useState(false)
   
   const [perfilLogado, setPerfilLogado] = useState<'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'>('VISUALIZADOR')
 
@@ -135,7 +156,11 @@ export default function UsuariosPage() {
           ativo: Boolean(u.ativo),
           modulosAcesso: normalizarModulos(u.modulosAcesso),
           status: u.ativo ? 'ATIVO' : 'INATIVO',
-          criadoEm: new Date(u.criado_em).toISOString().split('T')[0]
+          criadoEm: new Date(u.criado_em).toISOString().split('T')[0],
+          corTema: u.corTema,
+          temaClaro: u.temaClaro,
+          rotuloEquipe: u.rotuloEquipe,
+          podePersonalizarTema: Boolean(u.podePersonalizarTema),
         }))
         setUsuarios(formatados)
       }
@@ -158,6 +183,19 @@ export default function UsuariosPage() {
       } else setLoading(false)
     }).catch(() => setLoading(false))
   }, [carregarUsuarios])
+
+  useEffect(() => {
+    if (!confirmacaoOperador) return
+
+    const fecharComEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || alternandoStatusId || redefinindoId) return
+      setConfirmacaoOperador(null)
+      setErroConfirmacao('')
+    }
+
+    window.addEventListener('keydown', fecharComEscape)
+    return () => window.removeEventListener('keydown', fecharComEscape)
+  }, [alternandoStatusId, confirmacaoOperador, redefinindoId])
 
   const usuariosFiltrados = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase('pt-BR')
@@ -279,8 +317,8 @@ export default function UsuariosPage() {
   }
 
   const alternarStatus = async (usuario: UsuarioLocal) => {
-    const acao = usuario.ativo ? 'desabilitar' : 'habilitar'
-    if (!window.confirm(`Deseja ${acao} o acesso de ${usuario.nome}?`)) return
+    if (alternandoStatusId) return
+    setErroConfirmacao('')
     setAlternandoStatusId(usuario.id)
     try {
       const response = await fetch(`/api/empresa/usuarios/${usuario.id}`, {
@@ -289,12 +327,20 @@ export default function UsuariosPage() {
         body: JSON.stringify({ ativo: !usuario.ativo }),
       })
       const data = await response.json()
-      if (!response.ok) return alert(data.erro || 'Não foi possível alterar o status do acesso.')
+      if (!response.ok) {
+        setErroConfirmacao(data.erro || 'Não foi possível alterar o status do acesso.')
+        return
+      }
       setUsuarios(prev => prev.map(item => item.id === usuario.id
         ? { ...item, ativo: data.ativo, status: data.ativo ? 'ATIVO' : 'INATIVO' }
         : item))
+      setFeedbackOperador({
+        mensagem: data.ativo ? `Acesso de ${usuario.nome} habilitado.` : `Acesso de ${usuario.nome} desabilitado.`,
+        tom: 'success',
+      })
+      setConfirmacaoOperador(null)
     } catch {
-      alert('Erro de conexão ao alterar o status do acesso.')
+      setErroConfirmacao('Erro de conexão ao alterar o status do acesso.')
     } finally {
       setAlternandoStatusId(null)
     }
@@ -302,28 +348,78 @@ export default function UsuariosPage() {
 
   const redefinirAcesso = async (usuario: UsuarioLocal) => {
     if (usuario.id === usuarioLogadoId || usuario.role === 'GESTOR_EMPRESA') {
-      alert('A senha do gestor só pode ser alterada em Configurações > Segurança.')
+      setFeedbackOperador({ mensagem: 'A senha do gestor só pode ser alterada em Configurações > Segurança.', tom: 'warning' })
       return
     }
-    if (!window.confirm(`Gerar uma nova senha temporária para ${usuario.nome}? As sessões atuais serão encerradas.`)) return
+    if (redefinindoId) return
 
+    setErroConfirmacao('')
     setRedefinindoId(usuario.id)
     try {
       const response = await fetch(`/api/empresa/usuarios/${usuario.id}/redefinir-senha`, {
         method: 'POST',
       })
       const data = await response.json()
-      if (!response.ok) return alert(data.erro || 'Não foi possível redefinir o acesso.')
+      if (!response.ok) {
+        setErroConfirmacao(data.erro || 'Não foi possível redefinir o acesso.')
+        return
+      }
+      setSenhaCopiada(false)
       setCredencialTemporaria(data.credencialTemporaria)
+      setConfirmacaoOperador(null)
     } catch {
-      alert('Erro de conexão ao redefinir o acesso.')
+      setErroConfirmacao('Erro de conexão ao redefinir o acesso.')
     } finally {
       setRedefinindoId(null)
     }
   }
 
+  const abrirConfirmacao = (tipo: ConfirmacaoOperador['tipo'], usuario: UsuarioLocal) => {
+    setErroConfirmacao('')
+    setFeedbackOperador(null)
+    setConfirmacaoOperador({ tipo, usuario })
+  }
+
+  const fecharConfirmacao = () => {
+    if (alternandoStatusId || redefinindoId) return
+    setConfirmacaoOperador(null)
+    setErroConfirmacao('')
+  }
+
+  const confirmarAcaoOperador = () => {
+    if (!confirmacaoOperador) return
+    if (confirmacaoOperador.tipo === 'STATUS') void alternarStatus(confirmacaoOperador.usuario)
+    else void redefinirAcesso(confirmacaoOperador.usuario)
+  }
+
+  const usuarioConfirmacao = confirmacaoOperador?.usuario
+  const confirmandoStatus = confirmacaoOperador?.tipo === 'STATUS'
+  const desabilitandoAcesso = Boolean(confirmandoStatus && usuarioConfirmacao?.ativo)
+  const processandoConfirmacao = Boolean(usuarioConfirmacao && (
+    alternandoStatusId === usuarioConfirmacao.id || redefinindoId === usuarioConfirmacao.id
+  ))
+  const corConfirmacao = desabilitandoAcesso
+    ? 'var(--status-danger)'
+    : confirmacaoOperador?.tipo === 'SENHA_TEMPORARIA'
+      ? 'var(--status-warning)'
+      : 'var(--status-success)'
+
   return (
+    <MotionConfig reducedMotion="user">
     <div className="space-y-6 max-w-[1400px] mx-auto">
+      <AnimatePresence initial={false}>
+        {feedbackOperador && (
+          <motion.div
+            key={feedbackOperador.mensagem}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.22, ease: [0.2, 0, 0, 1] }}
+          >
+            <ActionFeedback message={feedbackOperador.mensagem} tone={feedbackOperador.tom} />
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* ─── CABEÇALHO DA PÁGINA ─── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
@@ -461,6 +557,12 @@ export default function UsuariosPage() {
                           <div>
                             <div className="font-bold font-sans text-sm">{u.nome}</div>
                             <div className="text-[11px] text-foreground-muted">{u.email}</div>
+                            {u.rotuloEquipe && (
+                              <div className="mt-1 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider" style={{ color: u.corTema || primary }}>
+                                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: u.corTema || primary }} aria-hidden="true" />
+                                {u.rotuloEquipe}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -495,6 +597,16 @@ export default function UsuariosPage() {
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           {u.id !== usuarioLogadoId && u.role !== 'GESTOR_EMPRESA' && (
+                            <Link
+                              href={`/dashboard/empresa/usuarios/${u.id}/personalizacao`}
+                              title="Personalizar identidade da equipe"
+                              aria-label={`Personalizar tema de ${u.nome}`}
+                              className="rounded p-2 text-foreground-muted transition-colors hover:bg-white/5 hover:text-foreground"
+                            >
+                              <Palette size={14} />
+                            </Link>
+                          )}
+                          {u.id !== usuarioLogadoId && u.role !== 'GESTOR_EMPRESA' && (
                             <button
                               type="button"
                               title="Configurar função e módulos"
@@ -511,7 +623,7 @@ export default function UsuariosPage() {
                               title={u.ativo ? 'Desabilitar acesso' : 'Habilitar acesso'}
                               aria-label={`${u.ativo ? 'Desabilitar' : 'Habilitar'} acesso de ${u.nome}`}
                               disabled={alternandoStatusId === u.id}
-                              onClick={() => void alternarStatus(u)}
+                              onClick={() => abrirConfirmacao('STATUS', u)}
                               className="rounded p-2 text-foreground-muted transition-colors hover:bg-white/5 hover:text-foreground disabled:opacity-50"
                             >
                               {alternandoStatusId === u.id ? <Loader2 size={14} className="animate-spin" /> : <Power size={14} />}
@@ -523,7 +635,7 @@ export default function UsuariosPage() {
                               title="Gerar senha temporária"
                               aria-label={`Redefinir acesso de ${u.nome}`}
                               disabled={redefinindoId === u.id}
-                              onClick={() => void redefinirAcesso(u)}
+                              onClick={() => abrirConfirmacao('SENHA_TEMPORARIA', u)}
                               className="p-2 text-foreground-muted hover:text-foreground transition-colors rounded hover:bg-white/5 disabled:opacity-50"
                             >
                               {redefinindoId === u.id ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
@@ -548,6 +660,110 @@ export default function UsuariosPage() {
           </table>
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {confirmacaoOperador && usuarioConfirmacao && (
+          <motion.div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) fecharConfirmacao()
+            }}
+          >
+            <motion.div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="titulo-confirmacao-operador"
+              aria-describedby="descricao-confirmacao-operador"
+              className="relative w-full max-w-lg overflow-hidden border shadow-2xl"
+              style={{ backgroundColor: 'var(--background)', borderColor: corConfirmacao }}
+              initial={{ opacity: 0, y: 14, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              transition={{ duration: 0.28, ease: [0.2, 0, 0, 1] }}
+            >
+              <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: corConfirmacao }} />
+
+              <div className="flex gap-4 p-5 pt-6 sm:p-6 sm:pt-7">
+                <motion.div
+                  className="grid h-11 w-11 shrink-0 place-items-center border"
+                  style={{ borderColor: corConfirmacao, color: corConfirmacao }}
+                  initial={{ rotate: -8, scale: 0.85 }}
+                  animate={{ rotate: 0, scale: 1 }}
+                  transition={{ delay: 0.08, duration: 0.28, ease: [0.2, 0, 0, 1] }}
+                  aria-hidden="true"
+                >
+                  {confirmacaoOperador.tipo === 'SENHA_TEMPORARIA' ? <Lock size={20} /> : <Power size={20} />}
+                </motion.div>
+
+                <div className="min-w-0">
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: corConfirmacao }}>
+                    Confirmação de segurança
+                  </p>
+                  <h2 id="titulo-confirmacao-operador" className="mt-1 font-rajdhani text-xl font-black uppercase">
+                    {confirmacaoOperador.tipo === 'SENHA_TEMPORARIA'
+                      ? 'Gerar senha temporária'
+                      : `${usuarioConfirmacao.ativo ? 'Desabilitar' : 'Habilitar'} acesso`}
+                  </h2>
+                  <p id="descricao-confirmacao-operador" className="mt-2 text-sm leading-relaxed text-foreground-muted">
+                    {confirmacaoOperador.tipo === 'SENHA_TEMPORARIA'
+                      ? `Uma nova credencial será criada para ${usuarioConfirmacao.nome} e todas as sessões atuais serão encerradas.`
+                      : usuarioConfirmacao.ativo
+                        ? `${usuarioConfirmacao.nome} perderá o acesso imediatamente. Você poderá habilitá-lo novamente depois.`
+                        : `${usuarioConfirmacao.nome} poderá acessar novamente os módulos permitidos.`}
+                  </p>
+                </div>
+              </div>
+
+              {erroConfirmacao && (
+                <div className="mx-5 mb-4 sm:mx-6">
+                  <ActionFeedback message={erroConfirmacao} tone="error" />
+                </div>
+              )}
+
+              <div className="flex flex-col-reverse gap-2 border-t p-5 sm:flex-row sm:justify-end" style={{ borderColor: 'var(--border)' }}>
+                <button
+                  type="button"
+                  disabled={processandoConfirmacao}
+                  onClick={fecharConfirmacao}
+                  className="min-h-11 border px-5 text-xs font-bold uppercase transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  Cancelar
+                </button>
+                <motion.button
+                  type="button"
+                  autoFocus
+                  disabled={processandoConfirmacao}
+                  onClick={confirmarAcaoOperador}
+                  whileHover={processandoConfirmacao ? undefined : { scale: 1.015 }}
+                  whileTap={processandoConfirmacao ? undefined : { scale: 0.985 }}
+                  className="flex min-h-11 items-center justify-center gap-2 px-5 text-xs font-black uppercase disabled:cursor-wait disabled:opacity-70"
+                  style={{ backgroundColor: corConfirmacao, color: desabilitandoAcesso ? '#fff' : '#000' }}
+                >
+                  {processandoConfirmacao ? (
+                    <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+                  ) : confirmacaoOperador.tipo === 'SENHA_TEMPORARIA' ? (
+                    <Lock size={15} aria-hidden="true" />
+                  ) : (
+                    <Power size={15} aria-hidden="true" />
+                  )}
+                  {processandoConfirmacao
+                    ? 'Processando...'
+                    : confirmacaoOperador.tipo === 'SENHA_TEMPORARIA'
+                      ? 'Gerar nova senha'
+                      : usuarioConfirmacao.ativo
+                        ? 'Desabilitar acesso'
+                        : 'Habilitar acesso'}
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ─── DRAWER LATERAL PARA REGISTAR NOVO OPERADOR ─── */}
       <GenericDrawer
@@ -618,15 +834,41 @@ export default function UsuariosPage() {
         </div>
       )}
 
-      {credencialTemporaria && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="presentation">
-          <div role="dialog" aria-modal="true" aria-labelledby="titulo-credencial-temporaria" className="w-full max-w-lg border p-5" style={{ backgroundColor: 'var(--background)', borderColor: primary }}>
+      <AnimatePresence>
+        {credencialTemporaria && (
+        <motion.div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="presentation"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setCredencialTemporaria(null)
+              setSenhaCopiada(false)
+            }
+          }}
+        >
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-credencial-temporaria"
+            className="relative w-full max-w-lg overflow-hidden border shadow-2xl"
+            style={{ backgroundColor: 'var(--background)', borderColor: primary }}
+            initial={{ opacity: 0, y: 14, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            transition={{ duration: 0.28, ease: [0.2, 0, 0, 1] }}
+          >
+            <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: primary }} />
+            <div className="p-5 pt-6 sm:p-6 sm:pt-7">
             <div className="flex items-start justify-between gap-4 border-b pb-3" style={{ borderColor: 'var(--border)' }}>
               <div>
                 <h2 id="titulo-credencial-temporaria" className="text-base font-black uppercase">Senha temporária gerada</h2>
                 <p className="mt-1 text-xs text-foreground-muted">Copie agora. Por segurança, ela não será exibida novamente.</p>
               </div>
-              <button type="button" aria-label="Fechar" onClick={() => setCredencialTemporaria(null)} className="p-2 text-foreground-muted hover:text-foreground"><X size={16} /></button>
+              <button type="button" aria-label="Fechar" onClick={() => { setCredencialTemporaria(null); setSenhaCopiada(false) }} className="p-2 text-foreground-muted hover:text-foreground"><X size={16} /></button>
             </div>
             <dl className="mt-4 space-y-3 text-sm">
               <div><dt className="text-[10px] font-bold uppercase text-foreground-muted">Operador</dt><dd>{credencialTemporaria.nome} · {credencialTemporaria.email}</dd></div>
@@ -634,17 +876,44 @@ export default function UsuariosPage() {
                 <dt className="text-[10px] font-bold uppercase text-foreground-muted">Senha temporária</dt>
                 <dd className="mt-1 flex items-center justify-between gap-3 border p-3 font-mono" style={{ borderColor: 'var(--border)' }}>
                   <span className="break-all">{credencialTemporaria.senha}</span>
-                  <button type="button" aria-label="Copiar senha temporária" onClick={() => void navigator.clipboard.writeText(credencialTemporaria.senha)} className="shrink-0 p-2" style={{ color: primary }}><Copy size={16} /></button>
+                  <button
+                    type="button"
+                    aria-label={senhaCopiada ? 'Senha temporária copiada' : 'Copiar senha temporária'}
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(credencialTemporaria.senha)
+                      setSenhaCopiada(true)
+                    }}
+                    className="flex shrink-0 items-center gap-2 p-2 text-[10px] font-bold uppercase"
+                    style={{ color: primary }}
+                  >
+                    {senhaCopiada ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+                    <span aria-live="polite">{senhaCopiada ? 'Copiada' : 'Copiar'}</span>
+                  </button>
                 </dd>
               </div>
               <div><dt className="text-[10px] font-bold uppercase text-foreground-muted">Validade</dt><dd>{new Date(credencialTemporaria.expiraEm).toLocaleString('pt-BR')}</dd></div>
             </dl>
             <p className="mt-4 border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-400">No próximo acesso, o operador deverá criar uma senha pessoal. As sessões anteriores já foram encerradas.</p>
-          </div>
-        </div>
-      )}
+            <div className="mt-5 flex justify-end border-t pt-4" style={{ borderColor: 'var(--border)' }}>
+              <motion.button
+                type="button"
+                onClick={() => { setCredencialTemporaria(null); setSenhaCopiada(false) }}
+                whileHover={{ scale: 1.015 }}
+                whileTap={{ scale: 0.985 }}
+                className="min-h-11 px-5 text-xs font-black uppercase text-black"
+                style={{ backgroundColor: primary }}
+              >
+                Entendi, fechar
+              </motion.button>
+            </div>
+            </div>
+          </motion.div>
+        </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
+    </MotionConfig>
   )
 }
 
@@ -680,6 +949,10 @@ interface UsuarioApi {
   ativo: boolean
   modulosAcesso: string[]
   criado_em: string
+  corTema: string | null
+  temaClaro: boolean | null
+  rotuloEquipe: string | null
+  podePersonalizarTema: boolean
 }
 
 const OPTION_STYLE = { backgroundColor: 'var(--background)', color: 'var(--foreground)' }

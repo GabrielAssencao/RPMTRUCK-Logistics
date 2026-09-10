@@ -44,7 +44,20 @@ export async function GET(request: NextRequest) {
         excluidoEm: null,
         ...(incluirInativos ? {} : { ativo: true }),
       },
-      select: { id: true, nome: true, email: true, role: true, acessoDashboardGeral: true, ativo: true, modulosAcesso: true, criado_em: true },
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        role: true,
+        acessoDashboardGeral: true,
+        ativo: true,
+        modulosAcesso: true,
+        criado_em: true,
+        corTema: true,
+        temaClaro: true,
+        rotuloEquipe: true,
+        podePersonalizarTema: true,
+      },
       orderBy: { criado_em: 'desc' }
     })
     return NextResponse.json(usuarios)

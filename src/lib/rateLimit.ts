@@ -118,6 +118,8 @@ export const RATE_LIMITS = {
   // O IP recebe uma margem maior para não punir empresas atrás do mesmo NAT.
   LOGIN_IP: { limit: 20, windowMs: 15 * 60 * 1000 },
   LOGIN_ACCOUNT: { limit: 5, windowMs: 15 * 60 * 1000 },
+  SESSION_READ: { limit: 30, windowMs: 60 * 1000 },
+  SESSION_MUTATION: { limit: 10, windowMs: 60 * 1000 },
   PUBLIC_SIGNUP: { limit: 3, windowMs: 60 * 60 * 1000 },
   PASSWORD_RESET_IP: { limit: 8, windowMs: 60 * 60 * 1000 },
   PASSWORD_RESET_ACCOUNT: { limit: 3, windowMs: 60 * 60 * 1000 },
@@ -131,6 +133,7 @@ export const RATE_LIMITS = {
   NOTIFICATION_SEND: { limit: 10, windowMs: 60 * 60 * 1000 },
   CHAT_READ: { limit: 120, windowMs: 60 * 1000 },
   CHAT_SEND: { limit: 30, windowMs: 60 * 1000 },
+  CHAT_EDIT: { limit: 20, windowMs: 60 * 1000 },
   CHAT_TICKET_CREATE: { limit: 10, windowMs: 60 * 60 * 1000 },
   ALERT_READ: { limit: 60, windowMs: 60 * 1000 },
   ALERT_MUTATION: { limit: 30, windowMs: 60 * 1000 },

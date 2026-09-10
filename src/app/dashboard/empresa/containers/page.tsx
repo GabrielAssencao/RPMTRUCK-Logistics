@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import type { LucideIcon } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { DominoLoader } from '@/components/motion/OperationalFeedback'
 import { useContainers, StatusContainer, TipoContainer, type RegistroContainer } from '@/contexts/ContainersContext'
 import { obterAnoMesSemana, MESES } from '@/lib/dataUtils'
 import {
@@ -87,6 +88,7 @@ export default function ContainersPage() {
   const {
     containers,
     duplas,
+    loading,
     erro: erroContainers,
     adicionarContainer,
     atualizarContainer,
@@ -189,6 +191,8 @@ export default function ContainersPage() {
       window.clearTimeout(timeout)
     }
   }, [buscaHistorico, paginaHistorico, revisaoHistorico])
+
+  if (loading) return <DominoLoader label="Carregando containers e operações" />
 
   // ─── FILTRAGEM DE DADOS ─────────────────────────────────────────────────
   const containersFiltrados = containers.filter(c => {

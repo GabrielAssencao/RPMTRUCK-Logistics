@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ClassificacaoCobrancaTicket, PrioridadeTicketSuporte, StatusTicketSuporte } from '@prisma/client'
-import { Bug, Headset, RefreshCw } from 'lucide-react'
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
+import { Bug, Headset, Loader2, RefreshCw, ShieldAlert, Trash2, X } from 'lucide-react'
 import ChatWorkspace from '@/components/dashboard/ChatWorkspace'
 import type { SupportAdminSummary, SupportTicket } from '@/components/dashboard/supportTypes'
 import { useTheme } from '@/contexts/ThemeContext'
 import { CATEGORIA_TICKET_LABEL, PRIORIDADE_TICKET_LABEL, STATUS_TICKET_LABEL } from '@/lib/suporteConfig'
+import { ActionFeedback } from '@/components/motion/DashboardMotion'
 
 const STATUS = ['ABERTO', 'EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE', 'RESOLVIDO', 'FECHADO'] as const
 const PRIORIDADES = ['BAIXA', 'NORMAL', 'ALTA', 'URGENTE'] as const
@@ -33,6 +35,9 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [feedback, setFeedback] = useState('')
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false)
+  const [excluindo, setExcluindo] = useState(false)
   const ticketInicial = useRef<string | null>(initialTicketId)
 
   const carregar = useCallback(async (silencioso = false) => {
@@ -99,6 +104,26 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
     if (window.confirm(confirmacao)) void atualizar({ classificacaoCobranca })
   }
 
+  const excluirTicket = async () => {
+    if (!selecionado || excluindo) return
+    setExcluindo(true)
+    setError('')
+    setFeedback('')
+    try {
+      const response = await fetch(`/api/admin/chat/${selecionado.id}`, { method: 'DELETE' })
+      const body = await response.json() as { erro?: string; protocolo?: string; mensagensRemovidas?: number; notificacoesRemovidas?: number }
+      if (!response.ok) throw new Error(body.erro || 'Não foi possível excluir o chamado.')
+      setConfirmarExclusao(false)
+      setSelecionado(null)
+      setFeedback(`${body.protocolo || 'Chamado'} excluído: ${body.mensagensRemovidas ?? 0} mensagem(ns) e ${body.notificacoesRemovidas ?? 0} notificação(ões) vinculada(s) removidas.`)
+      await carregar(true)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível excluir o chamado.')
+    } finally {
+      setExcluindo(false)
+    }
+  }
+
   const exibidos = useMemo(() => tickets.filter((ticket) => {
     if (filtro === 'EXTRAS') return ticket.cobravelExtra
     if (filtro === 'BUGS') return ticket.classificacaoCobranca === 'BUG_SISTEMA_CONFIRMADO'
@@ -107,6 +132,7 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
   }), [filtro, tickets])
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="space-y-5">
       <header className="flex flex-col justify-between gap-4 border-b pb-5 sm:flex-row sm:items-end" style={{ borderColor: 'var(--border)' }}>
         <div>
@@ -127,6 +153,7 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
       </div>
 
       {error && <p role="alert" className="border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-500">{error}</p>}
+      {feedback && <ActionFeedback message={feedback} tone="success" />}
 
       <div className="flex flex-wrap gap-2">
         {(['ATIVOS', 'TODOS', 'EXTRAS', 'BUGS'] as const).map((item) => (
@@ -195,6 +222,9 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
                 )}
               </div>
             </div>
+            <div className="flex justify-end">
+              <button type="button" onClick={() => setConfirmarExclusao(true)} disabled={saving || excluindo} className="interactive-control flex min-h-11 items-center gap-2 border border-red-500/50 px-4 text-[10px] font-black uppercase text-red-500 hover:bg-red-500/10 disabled:opacity-40"><Trash2 size={14} /> Excluir chamado</button>
+            </div>
             <p className="border border-blue-500/20 bg-blue-500/5 p-3 text-[10px] text-foreground-muted">Classifique como bug somente depois de reproduzir e confirmar uma falha do sistema. Dúvidas, auxílio operacional, cadastros e solicitações continuam contabilizados.</p>
             <ChatWorkspace key={`${selecionado.id}:${selecionado.status}`} ticketId={selecionado.id} empresaId={selecionado.empresa.id} title={`${selecionado.empresa.nome} · ${selecionado.assunto}`} protocolo={selecionado.protocolo} status={selecionado.status} onMessageSent={() => void carregar(true)} />
           </div>
@@ -204,7 +234,20 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {confirmarExclusao && selecionado && (
+          <motion.div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget && !excluindo) setConfirmarExclusao(false) }}>
+            <motion.div role="alertdialog" aria-modal="true" aria-labelledby="titulo-excluir-ticket" aria-describedby="descricao-excluir-ticket" className="relative w-full max-w-lg overflow-hidden border border-red-500 bg-background shadow-2xl" initial={{ opacity: 0, y: 14, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.98 }} transition={{ duration: 0.28, ease: [0.2, 0, 0, 1] }}>
+              <span className="absolute inset-x-0 top-0 h-1 bg-red-500" />
+              <div className="flex items-start justify-between gap-4 p-5 pt-6 sm:p-6 sm:pt-7"><div className="flex gap-4"><div className="grid h-11 w-11 shrink-0 place-items-center border border-red-500/60 text-red-500"><ShieldAlert size={20} /></div><div><p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-500">Ação irreversível</p><h2 id="titulo-excluir-ticket" className="mt-1 font-rajdhani text-xl font-black uppercase">Excluir chamado</h2><p id="descricao-excluir-ticket" className="mt-2 text-sm leading-relaxed text-foreground-muted">O ticket <strong className="text-foreground">{selecionado.protocolo}</strong>, todas as mensagens e todas as notificações vinculadas serão removidos permanentemente. A franquia da empresa será recalculada.</p></div></div><button type="button" disabled={excluindo} onClick={() => setConfirmarExclusao(false)} aria-label="Cancelar exclusão" className="p-2 text-foreground-muted disabled:opacity-40"><X size={17} /></button></div>
+              <div className="flex flex-col-reverse gap-2 border-t p-5 sm:flex-row sm:justify-end" style={{ borderColor: 'var(--border)' }}><button type="button" disabled={excluindo} onClick={() => setConfirmarExclusao(false)} className="min-h-11 border px-5 text-xs font-black uppercase disabled:opacity-40" style={{ borderColor: 'var(--border)' }}>Manter chamado</button><motion.button type="button" autoFocus disabled={excluindo} onClick={() => void excluirTicket()} whileTap={excluindo ? undefined : { scale: 0.985 }} className="flex min-h-11 items-center justify-center gap-2 bg-red-500 px-5 text-xs font-black uppercase text-white disabled:cursor-wait disabled:opacity-70">{excluindo ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}{excluindo ? 'Excluindo tudo...' : 'Excluir permanentemente'}</motion.button></div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
+    </MotionConfig>
   )
 }
 

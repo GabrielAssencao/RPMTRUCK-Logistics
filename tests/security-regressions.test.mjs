@@ -85,6 +85,20 @@ test('troca de senha autenticada revoga todas as sessões', () => {
   assert.match(route, /senhaAlteradaEm: agora/)
 })
 
+test('usuário gerencia somente as próprias sessões e não revoga a sessão atual pelo painel', () => {
+  const route = read('src/app/api/auth/sessions/route.ts')
+  const panel = read('src/app/dashboard/empresa/configuracoes/_componentes/SecuritySessions.tsx')
+
+  assert.match(route, /const auth = await requireAuth\(request\)/)
+  assert.match(route, /usuarioId: auth\.session\.userId/)
+  assert.match(route, /parsed\.data\.sessionId === auth\.session\.sessionId/)
+  assert.match(route, /SESSAO_REVOGADA/)
+  assert.match(route, /RATE_LIMITS\.SESSION_MUTATION/)
+  assert.doesNotMatch(route, /usuarioId: parsed\.data/)
+  assert.match(panel, /session\.atual/)
+  assert.match(panel, /window\.confirm\('Encerrar esta sessão\? O dispositivo precisará entrar novamente\.'\)/)
+})
+
 test('gestor solicita redefinição ao superadmin sem confiar em email do cliente', () => {
   const route = read('src/app/api/auth/change-password/request/route.ts')
 
@@ -292,17 +306,46 @@ test('retencao automatica exige segredo e aplica prazos limitados', () => {
   assert.match(migration, /current_setting\('rpm\.retention_cleanup', true\) = 'authorized'/)
 })
 
-test('atalho de auditoria pode ser ocultado visualmente sem alterar autorizacao', () => {
+test('logs permanecem acessíveis e suas seções podem ser recolhidas localmente', () => {
   const layout = read('src/app/dashboard/admin/_estrutura/AdminLayout.tsx')
   const settings = read('src/app/dashboard/admin/_modulos/configuracoes/SettingsModule.jsx')
   const preferences = read('src/lib/adminSidebarPreferences.ts')
+  const security = read('src/app/dashboard/admin/_modulos/seguranca/SecurityModule.tsx')
 
-  assert.match(layout, /item\.id !== 'security' \|\| atalhoSegurancaVisivel/)
-  assert.match(layout, /min-h-0 flex-1 overflow-y-auto/)
-  assert.match(settings, /Mostrar logs na sidebar/)
-  assert.match(settings, /somente visual e não altera suas permissões/)
-  assert.match(preferences, /usuario\.id \|\| 'local'/)
-  assert.match(preferences, /ADMIN_SIDEBAR_UPDATED_EVENT/)
+  assert.match(layout, /NAV_ADMIN\.map/)
+  assert.doesNotMatch(layout, /atalhoSegurancaVisivel/)
+  assert.match(layout, /min-h-0 flex-1 overflow-x-hidden overflow-y-auto/)
+  assert.doesNotMatch(settings, /Mostrar logs na sidebar/)
+  assert.match(preferences, /SECOES_LOG_ADMIN/)
+  assert.match(preferences, /usuario\.id \|\| usuario\.email \|\| 'local'/)
+  assert.match(security, /role="switch"/)
+  assert.match(security, /salvarSecoesLogsAdmin/)
+})
+
+test('superadmin possui ambiente visual, central de notificações e exclusão integral de ticket', () => {
+  const layout = read('src/app/dashboard/admin/_estrutura/AdminLayout.tsx')
+  const page = read('src/app/dashboard/admin/page.tsx')
+  const settings = read('src/app/dashboard/admin/_modulos/configuracoes/SettingsModule.jsx')
+  const notifications = read('src/app/dashboard/admin/_modulos/notificacoes/NotificationsModule.tsx')
+  const ticketRoute = read('src/app/api/admin/chat/[id]/route.ts')
+  const ticketUi = read('src/app/dashboard/admin/_modulos/chat/ChatModule.tsx')
+
+  assert.match(layout, /<DashboardEnvironmentBackground estilo=\{estiloFundo\}/)
+  assert.match(layout, /onOpenCentral=\{\(\) => changeTab\('notifications'\)\}/)
+  assert.match(layout, /CENTRAL DE NOTIFICAÇÕES/)
+  assert.match(layout, /changeTab\(NOTIFICATIONS_ITEM\.id\)/)
+  assert.match(page, /case 'notifications'/)
+  assert.match(settings, /<AppearancePreferences/)
+  assert.match(settings, /salvarEstiloFundoAdmin/)
+  assert.match(settings, /Redefinição de senha/)
+  assert.match(settings, /max-w-\[1200px\]/)
+  assert.match(notifications, /Central de notificações/i)
+  assert.match(ticketRoute, /export async function DELETE/)
+  assert.match(ticketRoute, /tx\.notificacao\.deleteMany\(\{ where: \{ ticketSuporteId: ticket\.id \} \}\)/)
+  assert.match(ticketRoute, /tx\.conversaSuporte\.delete/)
+  assert.match(ticketRoute, /recalcularCoberturaCompetencia\(tx, ticket\.empresaId, ticket\.competencia\)/)
+  assert.match(ticketUi, /role="alertdialog"/)
+  assert.match(ticketUi, /Excluir permanentemente/)
 })
 
 test('logout revoga a sessao no servidor e sempre remove o cookie do navegador', () => {
@@ -366,4 +409,41 @@ test('relatorios e dashboard respeitam os modulos efetivos do funcionario', () =
   assert.match(dashboard, /frotaHabilitada = auth\.empresa\.modulos\.includes\('FROTA'\)/)
   assert.match(dashboard, /gestaoHabilitada = auth\.empresa\.modulos\.includes\('GESTAO'\)/)
   assert.match(dashboard, /tarefasHabilitadas = auth\.empresa\.modulos\.includes\('TAREFAS'\)/)
+})
+
+test('edicao de mensagem do suporte preserva original e exige autor e empresa corretos', () => {
+  const chat = read('src/app/api/chat/route.ts')
+  const schema = read('prisma/schema.prisma')
+  const migration = read('prisma/migrations/20260909180000_edicao_mensagens_suporte/migration.sql')
+
+  assert.match(chat, /export async function PATCH\(request: NextRequest\)/)
+  assert.match(chat, /conversa: \{ empresaId: escopo\.empresaId \}/)
+  assert.match(chat, /atual\.autorId !== escopo\.auth\.session!\.userId/)
+  assert.match(chat, /atual\.tipo !== 'USUARIO' \|\| atual\.automatica/)
+  assert.match(chat, /conteudoOriginal: atual\.conteudoOriginal \?\? atual\.conteudo/)
+  assert.match(chat, /RATE_LIMITS\.CHAT_EDIT/)
+  assert.match(chat, /executarComAuditoria/)
+  assert.match(schema, /conteudoOriginal String\?\s+@map\("conteudo_original"\)/)
+  assert.match(schema, /editado_em\s+DateTime\?/)
+  assert.match(migration, /ADD COLUMN "conteudo_original" TEXT/)
+  assert.match(migration, /ADD COLUMN "editado_em" TIMESTAMP\(3\)/)
+})
+
+test('personalizacao visual de operadores respeita gestor, empresa e liberdade individual', () => {
+  const managerRoute = read('src/app/api/empresa/usuarios/[id]/personalizacao/route.ts')
+  const selfRoute = read('src/app/api/empresa/preferencias-visuais/route.ts')
+  const creation = read('src/lib/usuariosEmpresa.ts')
+  const schema = read('prisma/schema.prisma')
+  const migration = read('prisma/migrations/20260910130000_personalizacao_visual_usuarios/migration.sql')
+
+  assert.match(managerRoute, /requireEmpresaAuth\(request, \{ acao: 'GESTAO' \}\)/)
+  assert.match(managerRoute, /id, empresaId: auth\.session\.empresaId, excluidoEm: null/)
+  assert.match(managerRoute, /z\.string\(\)\.trim\(\)\.toLowerCase\(\)\.refine\(corTemaValida\)/)
+  assert.match(selfRoute, /!gestor && !auth\.usuario\.podePersonalizarTema/)
+  assert.match(selfRoute, /O tema desta conta é administrado pelo gestor/)
+  assert.match(creation, /id: input\.criadoPorId, empresaId: input\.empresaId/)
+  assert.match(creation, /corTema: normalizarCorTema\(criador\?\.corTema/)
+  assert.match(creation, /podePersonalizarTema: false/)
+  assert.match(schema, /rotuloEquipe\s+String\?\s+@map\("rotulo_equipe"\)/)
+  assert.match(migration, /"pode_personalizar_tema" BOOLEAN NOT NULL DEFAULT false/)
 })

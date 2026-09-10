@@ -5,6 +5,7 @@ import { nomeOperacional } from '@/lib/domainValidation'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { encryptionConfigured, exposeEmpresa, protectEmpresa } from '@/lib/fieldEncryption'
 import { prisma } from '@/lib/prisma'
+import { obterPreferenciasVisuaisEfetivas } from '@/lib/preferenciasVisuaisUsuario'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ erro: 'Usuário não pertence mais a esta empresa.' }, { status: 403 })
   }
 
+  const preferenciasVisuais = await obterPreferenciasVisuaisEfetivas(prisma, usuario, auth.empresa.id)
+
   return NextResponse.json(
     {
       usuario: {
@@ -29,6 +32,7 @@ export async function GET(request: NextRequest) {
         ativo: usuario.ativo,
         modulosAcesso: auth.empresa.modulos,
         senhaAlteradaEm: usuario.senhaAlteradaEm,
+        ...preferenciasVisuais,
       },
       empresa: auth.empresa,
     },

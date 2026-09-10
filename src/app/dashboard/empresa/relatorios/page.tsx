@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import ArquivosContasPagar from '@/components/dashboard/ArquivosContasPagar'
+import { PrinterProgress, type PrinterStage } from '@/components/motion/OperationalFeedback'
 import { 
   Download, 
   Calendar, 
@@ -86,6 +87,8 @@ export default function RelatoriosPage() {
   const [arquivosPrivados, setArquivosPrivados] = useState<RelatorioArquivado[]>([])
   const [usoStorage, setUsoStorage] = useState({ uso_bytes: 0, uso_global_bytes: 0, limite_interno_bytes: 0, banco_uso_bytes: 0, banco_limite_bytes: 0, banco_percentual: 0 })
   const [arquivando, setArquivando] = useState(false)
+  const [printerStage, setPrinterStage] = useState<PrinterStage | null>(null)
+  const [printerError, setPrinterError] = useState('')
   const [eficienciaMes, setEficienciaMes] = useState<Array<{ mes: string; custoKm: number; kmTotal: number }>>([])
   const [custoVeiculo, setCustoVeiculo] = useState<Array<{ veiculo: string; combustivel: number; manutencao: number }>>([])
   const [metricas, setMetricas] = useState<MetricasRelatorio>({
@@ -212,7 +215,11 @@ export default function RelatoriosPage() {
 
   const handleGerarExcelServidor = async () => {
     setArquivando(true)
+    setPrinterError('')
+    setPrinterStage('preparing')
     try {
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+      setPrinterStage('generating')
       const response = await fetch('/api/relatorios/gerar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -221,10 +228,13 @@ export default function RelatoriosPage() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.erro || 'Não foi possível gerar o Excel operacional.')
 
+      setPrinterStage('saving')
       await carregarArquivosPrivados()
-      registrarExportacao('Excel operacional gerado e protegido no bucket privado.')
+      setPrinterStage('complete')
     } catch (error) {
-      registrarExportacao(error instanceof Error ? error.message : 'Não foi possível gerar o Excel operacional.')
+      const errorMessage = error instanceof Error ? error.message : 'Não foi possível gerar o Excel operacional.'
+      setPrinterError(errorMessage)
+      setPrinterStage('error')
     } finally {
       setArquivando(false)
     }
@@ -361,6 +371,14 @@ export default function RelatoriosPage() {
         <div className="border px-4 py-3 text-xs font-bold" role="status" style={{ borderColor: `${primary}55`, backgroundColor: `${primary}0d`, color: primary }}>
           {mensagemExportacao}
         </div>
+      )}
+
+      {printerStage && (
+        <PrinterProgress
+          stage={printerStage}
+          errorMessage={printerError}
+          onDismiss={() => setPrinterStage(null)}
+        />
       )}
 
       <section className="border p-4 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>

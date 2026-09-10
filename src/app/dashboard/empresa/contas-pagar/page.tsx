@@ -9,6 +9,7 @@ import { CATEGORIAS_CONTA_PAGAR, descricaoContaPagarEhSugestao, obterCategoriaCo
 import { extrairCodigoLido, lerBoletoPdfLocalmente, lerCodigoBarrasImagemLocalmente } from './_utils/leituraBoletoPdf'
 import LeitorCamera, { type ModoLeitorCamera } from './_components/LeitorCamera'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { DominoLoader } from '@/components/motion/OperationalFeedback'
 import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
 interface Conta {
@@ -361,7 +362,7 @@ export default function ContasPagarPage() {
         {capacidades?.exportacaoLote && <Link href="/api/contas-pagar/exportar" download className="flex min-h-10 items-center justify-center border px-4 text-[10px] font-black uppercase" style={{ borderColor: 'var(--border)' }}><Download size={14} className="mr-2" />Exportar CSV</Link>}
       </div>
 
-      {carregando ? <p className="py-16 text-center text-xs uppercase tracking-widest text-foreground-muted">Carregando contas...</p> : exibidas.length === 0 ? <div className="border border-dashed py-16 text-center" style={{ borderColor: 'var(--border)' }}><ReceiptText className="mx-auto mb-3 text-foreground-muted" /><p className="text-sm font-bold">Nenhuma conta nesta categoria.</p><p className="mt-1 text-xs text-foreground-muted">Cadastre o primeiro vencimento para iniciar a organização.</p></div> : (
+      {carregando ? <DominoLoader label="Carregando contas a pagar" /> : exibidas.length === 0 ? <div className="border border-dashed py-16 text-center" style={{ borderColor: 'var(--border)' }}><ReceiptText className="mx-auto mb-3 text-foreground-muted" /><p className="text-sm font-bold">Nenhuma conta nesta categoria.</p><p className="mt-1 text-xs text-foreground-muted">Cadastre o primeiro vencimento para iniciar a organização.</p></div> : (
         <div className="grid gap-3 xl:grid-cols-2">{exibidas.map((conta) => <ContaCard key={conta.id} conta={conta} capacidades={capacidades!} portal={portal} primary={primary} onCopiar={() => void copiarLinha(conta)} onArquivo={(tipo) => void abrirArquivo(conta.id, tipo)} onEditar={() => abrirEdicao(conta)} onBaixar={() => abrirConfirmacaoBaixa(conta)} onCancelar={() => setCancelando(conta)} onReabrir={() => setReabrindo(conta)} />)}</div>
       )}
 

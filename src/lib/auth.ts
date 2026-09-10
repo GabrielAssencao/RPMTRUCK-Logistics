@@ -61,6 +61,10 @@ export interface AuthResult {
     excluidoEm: Date | null
     sessaoVersao: number
     senhaAlteradaEm: Date
+    corTema: string | null
+    temaClaro: boolean | null
+    rotuloEquipe: string | null
+    podePersonalizarTema: boolean
   }
 }
 
@@ -84,6 +88,10 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
     excluidoEm: true,
     sessaoVersao: true,
     senhaAlteradaEm: true,
+    corTema: true,
+    temaClaro: true,
+    rotuloEquipe: true,
+    podePersonalizarTema: true,
   } as const
   const usuario = tokenSession.sessionId
     ? (await prisma.sessaoUsuario.findFirst({

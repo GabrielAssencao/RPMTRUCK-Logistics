@@ -1,6 +1,7 @@
 import { Prisma, type Role } from '@prisma/client'
 import { normalizarModulos, PLANOS_CONFIG, type ModuloCodigo } from '@/utils/planos'
 import { executarComAuditoria } from '@/lib/auditoria'
+import { COR_TEMA_PADRAO, normalizarCorTema } from '@/data/temasELogos'
 
 export class EmpresaNaoEncontradaError extends Error {}
 export class LimiteUsuariosError extends Error {
@@ -55,6 +56,11 @@ export async function criarUsuarioEmpresaComLimite(input: CriarUsuarioEmpresaInp
       modulo === 'NOTIFICACOES' || solicitados.includes(modulo),
     )
 
+    const criador = await tx.usuario.findFirst({
+      where: { id: input.criadoPorId, empresaId: input.empresaId, excluidoEm: null },
+      select: { corTema: true, temaClaro: true },
+    })
+
     return tx.usuario.create({
       data: {
         nome: input.nome,
@@ -66,6 +72,9 @@ export async function criarUsuarioEmpresaComLimite(input: CriarUsuarioEmpresaInp
         exigeTrocaSenha: Boolean(input.senhaTemporariaExpiraEm),
         senhaTemporariaExpiraEm: input.senhaTemporariaExpiraEm,
         empresaId: input.empresaId,
+        corTema: normalizarCorTema(criador?.corTema ?? COR_TEMA_PADRAO),
+        temaClaro: criador?.temaClaro ?? false,
+        podePersonalizarTema: false,
       },
       select: {
         id: true,
@@ -76,6 +85,10 @@ export async function criarUsuarioEmpresaComLimite(input: CriarUsuarioEmpresaInp
         ativo: true,
         modulosAcesso: true,
         criado_em: true,
+        corTema: true,
+        temaClaro: true,
+        rotuloEquipe: true,
+        podePersonalizarTema: true,
       },
     })
   }, {

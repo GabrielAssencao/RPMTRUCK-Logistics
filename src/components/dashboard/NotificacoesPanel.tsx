@@ -10,25 +10,68 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, Trash2, Check, CheckCheck } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
+
+type ConfirmacaoNotificacao =
+  | { tipo: 'LIMPAR_LIDAS' }
+  | { tipo: 'EXCLUIR'; id: string; titulo: string }
 
 interface NotificacoesPanelProps {
   onPendenciasChange?: (pendencias: Record<string, number>) => void
   centralHref?: string | null
+  onOpenCentral?: () => void
 }
 
 export default function NotificacoesPanel({
   onPendenciasChange,
   centralHref = '/dashboard/empresa/notificacoes',
+  onOpenCentral,
 }: NotificacoesPanelProps) {
   const { primary, semanticColors } = useTheme()
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
+  const [processando, setProcessando] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<{ mensagem: string; erro: boolean } | null>(null)
+  const [confirmacao, setConfirmacao] = useState<ConfirmacaoNotificacao | null>(null)
   const { notificacoes, naoLidas, loading, error, pendenciasPorModulo, marcarComoLida, marcarTodasComoLidas, limparLidas, deletarNotificacao, recarregar } =
     useNotificacoes()
   const temLidas = notificacoes.some(notificacao => notificacao.lida)
 
+  const executarAcao = async (chave: string, acao: () => Promise<unknown>, sucesso: string) => {
+    if (processando) return
+    setProcessando(chave)
+    setFeedback(null)
+    try {
+      await acao()
+      setFeedback({ mensagem: sucesso, erro: false })
+    } catch (cause) {
+      setFeedback({ mensagem: cause instanceof Error ? cause.message : 'Não foi possível concluir a ação.', erro: true })
+    } finally {
+      setProcessando(null)
+    }
+  }
+
+  const confirmarAcao = async () => {
+    if (!confirmacao || processando) return
+    const acao = confirmacao
+    if (acao.tipo === 'LIMPAR_LIDAS') {
+      await executarAcao('limpar', async () => {
+        const removidas = await limparLidas()
+        setFeedback({ mensagem: `${removidas} notificação(ões) lida(s) removida(s).`, erro: false })
+      }, 'Notificações lidas removidas.')
+    } else {
+      await executarAcao(acao.id, () => deletarNotificacao(acao.id), 'Notificação excluída.')
+    }
+    setConfirmacao(null)
+  }
+
   const abrirTicket = async (notificacaoId: string, ticketId: string) => {
-    await marcarComoLida(notificacaoId)
+    try {
+      await marcarComoLida(notificacaoId)
+    } catch (cause) {
+      setFeedback({ mensagem: cause instanceof Error ? cause.message : 'Não foi possível atualizar a notificação.', erro: true })
+    }
     setIsOpen(false)
     const params = new URLSearchParams({ ticket: ticketId })
     if (centralHref === null) params.set('tab', 'chat')
@@ -113,16 +156,16 @@ export default function NotificacoesPanel({
 
             {(naoLidas > 0 || temLidas) && (
               <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2" style={{ borderColor: 'var(--border)' }}>
-                {naoLidas > 0 && <button type="button" onClick={() => void marcarTodasComoLidas()} className="flex items-center gap-2 text-xs font-bold hover:underline" style={{ color: primary }}>
+                {naoLidas > 0 && <button type="button" disabled={Boolean(processando)} onClick={() => void executarAcao('todas', marcarTodasComoLidas, 'Todas as notificações foram marcadas como lidas.')} className="flex items-center gap-2 text-xs font-bold hover:underline disabled:opacity-50" style={{ color: primary }}>
                   <CheckCheck size={14} /> Marcar todas como lidas
                 </button>}
-                {temLidas && <button type="button" onClick={() => {
-                  if (window.confirm('Remover permanentemente todas as notificações já lidas?')) void limparLidas()
-                }} className="ml-auto flex items-center gap-2 text-xs font-bold hover:underline" style={{ color: semanticColors.danger }}>
+                {temLidas && <button type="button" disabled={Boolean(processando)} onClick={() => setConfirmacao({ tipo: 'LIMPAR_LIDAS' })} className="ml-auto flex items-center gap-2 text-xs font-bold hover:underline disabled:opacity-50" style={{ color: semanticColors.danger }}>
                   <Trash2 size={14} /> Limpar lidas
                 </button>}
               </div>
             )}
+
+            {feedback && <ActionFeedback message={feedback.mensagem} tone={feedback.erro ? 'error' : 'success'} className="m-3 text-xs" />}
 
             {/* Lista de Notificações */}
             <div className="max-h-96 overflow-y-auto">
@@ -204,16 +247,16 @@ export default function NotificacoesPanel({
                         {!notif.lida && (
                           <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0">
                             <button
-                              onClick={() => marcarComoLida(notif.id)}
+                              disabled={Boolean(processando)}
+                              onClick={() => void executarAcao(notif.id, () => marcarComoLida(notif.id), 'Notificação marcada como lida.')}
                               className="p-1 hover:opacity-70 transition-opacity"
                               title="Marcar como lida"
                             >
                               <Check size={14} style={{ color: primary }} />
                             </button>
                             <button
-                              onClick={() => {
-                                if (window.confirm(`Excluir permanentemente a notificação “${notif.titulo}”?`)) void deletarNotificacao(notif.id)
-                              }}
+                              disabled={Boolean(processando)}
+                              onClick={() => setConfirmacao({ tipo: 'EXCLUIR', id: notif.id, titulo: notif.titulo })}
                               className="p-1 hover:opacity-70 transition-opacity"
                               style={{ color: semanticColors.danger }}
                               title="Deletar"
@@ -230,14 +273,20 @@ export default function NotificacoesPanel({
             </div>
 
             {/* Footer */}
-            {notificacoes.length > 0 && centralHref && (
+            {(centralHref || onOpenCentral) && (
               <div
                 className="px-4 py-3 border-t text-center"
                 style={{ borderColor: 'var(--border)' }}
               >
-                <Link href={centralHref} onClick={() => setIsOpen(false)} className="text-xs font-bold uppercase tracking-widest transition-all hover:underline" style={{ color: primary }}>
-                  Abrir central de notificações
-                </Link>
+                {centralHref ? (
+                  <Link href={centralHref} onClick={() => setIsOpen(false)} className="text-xs font-bold uppercase tracking-widest transition-all hover:underline" style={{ color: primary }}>
+                    Abrir central de notificações
+                  </Link>
+                ) : (
+                  <button type="button" onClick={() => { setIsOpen(false); onOpenCentral?.() }} className="text-xs font-bold uppercase tracking-widest transition-all hover:underline" style={{ color: primary }}>
+                    Abrir central de notificações
+                  </button>
+                )}
               </div>
             )}
           </motion.div>
@@ -251,6 +300,19 @@ export default function NotificacoesPanel({
           onClick={() => setIsOpen(false)}
         />
       )}
+
+      <ActionConfirmDialog
+        open={Boolean(confirmacao)}
+        title={confirmacao?.tipo === 'LIMPAR_LIDAS' ? 'Limpar notificações lidas' : 'Excluir notificação'}
+        description={confirmacao?.tipo === 'LIMPAR_LIDAS'
+          ? 'As notificações já lidas serão removidas permanentemente. As não lidas serão preservadas.'
+          : `A notificação “${confirmacao?.tipo === 'EXCLUIR' ? confirmacao.titulo : ''}” será removida permanentemente.`}
+        confirmLabel={confirmacao?.tipo === 'LIMPAR_LIDAS' ? 'Limpar lidas' : 'Excluir notificação'}
+        cancelLabel="Manter notificações"
+        loading={Boolean(processando)}
+        onClose={() => { if (!processando) setConfirmacao(null) }}
+        onConfirm={() => void confirmarAcao()}
+      />
     </div>
   )
 }

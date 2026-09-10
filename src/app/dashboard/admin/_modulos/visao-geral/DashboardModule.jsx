@@ -143,7 +143,9 @@ export default function DashboardModule() {
                 </Pie>
                 <Tooltip
                   formatter={(value) => [`${value} empresas`, 'Quantidade']}
-                  contentStyle={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)', borderRadius: '12px' }}
+                  contentStyle={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)', borderRadius: '12px', color: 'var(--foreground)' }}
+                  itemStyle={{ color: 'var(--foreground)' }}
+                  labelStyle={{ color: 'var(--foreground)' }}
                 />
               </PieChart>
             </ResponsiveContainer>

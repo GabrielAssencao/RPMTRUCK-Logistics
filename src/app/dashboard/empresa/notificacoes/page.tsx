@@ -5,8 +5,12 @@ import { Bell, Check, CheckCheck, ChevronLeft, ChevronRight, Inbox, Trash2 } fro
 import { useTheme } from '@/contexts/ThemeContext'
 import { NOTIFICACOES_ATUALIZADAS_EVENT, type Notificacao } from '@/hooks/useNotificacoes'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 
 type FiltroLeitura = 'todas' | 'nao_lidas' | 'lidas'
+type ConfirmacaoNotificacao =
+  | { tipo: 'LIMPAR_LIDAS' }
+  | { tipo: 'EXCLUIR'; notificacao: Notificacao }
 
 interface RespostaNotificacoes {
   notificacoes: Notificacao[]
@@ -46,6 +50,7 @@ export default function CentralNotificacoesPage() {
   const [erro, setErro] = useState('')
   const [feedback, setFeedback] = useState('')
   const [revisao, setRevisao] = useState(0)
+  const [confirmacao, setConfirmacao] = useState<ConfirmacaoNotificacao | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -119,7 +124,7 @@ export default function CentralNotificacoesPage() {
   }
 
   const limparLidas = async () => {
-    if (processando || !window.confirm('Remover permanentemente todas as notificações já lidas? As não lidas serão preservadas.')) return
+    if (processando) return
     setProcessando('limpar')
     setErro('')
     try {
@@ -139,7 +144,7 @@ export default function CentralNotificacoesPage() {
   }
 
   const excluirNotificacao = async (notificacao: Notificacao) => {
-    if (processando || !window.confirm(`Excluir permanentemente a notificação “${notificacao.titulo}”?`)) return
+    if (processando) return
     setProcessando(notificacao.id)
     setErro('')
     try {
@@ -166,7 +171,7 @@ export default function CentralNotificacoesPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={naoLidas === 0 || Boolean(processando)} onClick={() => void marcarTodasComoLidas()} className="flex items-center gap-2 border px-4 py-2 text-[10px] font-bold uppercase disabled:opacity-40" style={{ borderColor: primary, color: primary }}><CheckCheck size={14} /> Marcar todas como lidas</button>
-          <button type="button" disabled={Boolean(processando)} onClick={() => void limparLidas()} className="flex items-center gap-2 border px-4 py-2 text-[10px] font-bold uppercase disabled:opacity-40" style={{ borderColor: `${semanticColors.danger}66`, color: semanticColors.danger }}><Trash2 size={14} /> Limpar lidas</button>
+          <button type="button" disabled={Boolean(processando)} onClick={() => setConfirmacao({ tipo: 'LIMPAR_LIDAS' })} className="flex items-center gap-2 border px-4 py-2 text-[10px] font-bold uppercase disabled:opacity-40" style={{ borderColor: `${semanticColors.danger}66`, color: semanticColors.danger }}><Trash2 size={14} /> Limpar lidas</button>
         </div>
       </div>
 
@@ -215,7 +220,7 @@ export default function CentralNotificacoesPage() {
                     </div>
                     <div className="flex items-start gap-1 sm:justify-end">
                       {!notificacao.lida && <button type="button" disabled={Boolean(processando)} onClick={() => void marcarComoLida(notificacao)} className="p-2 text-foreground-muted transition-colors hover:text-foreground disabled:opacity-40" title="Marcar como lida" aria-label={`Marcar “${notificacao.titulo}” como lida`}><Check size={15} /></button>}
-                      <button type="button" disabled={Boolean(processando)} onClick={() => void excluirNotificacao(notificacao)} className="p-2 transition-opacity hover:opacity-75 disabled:opacity-40" style={{ color: semanticColors.danger }} title="Excluir notificação" aria-label={`Excluir “${notificacao.titulo}”`}><Trash2 size={15} /></button>
+                      <button type="button" disabled={Boolean(processando)} onClick={() => setConfirmacao({ tipo: 'EXCLUIR', notificacao })} className="p-2 transition-opacity hover:opacity-75 disabled:opacity-40" style={{ color: semanticColors.danger }} title="Excluir notificação" aria-label={`Excluir “${notificacao.titulo}”`}><Trash2 size={15} /></button>
                     </div>
                   </article>
                 )
@@ -230,6 +235,25 @@ export default function CentralNotificacoesPage() {
           <button type="button" disabled={pagina >= totalPaginas || loading} onClick={() => { setLoading(true); setPagina(atual => Math.min(totalPaginas, atual + 1)) }} className="flex items-center gap-1 border px-3 py-2 text-[10px] font-bold uppercase disabled:opacity-30" style={{ borderColor: 'var(--border)' }}>Próxima <ChevronRight size={13} /></button>
         </div>}
       </section>
+
+      <ActionConfirmDialog
+        open={Boolean(confirmacao)}
+        title={confirmacao?.tipo === 'LIMPAR_LIDAS' ? 'Limpar notificações lidas' : 'Excluir notificação'}
+        description={confirmacao?.tipo === 'LIMPAR_LIDAS'
+          ? 'As notificações já lidas serão removidas permanentemente. As não lidas serão preservadas.'
+          : `A notificação “${confirmacao?.tipo === 'EXCLUIR' ? confirmacao.notificacao.titulo : ''}” será removida permanentemente.`}
+        confirmLabel={confirmacao?.tipo === 'LIMPAR_LIDAS' ? 'Limpar lidas' : 'Excluir notificação'}
+        cancelLabel="Manter notificações"
+        loading={Boolean(processando)}
+        onClose={() => { if (!processando) setConfirmacao(null) }}
+        onConfirm={() => {
+          if (!confirmacao) return
+          const acao = confirmacao
+          setConfirmacao(null)
+          if (acao.tipo === 'LIMPAR_LIDAS') void limparLidas()
+          else void excluirNotificacao(acao.notificacao)
+        }}
+      />
     </div>
   )
 }

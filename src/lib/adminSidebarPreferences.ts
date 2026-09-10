@@ -1,28 +1,63 @@
-export const ADMIN_SECURITY_SHORTCUT_KEY = '@rpmtruck:admin-security-shortcut-visible'
-export const ADMIN_SIDEBAR_UPDATED_EVENT = 'rpmtruck:admin-sidebar-updated'
+import { estiloFundoEmpresaValido, type EstiloFundoEmpresa } from '@/lib/empresaPreferences'
 
-function chavePreferencia() {
+export const ADMIN_BACKGROUND_PREFERENCES_EVENT = 'rpmtruck:admin-background-preferences'
+
+const ADMIN_BACKGROUND_STYLE_KEY = '@rpmtruck:admin-background-style'
+const ADMIN_LOG_SECTIONS_KEY = '@rpmtruck:admin-log-sections'
+
+export type SecaoLogAdmin = 'SESSOES' | 'EVENTOS' | 'AUDITORIA' | 'EXCLUSOES'
+
+export const SECOES_LOG_ADMIN: SecaoLogAdmin[] = ['SESSOES', 'EVENTOS', 'AUDITORIA', 'EXCLUSOES']
+
+function obterIdentidadeAdmin() {
   try {
     const usuario = JSON.parse(localStorage.getItem('@rpmtruck:user') || '{}')
-    return `${ADMIN_SECURITY_SHORTCUT_KEY}:${usuario.id || 'local'}`
+    return encodeURIComponent(String(usuario.id || usuario.email || 'local'))
   } catch {
-    return `${ADMIN_SECURITY_SHORTCUT_KEY}:local`
+    return 'local'
   }
 }
 
-export function lerAtalhoSegurancaVisivel() {
+function chavePorAdmin(base: string) {
+  return `${base}:${obterIdentidadeAdmin()}`
+}
+
+export function lerEstiloFundoAdmin(): EstiloFundoEmpresa {
+  if (typeof window === 'undefined') return 'DESLIGADO'
   try {
-    return localStorage.getItem(chavePreferencia()) !== 'false'
+    const estilo = localStorage.getItem(chavePorAdmin(ADMIN_BACKGROUND_STYLE_KEY))
+    return estiloFundoEmpresaValido(estilo) ? estilo : 'DESLIGADO'
   } catch {
-    return true
+    return 'DESLIGADO'
   }
 }
 
-export function salvarAtalhoSegurancaVisivel(visivel: boolean) {
+export function salvarEstiloFundoAdmin(estilo: EstiloFundoEmpresa) {
   try {
-    localStorage.setItem(chavePreferencia(), String(visivel))
+    localStorage.setItem(chavePorAdmin(ADMIN_BACKGROUND_STYLE_KEY), estilo)
   } catch {
     // A preferência permanece apenas na sessão quando o storage está indisponível.
   }
-  window.dispatchEvent(new CustomEvent(ADMIN_SIDEBAR_UPDATED_EVENT, { detail: { visivel } }))
+  window.dispatchEvent(new CustomEvent<EstiloFundoEmpresa>(ADMIN_BACKGROUND_PREFERENCES_EVENT, { detail: estilo }))
+}
+
+export function lerSecoesLogsAdmin(): Record<SecaoLogAdmin, boolean> {
+  const padrao = Object.fromEntries(SECOES_LOG_ADMIN.map((secao) => [secao, true])) as Record<SecaoLogAdmin, boolean>
+  if (typeof window === 'undefined') return padrao
+  try {
+    const salvo: unknown = JSON.parse(localStorage.getItem(chavePorAdmin(ADMIN_LOG_SECTIONS_KEY)) || '{}')
+    if (!salvo || typeof salvo !== 'object') return padrao
+    return Object.fromEntries(SECOES_LOG_ADMIN.map((secao) => [secao, (salvo as Record<string, unknown>)[secao] !== false])) as Record<SecaoLogAdmin, boolean>
+  } catch {
+    return padrao
+  }
+}
+
+export function salvarSecoesLogsAdmin(secoes: Record<SecaoLogAdmin, boolean>) {
+  try {
+    localStorage.setItem(chavePorAdmin(ADMIN_LOG_SECTIONS_KEY), JSON.stringify(secoes))
+  } catch {
+    // A preferência permanece apenas na sessão quando o storage está indisponível.
+  }
+  return secoes
 }

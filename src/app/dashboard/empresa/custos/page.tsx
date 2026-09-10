@@ -8,6 +8,7 @@ import { useContainers } from '@/contexts/ContainersContext'
 import { obterAnoMesSemana, MESES } from '@/lib/dataUtils'
 import { PLANOS_CONFIG, type PlanoTipo } from '@/utils/planos'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { DominoLoader } from '@/components/motion/OperationalFeedback'
 import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 import { 
   DollarSign, 
@@ -114,6 +115,7 @@ export default function CustosPage() {
   })
 
   const [custos, setCustos] = useState<RegistroCusto[]>([])
+  const [carregandoCustos, setCarregandoCustos] = useState(true)
 
   useEffect(() => {
     queueMicrotask(() => setMontado(true))
@@ -125,6 +127,9 @@ export default function CustosPage() {
 
   useEffect(() => {
     const controller = new AbortController()
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) setCarregandoCustos(true)
+    })
     fetch(`/api/custos?ano=${anoSelecionado}`, { cache: 'no-store', signal: controller.signal })
       .then(async response => {
         const data = await response.json()
@@ -134,12 +139,14 @@ export default function CustosPage() {
       .catch(error => {
         if (error instanceof Error && error.name !== 'AbortError') setErroFormulario(error.message)
       })
+      .finally(() => {
+        if (!controller.signal.aborted) setCarregandoCustos(false)
+      })
     return () => controller.abort()
   }, [anoSelecionado])
 
-  if (!montado) return null
+  if (!montado || carregandoDuplas || carregandoCustos) return <DominoLoader label="Carregando custos e despesas" />
 
-  if (carregandoDuplas) return <div className="p-12 text-center text-sm text-foreground-muted">Carregando dados operacionais...</div>
   if (duplas.length === 0) return <div className="border border-dashed p-12 text-center text-sm text-foreground-muted">Cadastre ao menos um veículo antes de lançar custos.</div>
   const duplaAtiva = duplas[indexDupla] || duplas[0]
 

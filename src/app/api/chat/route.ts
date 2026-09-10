@@ -8,12 +8,19 @@ import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { inicioCompetencia } from '@/lib/suporte'
 import { obterPoliticaSuporte } from '@/lib/suporteConfig'
 import { notificarAdmins, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 export const dynamic = 'force-dynamic'
 
 const mensagemSchema = z.object({
   mensagem: textoOperacional(1, 2000),
   ticketId: z.string().uuid(),
+  empresaId: z.string().uuid().optional(),
+}).strict()
+
+const editarMensagemSchema = z.object({
+  mensagemId: z.string().uuid(),
+  mensagem: textoOperacional(1, 2000),
   empresaId: z.string().uuid().optional(),
 }).strict()
 
@@ -119,6 +126,7 @@ export async function GET(request: NextRequest) {
     automatica: boolean
     criado_em: Date
     lida_em: Date | null
+    editado_em: Date | null
     autor: { id: string; nome: string; role: string } | null
   }> = []
 
@@ -144,6 +152,7 @@ export async function GET(request: NextRequest) {
         automatica: true,
         criado_em: true,
         lida_em: true,
+        editado_em: true,
         autor: { select: { id: true, nome: true, role: true } },
       },
     }).then((itens) => itens.reverse())
@@ -204,6 +213,7 @@ export async function POST(request: NextRequest) {
         automatica: true,
         criado_em: true,
         lida_em: true,
+        editado_em: true,
         autor: { select: { id: true, nome: true, role: true } },
       },
     })
@@ -235,4 +245,65 @@ export async function POST(request: NextRequest) {
   })
 
   return NextResponse.json({ mensagem }, { status: 201, headers: { 'Cache-Control': 'no-store' } })
+}
+
+export async function PATCH(request: NextRequest) {
+  const preAuth = await requireAuth(request)
+  if (preAuth.error || !preAuth.session) return NextResponse.json({ erro: preAuth.error }, { status: preAuth.status })
+
+  const parsed = editarMensagemSchema.safeParse(await request.json().catch(() => null))
+  if (!parsed.success) return NextResponse.json({ erro: 'Mensagem ou identificador inválido.' }, { status: 400 })
+
+  const escopo = await resolverEscopo(request, parsed.data.empresaId)
+  if ('error' in escopo) return NextResponse.json({ erro: escopo.error }, { status: escopo.status })
+
+  const limited = await applyRateLimit(request, `chat-edit:${escopo.auth.session!.userId}`, RATE_LIMITS.CHAT_EDIT.limit, RATE_LIMITS.CHAT_EDIT.windowMs)
+  if (limited) return limited
+
+  const atual = await prisma.mensagemSuporte.findFirst({
+    where: {
+      id: parsed.data.mensagemId,
+      conversa: { empresaId: escopo.empresaId },
+    },
+    select: {
+      id: true,
+      autorId: true,
+      conteudo: true,
+      conteudoOriginal: true,
+      tipo: true,
+      automatica: true,
+    },
+  })
+  if (!atual) return NextResponse.json({ erro: 'Mensagem não encontrada.' }, { status: 404 })
+  if (atual.autorId !== escopo.auth.session!.userId) {
+    return NextResponse.json({ erro: 'Você só pode editar mensagens enviadas pela sua própria conta.' }, { status: 403 })
+  }
+  if (atual.tipo !== 'USUARIO' || atual.automatica) {
+    return NextResponse.json({ erro: 'Mensagens automáticas do sistema não podem ser editadas.' }, { status: 409 })
+  }
+
+  const editadoEm = new Date()
+  const mensagem = await executarComAuditoria(
+    { usuarioId: escopo.auth.session!.userId, origem: escopo.admin ? 'SUPERADMIN' : 'API' },
+    (tx) => tx.mensagemSuporte.update({
+      where: { id: atual.id },
+      data: {
+        conteudo: parsed.data.mensagem,
+        conteudoOriginal: atual.conteudoOriginal ?? atual.conteudo,
+        editado_em: editadoEm,
+      },
+      select: {
+        id: true,
+        conteudo: true,
+        tipo: true,
+        automatica: true,
+        criado_em: true,
+        lida_em: true,
+        editado_em: true,
+        autor: { select: { id: true, nome: true, role: true } },
+      },
+    }),
+  )
+
+  return NextResponse.json({ mensagem }, { headers: { 'Cache-Control': 'private, no-store' } })
 }

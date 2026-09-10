@@ -19,6 +19,7 @@ import {
 import Link from 'next/link'
 import { formatarCPF } from '@/utils/documentos'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { DominoLoader } from '@/components/motion/OperationalFeedback'
 import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
 interface VeiculoCompleto {
@@ -65,6 +66,7 @@ export default function MotoristasPage() {
   const { primary } = useTheme()
   const { containers } = useContainers()
   const [montado, setMontado] = useState(false)
+  const [carregando, setCarregando] = useState(true)
 
   // Lista de Veículos
   const [veiculos, setVeiculos] = useState<VeiculoCompleto[]>([])
@@ -94,10 +96,10 @@ export default function MotoristasPage() {
     }).catch(error => {
       setFeedbackTone('error')
       setFeedback(error instanceof Error ? error.message : 'Falha ao carregar motoristas.')
-    })
+    }).finally(() => setCarregando(false))
   }, [])
 
-  if (!montado) return null
+  if (!montado || carregando) return <DominoLoader label="Carregando motoristas e vínculos" />
 
   // Comissão calculada pelos vínculos relacionais persistidos no banco.
   const obterComissaoDoMotorista = (motoristaId: string) => {

@@ -281,6 +281,10 @@ model Usuario {
   exigeTrocaSenha         Boolean   @default(false) @map("exige_troca_senha")
   senhaTemporariaExpiraEm DateTime? @map("senha_temporaria_expira_em")
   senhaAlteradaEm         DateTime  @default(now()) @map("senha_alterada_em")
+  corTema                 String?   @map("cor_tema") @db.VarChar(16)
+  temaClaro               Boolean?  @map("tema_claro")
+  rotuloEquipe            String?   @map("rotulo_equipe") @db.VarChar(48)
+  podePersonalizarTema    Boolean   @default(false) @map("pode_personalizar_tema")
 
   // Se for nulo, indica que o usuário é da equipe interna RPMTruck (Geral Admin)
   empresaId String?
@@ -560,11 +564,13 @@ model ConversaSuporte {
 }
 
 model MensagemSuporte {
-  id         String              @id @default(uuid())
-  conteudo   String
-  tipo       TipoMensagemSuporte @default(USUARIO)
-  automatica Boolean             @default(false)
-  lida_em    DateTime?
+  id               String              @id @default(uuid())
+  conteudo         String
+  conteudoOriginal String?             @map("conteudo_original")
+  tipo             TipoMensagemSuporte @default(USUARIO)
+  automatica       Boolean             @default(false)
+  lida_em          DateTime?
+  editado_em       DateTime?
 
   conversaId String
   conversa   ConversaSuporte @relation(fields: [conversaId], references: [id], onDelete: Cascade)

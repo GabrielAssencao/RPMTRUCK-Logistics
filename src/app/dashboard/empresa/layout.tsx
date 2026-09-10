@@ -2,11 +2,9 @@
 
 import { useCallback, useState, useEffect } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
-import { obterLogoPorTema } from '@/data/temasELogos'
 import { ContainersProvider } from '@/contexts/ContainersContext'
 import { 
   LayoutDashboard, 
@@ -28,13 +26,27 @@ import {
   Eye,
   EyeOff,
   MessageSquare,
+  Palette,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
+import SidebarBrandMark, { SidebarBrandIdentity } from '@/components/dashboard/SidebarBrandMark'
+import DashboardEnvironmentBackground from '@/components/dashboard/DashboardEnvironmentBackground'
 import { normalizarModulos, type ModuloCodigo } from '@/utils/planos'
+import { normalizarCorTema } from '@/data/temasELogos'
 import { useSessionActivity } from '@/hooks/useSessionActivity'
 import { DashboardMotion } from '@/components/motion/DashboardMotion'
 import AlertasSistema from '@/components/dashboard/AlertasSistema'
+import {
+  EMPRESA_BACKGROUND_PREFERENCES_EVENT,
+  EMPRESA_NAVIGATION_ITEMS,
+  EMPRESA_SIDEBAR_PREFERENCES_EVENT,
+  lerEstiloFundoEmpresa,
+  estiloFundoEmpresaValido,
+  lerModulosOcultosEmpresa,
+  salvarModulosOcultosEmpresa,
+  type EstiloFundoEmpresa,
+} from '@/lib/empresaPreferences'
 
 // ─── Marcadores Operacionais do Cliente (Empresa) ─────────────────────────────
 interface NavEmpresaItem {
@@ -51,20 +63,45 @@ interface PerfilEmpresaUsuario {
   role: 'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'
   acessoDashboardGeral: boolean
   modulosAcesso: ModuloCodigo[]
+  corTema: string
+  temaClaro: boolean
+  rotuloEquipe: string | null
+  podePersonalizarTema: boolean
+  herdadoDoGestor: boolean
 }
 
-const NAV_EMPRESA: NavEmpresaItem[] = [
-  { path: '/dashboard/empresa', icon: LayoutDashboard, label: 'PAINEL OPERACIONAL', modulo: null, notificacaoModulo: 'GERAL', visaoGeral: true },
-  { path: '/dashboard/empresa/frota', icon: Truck, label: 'FROTA / VEÍCULOS', modulo: 'FROTA', notificacaoModulo: 'FROTA' },
-  { path: '/dashboard/empresa/motoristas', icon: Users, label: 'MOTORISTAS', modulo: 'FROTA', notificacaoModulo: 'MOTORISTAS', somenteGestor: true },
-  { path: '/dashboard/empresa/containers', icon: ContainerIcon, label: 'CONTAINERS', modulo: 'FROTA', notificacaoModulo: 'CONTAINERS' },
-  { path: '/dashboard/empresa/custos', icon: DollarSign, label: 'CUSTOS / DESPESAS', modulo: 'GESTAO', notificacaoModulo: 'CUSTOS' },
-  { path: '/dashboard/empresa/contas-pagar', icon: ReceiptText, label: 'CONTAS A PAGAR', modulo: 'CONTAS_PAGAR', notificacaoModulo: 'CONTAS_PAGAR', somenteGestor: true },
-  { path: '/dashboard/empresa/tarefas', icon: ClipboardList, label: 'TAREFAS', modulo: 'TAREFAS', notificacaoModulo: 'TAREFAS' },
-  { path: '/dashboard/empresa/arquivos', icon: Archive, label: 'ARQUIVO OPERACIONAL', modulo: null, notificacaoModulo: 'RELATORIOS', somenteGestor: true },
-  { path: '/dashboard/empresa/relatorios', icon: FilePieChart, label: 'RELATÓRIOS', modulo: 'RELATORIOS', notificacaoModulo: 'RELATORIOS', somenteGestor: true },
-  { path: '/dashboard/empresa/usuarios', icon: UserSquare2, label: 'OPERADORES', modulo: null, notificacaoModulo: 'USUARIOS', somenteGestor: true },
-]
+const NAVIGATION_ICONS: Record<string, LucideIcon> = {
+  '/dashboard/empresa': LayoutDashboard,
+  '/dashboard/empresa/frota': Truck,
+  '/dashboard/empresa/motoristas': Users,
+  '/dashboard/empresa/containers': ContainerIcon,
+  '/dashboard/empresa/custos': DollarSign,
+  '/dashboard/empresa/contas-pagar': ReceiptText,
+  '/dashboard/empresa/tarefas': ClipboardList,
+  '/dashboard/empresa/arquivos': Archive,
+  '/dashboard/empresa/relatorios': FilePieChart,
+  '/dashboard/empresa/usuarios': UserSquare2,
+}
+
+const NOTIFICATION_MODULES: Record<string, string> = {
+  '/dashboard/empresa': 'GERAL',
+  '/dashboard/empresa/frota': 'FROTA',
+  '/dashboard/empresa/motoristas': 'MOTORISTAS',
+  '/dashboard/empresa/containers': 'CONTAINERS',
+  '/dashboard/empresa/custos': 'CUSTOS',
+  '/dashboard/empresa/contas-pagar': 'CONTAS_PAGAR',
+  '/dashboard/empresa/tarefas': 'TAREFAS',
+  '/dashboard/empresa/arquivos': 'RELATORIOS',
+  '/dashboard/empresa/relatorios': 'RELATORIOS',
+  '/dashboard/empresa/usuarios': 'USUARIOS',
+}
+
+const NAV_EMPRESA: NavEmpresaItem[] = EMPRESA_NAVIGATION_ITEMS.map((item) => ({
+  ...item,
+  label: item.label.toLocaleUpperCase('pt-BR'),
+  icon: NAVIGATION_ICONS[item.path],
+  notificacaoModulo: NOTIFICATION_MODULES[item.path],
+}))
 
 const CONFIG_ITEM = { path: '/dashboard/empresa/configuracoes', icon: Settings, label: 'CONFIGURAÇÕES' }
 const NOTIFICACOES_ITEM: NavEmpresaItem = { path: '/dashboard/empresa/notificacoes', icon: Bell, label: 'NOTIFICAÇÕES', modulo: null, notificacaoModulo: 'TODAS' }
@@ -73,17 +110,6 @@ const SUPORTE_ITEM: NavEmpresaItem = { path: '/dashboard/empresa/chat', icon: Me
 // Larguras da sidebar recolhida (só ícones) e expandida (ícones + texto)
 const LARGURA_RECOLHIDA = '72px'
 const LARGURA_EXPANDIDA = '16rem'
-const SIDEBAR_HIDDEN_MODULES_KEY = '@rpmtruck:sidebar-hidden-modules'
-
-function obterChavePreferenciaSidebar() {
-  try {
-    const usuario = JSON.parse(localStorage.getItem('@rpmtruck:user') || '{}')
-    const identidade = usuario.id || usuario.email || 'local'
-    return `${SIDEBAR_HIDDEN_MODULES_KEY}:${encodeURIComponent(String(identidade))}`
-  } catch {
-    return `${SIDEBAR_HIDDEN_MODULES_KEY}:local`
-  }
-}
 
 export default function EmpresaLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -100,7 +126,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
 function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   useSessionActivity()
-  const { primary, isLight, themeReady, semanticColors } = useTheme()
+  const { primary, isLight, setPrimary, setIsLight, semanticColors } = useTheme()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarExpandida, setSidebarExpandida] = useState(false)
@@ -111,10 +137,13 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
   const [ticketsNaoLidos, setTicketsNaoLidos] = useState(0)
   const [acessoCarregado, setAcessoCarregado] = useState(false)
   const [modulosOcultos, setModulosOcultos] = useState<string[]>([])
+  const [estiloFundo, setEstiloFundo] = useState<EstiloFundoEmpresa>('DESLIGADO')
 
   // Resgata os dados da sessão guardada no login
   useEffect(() => {
     const userData = localStorage.getItem('@rpmtruck:user')
+    const corLocalAntesDoPerfil = normalizarCorTema(localStorage.getItem('rpm-primary'))
+    const temaClaroLocalAntesDoPerfil = localStorage.getItem('rpm-light') === 'true'
     if (userData) {
       const parsed = JSON.parse(userData)
       const empresaLocal = parsed.empresaInfo ?? parsed.empresa
@@ -131,6 +160,18 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
         setNomeEmpresa(data.empresa.nome)
         setModulosAtivos(normalizarModulos(data.usuario.modulosAcesso))
         setPerfilUsuario(data.usuario)
+        const gestorSemPreferenciaPersistida = data.usuario.role === 'GESTOR_EMPRESA' && data.usuario.herdadoDoGestor
+        const corEfetiva = gestorSemPreferenciaPersistida ? corLocalAntesDoPerfil : data.usuario.corTema
+        const temaClaroEfetivo = gestorSemPreferenciaPersistida ? temaClaroLocalAntesDoPerfil : Boolean(data.usuario.temaClaro)
+        setPrimary(corEfetiva)
+        setIsLight(temaClaroEfetivo)
+        if (gestorSemPreferenciaPersistida) {
+          void fetch('/api/empresa/preferencias-visuais', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ corTema: corEfetiva, temaClaro: temaClaroEfetivo }),
+          })
+        }
 
         const usuarioLocal = userData ? JSON.parse(userData) : {}
         localStorage.setItem('@rpmtruck:user', JSON.stringify({
@@ -144,36 +185,65 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
         router.replace('/auth/login')
       })
       .finally(() => setAcessoCarregado(true))
-  }, [router])
+  }, [router, setIsLight, setPrimary])
 
   useEffect(() => {
-    try {
-      const salvos: unknown = JSON.parse(localStorage.getItem(obterChavePreferenciaSidebar()) || '[]')
-      if (!Array.isArray(salvos)) return
-      const rotasValidas = new Set(NAV_EMPRESA.map((item) => item.path))
-      queueMicrotask(() => setModulosOcultos(
-        salvos.filter((path): path is string => typeof path === 'string' && rotasValidas.has(path)),
-      ))
-    } catch {
-      localStorage.removeItem(obterChavePreferenciaSidebar())
+    const sincronizarPreferencias = (event?: Event) => {
+      if (event instanceof CustomEvent && Array.isArray(event.detail)) {
+        setModulosOcultos(event.detail)
+        return
+      }
+      setModulosOcultos(lerModulosOcultosEmpresa())
+    }
+    const sincronizarFundo = (event?: Event) => {
+      if (event instanceof CustomEvent && estiloFundoEmpresaValido(event.detail)) {
+        setEstiloFundo(event.detail)
+        return
+      }
+      setEstiloFundo(lerEstiloFundoEmpresa())
+    }
+
+    queueMicrotask(() => {
+      sincronizarPreferencias()
+      sincronizarFundo()
+    })
+    window.addEventListener(EMPRESA_SIDEBAR_PREFERENCES_EVENT, sincronizarPreferencias)
+    window.addEventListener(EMPRESA_BACKGROUND_PREFERENCES_EVENT, sincronizarFundo)
+    window.addEventListener('storage', sincronizarPreferencias)
+    window.addEventListener('storage', sincronizarFundo)
+    return () => {
+      window.removeEventListener(EMPRESA_SIDEBAR_PREFERENCES_EVENT, sincronizarPreferencias)
+      window.removeEventListener(EMPRESA_BACKGROUND_PREFERENCES_EVENT, sincronizarFundo)
+      window.removeEventListener('storage', sincronizarPreferencias)
+      window.removeEventListener('storage', sincronizarFundo)
     }
   }, [])
 
   const atualizarModuloOculto = (path: string, ocultar: boolean) => {
-    setModulosOcultos((atuais) => {
-      const proximos = ocultar
-        ? Array.from(new Set([...atuais, path]))
-        : atuais.filter((item) => item !== path)
-      try {
-        localStorage.setItem(obterChavePreferenciaSidebar(), JSON.stringify(proximos))
-      } catch {
-        // A preferência permanece na sessão se o navegador bloquear o storage.
-      }
-      return proximos
-    })
+    const proximos = ocultar
+      ? Array.from(new Set([...modulosOcultos, path]))
+      : modulosOcultos.filter((item) => item !== path)
+    salvarModulosOcultosEmpresa(proximos)
   }
 
   const eGestor = perfilUsuario?.role === 'GESTOR_EMPRESA'
+  const podePersonalizarTema = eGestor || Boolean(perfilUsuario?.podePersonalizarTema)
+
+  const alterarModoTema = async (temaClaro: boolean) => {
+    if (!podePersonalizarTema) return
+    const anterior = isLight
+    setIsLight(temaClaro)
+    try {
+      const response = await fetch('/api/empresa/preferencias-visuais', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ corTema: primary, temaClaro }),
+      })
+      if (!response.ok) setIsLight(anterior)
+    } catch {
+      setIsLight(anterior)
+    }
+  }
   const itemPermitido = useCallback((item: NavEmpresaItem) => {
     if (item.modulo && !modulosAtivos.includes(item.modulo)) return false
     if (eGestor) return true
@@ -242,38 +312,16 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
     const itensOcultos = itensPermitidos.filter((item) => modulosOcultos.includes(item.path))
     return (
       <div className="flex flex-col h-full justify-between p-4 font-mono">
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1 custom-scrollbar">
           {/* Header da Sidebar com Logo Ajustada */}
-          <div className="mb-6 py-3 border-b border-white/10 flex items-center justify-center min-h-[64px]">
+          <div className="-mx-4 -mt-4 mb-6 flex h-16 items-center justify-start border-b border-white/10 px-4">
             {expandida ? (
-              <div className="w-full px-2 flex flex-col justify-center">
-                <div className="flex items-center gap-2">
-                  <Image
-                    src={`/logos/${obterLogoPorTema(primary)}`}
-                    alt="RPMTRUCK"
-                    width={32}
-                    height={28}
-                    className={`h-7 w-auto object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
-                  />
-                  <span className="font-black text-xl tracking-tight whitespace-nowrap" style={{ color: 'var(--foreground)' }}>
-                    RPM<span style={{ color: primary }}>TRUCK</span>
-                  </span>
-                </div>
-                <div className="text-[9px] uppercase tracking-[0.2em] text-foreground-muted mt-1 truncate pl-0.5">
-                  {nomeEmpresa}
-                </div>
-              </div>
+              <SidebarBrandIdentity
+                primary={primary}
+                subtitle={nomeEmpresa}
+              />
             ) : (
-              /* Logo em destaque quando a Sidebar está recolhida */
-              <div className="w-10 h-10 flex items-center justify-center shrink-0 p-1 rounded bg-white/5 hover:bg-white/10 transition-all">
-                <Image
-                  src={`/logos/${obterLogoPorTema(primary)}`}
-                  alt="RPMTRUCK"
-                  width={40}
-                  height={40}
-                  className={`h-full w-full object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
-                />
-              </div>
+              <SidebarBrandMark primary={primary} />
             )}
           </div>
 
@@ -341,8 +389,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
                   <button
                     type="button"
                     onClick={() => {
-                      setModulosOcultos([])
-                      try { localStorage.setItem(obterChavePreferenciaSidebar(), '[]') } catch {}
+                      salvarModulosOcultosEmpresa([])
                     }}
                     className="inline-flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider hover:underline"
                     style={{ color: primary }}
@@ -444,6 +491,18 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
               {expandida && <span className="flex-1 truncate">{CONFIG_ITEM.label}</span>}
             </Link>
           )}
+          {!eGestor && perfilUsuario?.podePersonalizarTema && (
+            <Link
+              href="/dashboard/empresa/tema"
+              onClick={() => setMobileOpen(false)}
+              title={!expandida ? 'PERSONALIZAR TEMA' : undefined}
+              className={`flex items-center gap-3 rounded-sm px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${pathname === '/dashboard/empresa/tema' ? 'text-black font-black' : 'text-foreground-muted hover:bg-white/5 hover:text-foreground'}`}
+              style={{ backgroundColor: pathname === '/dashboard/empresa/tema' ? primary : 'transparent' }}
+            >
+              <Palette size={18} className="shrink-0" />
+              {expandida && <span className="flex-1 truncate">PERSONALIZAR TEMA</span>}
+            </Link>
+          )}
 
           <button 
             onClick={handleLogout}
@@ -462,14 +521,16 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
     <div className="flex h-dvh overflow-hidden transition-colors duration-300" style={{ backgroundColor: 'var(--background)' }}>
       
       {/* SIDEBAR DESKTOP — RECOLHE QUANDO O MOUSE SAI, EXPANDE NO HOVER */}
-      <aside 
+      <aside
         onMouseEnter={() => setSidebarExpandida(true)}
         onMouseLeave={() => setSidebarExpandida(false)}
-        className="hidden md:block border-r shrink-0 z-20 overflow-hidden transition-[width] duration-300 ease-in-out relative"
-        style={{ 
-          backgroundColor: isLight ? '#f9f9f9' : '#090909', 
+        className="relative z-20 hidden shrink-0 overflow-hidden border-r transition-[width] duration-300 ease-in-out motion-reduce:transition-none md:block"
+        aria-label="Navegação principal da empresa"
+        style={{
+          backgroundColor: isLight ? '#f9f9f9' : '#090909',
           borderColor: 'var(--border)',
-          width: sidebarExpandida ? LARGURA_EXPANDIDA : LARGURA_RECOLHIDA
+          width: sidebarExpandida ? LARGURA_EXPANDIDA : LARGURA_RECOLHIDA,
+          willChange: 'width',
         }}
       >
         <div style={{ width: LARGURA_EXPANDIDA }} className="h-full">
@@ -501,7 +562,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-4">
             {eGestor && <Link href={SUPORTE_ITEM.path} aria-label="Abrir suporte e tickets" title="Suporte e tickets" className="relative flex min-h-11 min-w-11 items-center justify-center border transition-colors hover:text-foreground" style={{ borderColor: pathname === SUPORTE_ITEM.path ? primary : 'var(--border)', color: pathname === SUPORTE_ITEM.path ? primary : 'var(--foreground-muted)' }}><MessageSquare size={18} />{ticketsNaoLidos > 0 && <span className="absolute -right-1.5 -top-1.5 min-w-5 rounded-full px-1 py-0.5 text-center text-[9px] font-black text-black" style={{ backgroundColor: primary }}>{ticketsNaoLidos > 99 ? '99+' : ticketsNaoLidos}</span>}</Link>}
             <NotificacoesPanel onPendenciasChange={setPendenciasPorModulo} />
-            <ThemeToggle />
+            <ThemeToggle disabled={!podePersonalizarTema} onToggle={alterarModoTema} />
             <div className="w-px h-6 bg-border hidden sm:block" style={{ backgroundColor: 'var(--border)' }} />
             <div className="hidden sm:flex flex-col text-right font-mono">
               <span className="text-[11px] font-bold text-foreground truncate max-w-[150px]">{nomeEmpresa}</span>
@@ -511,11 +572,18 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* ÁREA DE RENDERIZAÇÃO DA PÁGINA INTERNA */}
-        <main className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5 md:p-8">
-          {rotaAtualPermitida && <AlertasSistema />}
-          <DashboardMotion>
-            {rotaAtualPermitida ? children : <div className="py-16 text-center text-xs font-mono text-foreground-muted">Validando permissões...</div>}
-          </DashboardMotion>
+        <main
+          className={`relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain custom-scrollbar ${estiloFundo !== 'DESLIGADO' ? 'dashboard-environment-active' : ''}`}
+          data-dashboard-environment={estiloFundo.toLowerCase()}
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          <DashboardEnvironmentBackground estilo={estiloFundo} />
+          <div className="relative z-[1] p-3 sm:p-5 md:p-8">
+            {rotaAtualPermitida && <AlertasSistema />}
+            <DashboardMotion>
+              {rotaAtualPermitida ? children : <div className="py-16 text-center text-xs font-mono text-foreground-muted">Validando permissões...</div>}
+            </DashboardMotion>
+          </div>
         </main>
       </div>
 

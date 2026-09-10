@@ -124,15 +124,15 @@ export function useNotificacoes(pollingInterval = 60000): UseNotificacoesReturn 
         body: JSON.stringify({ lida: true }),
       })
 
-      if (res.ok) {
-        setNotificacoes(prev => prev.map(notificacao => (
-          notificacao.id === id ? { ...notificacao, lida: true } : notificacao
-        )))
-        setNaoLidas(prev => Math.max(0, prev - 1))
-        void recarregarResumo()
-      }
+      if (!res.ok) throw new Error('Não foi possível marcar a notificação como lida.')
+      setNotificacoes(prev => prev.map(notificacao => (
+        notificacao.id === id ? { ...notificacao, lida: true } : notificacao
+      )))
+      setNaoLidas(prev => Math.max(0, prev - 1))
+      void recarregarResumo()
     } catch (err) {
       console.error('Erro ao marcar como lida:', err)
+      throw err
     }
   }, [recarregarResumo])
 
@@ -140,22 +140,22 @@ export function useNotificacoes(pollingInterval = 60000): UseNotificacoesReturn 
     try {
       const res = await fetch(`/api/notificacoes/${id}`, { method: 'DELETE' })
 
-      if (res.ok) {
-        setNotificacoes(prev => {
-          const removida = prev.find(notificacao => notificacao.id === id)
-          if (removida && !removida.lida) setNaoLidas(total => Math.max(0, total - 1))
-          return prev.filter(notificacao => notificacao.id !== id)
-        })
-        void recarregarResumo()
-      }
+      if (!res.ok) throw new Error('Não foi possível excluir a notificação.')
+      setNotificacoes(prev => {
+        const removida = prev.find(notificacao => notificacao.id === id)
+        if (removida && !removida.lida) setNaoLidas(total => Math.max(0, total - 1))
+        return prev.filter(notificacao => notificacao.id !== id)
+      })
+      void recarregarResumo()
     } catch (err) {
       console.error('Erro ao deletar notificação:', err)
+      throw err
     }
   }, [recarregarResumo])
 
   const marcarTodasComoLidas = useCallback(async () => {
     const res = await fetch('/api/notificacoes', { method: 'PATCH' })
-    if (!res.ok) return
+    if (!res.ok) throw new Error('Não foi possível marcar todas as notificações como lidas.')
     setNotificacoes(prev => prev.map(notificacao => ({ ...notificacao, lida: true })))
     setNaoLidas(0)
     setPendenciasPorModulo({})
@@ -163,7 +163,7 @@ export function useNotificacoes(pollingInterval = 60000): UseNotificacoesReturn 
 
   const limparLidas = useCallback(async () => {
     const res = await fetch('/api/notificacoes', { method: 'DELETE' })
-    if (!res.ok) return 0
+    if (!res.ok) throw new Error('Não foi possível limpar as notificações lidas.')
     const data = await res.json() as { removidas?: number }
     setNotificacoes(prev => prev.filter(notificacao => !notificacao.lida))
     void recarregarResumo()

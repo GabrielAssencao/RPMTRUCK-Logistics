@@ -6,6 +6,7 @@ import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { PRIORIDADE_TICKET_LABEL, STATUS_TICKET_LABEL } from '@/lib/suporteConfig'
 import { recalcularCoberturaCompetencia } from '@/lib/suporte'
 import { notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
+import { executarComAuditoria } from '@/lib/auditoria'
 
 const atualizarTicketSchema = z.object({
   status: z.enum(['ABERTO', 'EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE', 'RESOLVIDO', 'FECHADO']).optional(),
@@ -99,4 +100,47 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   })
 
   return NextResponse.json({ ticket }, { headers: { 'Cache-Control': 'no-store' } })
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAdminAuth(request)
+  if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
+
+  const limited = await applyRateLimit(request, `admin-chat-delete:${auth.session.userId}`, RATE_LIMITS.ADMIN_MUTATION.limit, RATE_LIMITS.ADMIN_MUTATION.windowMs)
+  if (limited) return limited
+
+  const { id } = await params
+  if (!z.string().uuid().safeParse(id).success) {
+    return NextResponse.json({ erro: 'Identificador de ticket inválido.' }, { status: 400 })
+  }
+
+  const resultado = await executarComAuditoria(
+    { usuarioId: auth.session.userId, origem: 'SUPERADMIN' },
+    async (tx) => {
+      const ticket = await tx.conversaSuporte.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          protocolo: true,
+          empresaId: true,
+          competencia: true,
+          _count: { select: { mensagens: true, notificacoes: true } },
+        },
+      })
+      if (!ticket) return null
+
+      const notificacoes = await tx.notificacao.deleteMany({ where: { ticketSuporteId: ticket.id } })
+      await tx.conversaSuporte.delete({ where: { id: ticket.id } })
+      await recalcularCoberturaCompetencia(tx, ticket.empresaId, ticket.competencia)
+
+      return {
+        protocolo: ticket.protocolo,
+        mensagensRemovidas: ticket._count.mensagens,
+        notificacoesRemovidas: notificacoes.count,
+      }
+    },
+  )
+
+  if (!resultado) return NextResponse.json({ erro: 'Ticket não encontrado.' }, { status: 404 })
+  return NextResponse.json({ sucesso: true, ...resultado }, { headers: { 'Cache-Control': 'no-store' } })
 }

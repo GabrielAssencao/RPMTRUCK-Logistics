@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import GenericDrawer, { FieldConfig } from '@/components/dashboard/GenericDrawer'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { DominoLoader } from '@/components/motion/OperationalFeedback'
 import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
 type StatusVeiculo = 'OPERACIONAL' | 'OFICINA' | 'INATIVO'
@@ -46,6 +47,7 @@ interface VeiculoApi extends Omit<VeiculoCompleto, 'localizacao' | 'motoristaAtu
 export default function FrotaPage() {
   const { primary } = useTheme()
   const [montado, setMontado] = useState(false)
+  const [carregando, setCarregando] = useState(true)
   
   // Estado do Drawer e Edição
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -92,10 +94,10 @@ export default function FrotaPage() {
     }).catch(error => {
       setFeedbackTone('error')
       setFeedback(error instanceof Error ? error.message : 'Falha ao carregar a frota.')
-    })
+    }).finally(() => setCarregando(false))
   }, [])
 
-  if (!montado) return null
+  if (!montado || carregando) return <DominoLoader label="Carregando frota e veículos" />
 
   // Configuração Dinâmica dos Campos do Drawer com as Localizações do Sistema
   const camposFrotaDinamicos: FieldConfig[] = [
