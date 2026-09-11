@@ -5,12 +5,14 @@ import { executarComAuditoria } from '@/lib/auditoria'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { prisma } from '@/lib/prisma'
+import { ESTILOS_FUNDO_EMPRESA, estiloFundoEmpresaValido } from '@/lib/empresaPreferences'
 
 const personalizacaoSchema = z.object({
   corTema: z.string().trim().toLowerCase().refine(corTemaValida),
   temaClaro: z.boolean(),
   rotuloEquipe: z.string().trim().max(48).nullable(),
   podePersonalizarTema: z.boolean(),
+  estiloFundo: z.enum(ESTILOS_FUNDO_EMPRESA),
 }).strict()
 
 async function autorizarGestor(request: NextRequest, limitarMutacao = false) {
@@ -45,6 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       temaClaro: true,
       rotuloEquipe: true,
       podePersonalizarTema: true,
+      estiloFundo: true,
     },
   })
   if (!usuario) return NextResponse.json({ erro: 'Usuário não encontrado.' }, { status: 404 })
@@ -54,7 +57,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const gestor = await prisma.usuario.findFirst({
     where: { empresaId: auth.session.empresaId, role: 'GESTOR_EMPRESA', excluidoEm: null },
-    select: { corTema: true, temaClaro: true },
+    select: { corTema: true, temaClaro: true, estiloFundo: true },
     orderBy: { criado_em: 'asc' },
   })
 
@@ -62,6 +65,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     ...usuario,
     corTema: normalizarCorTema(usuario.corTema ?? gestor?.corTema),
     temaClaro: usuario.temaClaro ?? gestor?.temaClaro ?? false,
+    estiloFundo: estiloFundoEmpresaValido(usuario.estiloFundo ?? gestor?.estiloFundo)
+      ? (usuario.estiloFundo ?? gestor?.estiloFundo)
+      : 'DESLIGADO',
   }, { headers: { 'Cache-Control': 'private, no-store' } })
 }
 
@@ -90,6 +96,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       temaClaro: parsed.data.temaClaro,
       rotuloEquipe: parsed.data.rotuloEquipe || null,
       podePersonalizarTema: parsed.data.podePersonalizarTema,
+      estiloFundo: parsed.data.estiloFundo,
     },
     select: {
       id: true,
@@ -97,6 +104,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       temaClaro: true,
       rotuloEquipe: true,
       podePersonalizarTema: true,
+      estiloFundo: true,
     },
   }))
 

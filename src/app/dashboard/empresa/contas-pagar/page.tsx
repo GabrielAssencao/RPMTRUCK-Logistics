@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Building2, Camera, Check, Copy, Download, ExternalLink, FileText, Pencil, Plus, ReceiptText, RotateCcw, Trash2, Upload, X } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -29,8 +29,28 @@ const criarEstadoInicial = () => ({ descricao: '', fornecedor: '', vencimento: n
 type EstadoFormulario = ReturnType<typeof criarEstadoInicial>
 type EstadoEdicao = Pick<EstadoFormulario, 'descricao' | 'fornecedor' | 'vencimento' | 'valor' | 'linhaDigitavel'>
 
+const CONSULTA_CELULAR = '(max-width: 767px) and (pointer: coarse)'
+
+function detectarCelular() {
+  const navegador = navigator as Navigator & { userAgentData?: { mobile?: boolean } }
+  if (typeof navegador.userAgentData?.mobile === 'boolean') return navegador.userAgentData.mobile
+  if (/Android.+Mobile|iPhone|iPod|IEMobile|Windows Phone|webOS|BlackBerry/i.test(navegador.userAgent)) return true
+  return navegador.maxTouchPoints > 0 && window.matchMedia(CONSULTA_CELULAR).matches
+}
+
+function observarDispositivo(callback: () => void) {
+  const consulta = window.matchMedia(CONSULTA_CELULAR)
+  consulta.addEventListener('change', callback)
+  return () => consulta.removeEventListener('change', callback)
+}
+
+function dispositivoDesktopNoServidor() {
+  return false
+}
+
 export default function ContasPagarPage() {
   const { primary } = useTheme()
+  const dispositivoCelular = useSyncExternalStore(observarDispositivo, detectarCelular, dispositivoDesktopNoServidor)
   const [contas, setContas] = useState<Conta[]>([])
   const [capacidades, setCapacidades] = useState<Capacidades | null>(null)
   const [integracoes, setIntegracoes] = useState<Integracoes>({ custos: false, frota: false })
@@ -62,6 +82,10 @@ export default function ContasPagarPage() {
   const leituraArquivoRef = useRef(0)
   const [cameraAberta, setCameraAberta] = useState<ModoLeitorCamera | null>(null)
   const fecharCamera = useCallback(() => setCameraAberta(null), [])
+
+  useEffect(() => {
+    if (!dispositivoCelular && cameraAberta) queueMicrotask(fecharCamera)
+  }, [cameraAberta, dispositivoCelular, fecharCamera])
   const receberCodigo = useCallback((codigo: string) => {
     const identificacao = identificarCodigoBoleto(codigo)
     if (!identificacao.valido) {
@@ -405,13 +429,18 @@ export default function ContasPagarPage() {
                 {linhaSomenteDigitos.length} dígitos informados{linhaComValidacaoDivergente ? ' · a verificação de segurança divergiu; revise antes de salvar.' : identificacaoLinha.valido ? ` · ${identificacaoLinha.descricao}` : ''}
               </span>
             </Campo>
-            {capacidades?.leituraAutomatica && (
+            {capacidades?.leituraAutomatica && dispositivoCelular && (
               <div className="grid gap-2 sm:grid-cols-2">
                 <button type="button" disabled={lendoArquivo} onClick={() => setCameraAberta('AO_VIVO')} className="min-h-12 border px-3 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}><Camera size={15} className="mr-2 inline" />Ler código ao vivo</button>
                 <button type="button" disabled={lendoArquivo} onClick={() => setCameraAberta('FOTO')} className="min-h-12 border px-3 text-xs font-bold uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}><Camera size={15} className="mr-2 inline" />Fotografar código</button>
                 <p className="sm:col-span-2 text-[10px] text-foreground-muted">Os dois modos usam a câmera traseira dentro do sistema. São reconhecidos boletos bancários e contas de água, luz, telefone, gás e tributos.</p>
                 {cameraAberta && <div className="sm:col-span-2"><LeitorCamera key={cameraAberta} modo={cameraAberta} onRead={receberCodigo} onClose={fecharCamera} /></div>}
               </div>
+            )}
+            {capacidades?.leituraAutomatica && !dispositivoCelular && (
+              <p className="border p-3 text-[11px] text-foreground-muted" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+                A leitura ao vivo e a fotografia do código ficam disponíveis ao acessar esta tela pelo celular. No computador, envie o boleto pelo seletor de arquivos abaixo.
+              </p>
             )}
             <Campo label="Boleto (PDF/JPG/PNG/WebP, até 5 MB)"><label className="flex min-h-12 cursor-pointer items-center justify-center border border-dashed px-3 text-center text-xs" style={{ borderColor: 'var(--border)' }}><Upload size={15} className="mr-2" />{lendoArquivo ? 'Analisando arquivo localmente...' : boleto?.name ?? 'Selecionar arquivo'}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => void selecionarBoleto(e.target.files?.[0] ?? null)} /></label></Campo>
 

@@ -256,6 +256,7 @@ model Empresa {
   movimentacoes_container MovimentacaoContainerPermanente[]
   containers              Container[]
   tarefas                 Tarefa[]
+  lembretes_pessoais      LembretePessoal[]
   leituras_quilometragem  LeituraQuilometragem[]
   sessoes                 SessaoUsuario[]
   eventos_seguranca       EventoSeguranca[]
@@ -285,6 +286,7 @@ model Usuario {
   temaClaro               Boolean?  @map("tema_claro")
   rotuloEquipe            String?   @map("rotulo_equipe") @db.VarChar(48)
   podePersonalizarTema    Boolean   @default(false) @map("pode_personalizar_tema")
+  estiloFundo             String?   @map("estilo_fundo") @db.VarChar(24)
 
   // Se for nulo, indica que o usuário é da equipe interna RPMTruck (Geral Admin)
   empresaId String?
@@ -297,6 +299,7 @@ model Usuario {
   notificacoes                      Notificacao[]           @relation("NotificacoesUsuario")
   tarefas_criadas                   Tarefa[]                @relation("TarefasCriadas")
   tarefas_atribuidas                Tarefa[]                @relation("TarefasResponsavel")
+  lembretes_pessoais                LembretePessoal[]
   sessoes                           SessaoUsuario[]
   eventos_seguranca                 EventoSeguranca[]
   solicitacoes_assinatura_criadas   SolicitacaoAssinatura[] @relation("SolicitacaoAssinaturaCriadaPor")
@@ -516,6 +519,9 @@ model Notificacao {
   tarefaId String?
   tarefa   Tarefa? @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
 
+  lembretePessoalId String?          @map("lembrete_pessoal_id")
+  lembretePessoal   LembretePessoal? @relation(fields: [lembretePessoalId], references: [id], onDelete: Cascade)
+
   ticketSuporteId String?
   ticketSuporte   ConversaSuporte? @relation(fields: [ticketSuporteId], references: [id], onDelete: SetNull)
 
@@ -524,6 +530,7 @@ model Notificacao {
   @@index([usuarioId, lida, criado_em])
   @@index([empresaId, lida, criado_em])
   @@index([ticketSuporteId, usuarioId, lida])
+  @@index([lembretePessoalId])
   @@map("notificacoes")
 }
 
@@ -627,6 +634,12 @@ model Tarefa {
   titulo     String
   descricao  String?
   prazo      DateTime?
+  inicio     DateTime?
+  duracaoMinutos Int?  @map("duracao_minutos")
+  ordem      Int       @default(0)
+  exibirCalendario Boolean @default(true) @map("exibir_calendario")
+  lembreteEm DateTime? @map("lembrete_em")
+  lembreteEnviadoEm DateTime? @map("lembrete_enviado_em")
   prioridade String    @default("MEDIA")
   status     String    @default("PENDENTE")
   modulo     String?
@@ -649,7 +662,37 @@ model Tarefa {
 
   @@index([empresaId, status, prazo])
   @@index([responsavelId, status, prazo])
+  @@index([empresaId, status, ordem])
+  @@index([responsavelId, lembreteEm, lembreteEnviadoEm])
   @@map("tarefas")
+}
+
+model LembretePessoal {
+  id               String   @id @default(uuid())
+  titulo           String
+  descricao        String?
+  dataHora         DateTime @map("data_hora")
+  urgencia         String   @default("MEDIA")
+  modoNotificacao  String   @default("AUTOMATICA") @map("modo_notificacao")
+  notificarEm      DateTime @map("notificar_em")
+  notificacaoEm    DateTime? @map("notificacao_enviada_em")
+  concluido        Boolean  @default(false)
+  ordem            Int      @default(0)
+
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  notificacoes Notificacao[]
+
+  criado_em     DateTime @default(now())
+  atualizado_em DateTime @updatedAt
+
+  @@index([empresaId, usuarioId, concluido, ordem])
+  @@index([usuarioId, notificarEm, notificacaoEm])
+  @@map("lembretes_pessoais")
 }
 
 model Container {

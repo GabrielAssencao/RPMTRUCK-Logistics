@@ -6,12 +6,14 @@ import { corTemaValida } from '@/data/temasELogos'
 import { obterPreferenciasVisuaisEfetivas } from '@/lib/preferenciasVisuaisUsuario'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { ESTILOS_FUNDO_EMPRESA } from '@/lib/empresaPreferences'
 
 export const dynamic = 'force-dynamic'
 
 const preferenciasSchema = z.object({
   corTema: z.string().trim().toLowerCase().refine(corTemaValida),
   temaClaro: z.boolean(),
+  estiloFundo: z.enum(ESTILOS_FUNDO_EMPRESA),
 }).strict()
 
 export async function GET(request: NextRequest) {
@@ -56,6 +58,7 @@ export async function PATCH(request: NextRequest) {
       temaClaro: true,
       rotuloEquipe: true,
       podePersonalizarTema: true,
+      estiloFundo: true,
     },
   }))
 

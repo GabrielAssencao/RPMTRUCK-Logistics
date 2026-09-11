@@ -42,6 +42,7 @@ import {
   EMPRESA_NAVIGATION_ITEMS,
   EMPRESA_SIDEBAR_PREFERENCES_EVENT,
   lerEstiloFundoEmpresa,
+  salvarEstiloFundoEmpresa,
   estiloFundoEmpresaValido,
   lerModulosOcultosEmpresa,
   salvarModulosOcultosEmpresa,
@@ -67,6 +68,7 @@ interface PerfilEmpresaUsuario {
   temaClaro: boolean
   rotuloEquipe: string | null
   podePersonalizarTema: boolean
+  estiloFundo: EstiloFundoEmpresa
   herdadoDoGestor: boolean
 }
 
@@ -77,7 +79,7 @@ const NAVIGATION_ICONS: Record<string, LucideIcon> = {
   '/dashboard/empresa/containers': ContainerIcon,
   '/dashboard/empresa/custos': DollarSign,
   '/dashboard/empresa/contas-pagar': ReceiptText,
-  '/dashboard/empresa/tarefas': ClipboardList,
+  '/dashboard/empresa/cronograma': ClipboardList,
   '/dashboard/empresa/arquivos': Archive,
   '/dashboard/empresa/relatorios': FilePieChart,
   '/dashboard/empresa/usuarios': UserSquare2,
@@ -90,7 +92,7 @@ const NOTIFICATION_MODULES: Record<string, string> = {
   '/dashboard/empresa/containers': 'CONTAINERS',
   '/dashboard/empresa/custos': 'CUSTOS',
   '/dashboard/empresa/contas-pagar': 'CONTAS_PAGAR',
-  '/dashboard/empresa/tarefas': 'TAREFAS',
+  '/dashboard/empresa/cronograma': 'TAREFAS',
   '/dashboard/empresa/arquivos': 'RELATORIOS',
   '/dashboard/empresa/relatorios': 'RELATORIOS',
   '/dashboard/empresa/usuarios': 'USUARIOS',
@@ -163,13 +165,18 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
         const gestorSemPreferenciaPersistida = data.usuario.role === 'GESTOR_EMPRESA' && data.usuario.herdadoDoGestor
         const corEfetiva = gestorSemPreferenciaPersistida ? corLocalAntesDoPerfil : data.usuario.corTema
         const temaClaroEfetivo = gestorSemPreferenciaPersistida ? temaClaroLocalAntesDoPerfil : Boolean(data.usuario.temaClaro)
+        const fundoEfetivo = gestorSemPreferenciaPersistida
+          ? lerEstiloFundoEmpresa()
+          : estiloFundoEmpresaValido(data.usuario.estiloFundo) ? data.usuario.estiloFundo : 'DESLIGADO'
         setPrimary(corEfetiva)
         setIsLight(temaClaroEfetivo)
+        setEstiloFundo(fundoEfetivo)
+        salvarEstiloFundoEmpresa(fundoEfetivo)
         if (gestorSemPreferenciaPersistida) {
           void fetch('/api/empresa/preferencias-visuais', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ corTema: corEfetiva, temaClaro: temaClaroEfetivo }),
+            body: JSON.stringify({ corTema: corEfetiva, temaClaro: temaClaroEfetivo, estiloFundo: fundoEfetivo }),
           })
         }
 
@@ -237,7 +244,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
       const response = await fetch('/api/empresa/preferencias-visuais', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ corTema: primary, temaClaro }),
+        body: JSON.stringify({ corTema: primary, temaClaro, estiloFundo }),
       })
       if (!response.ok) setIsLight(anterior)
     } catch {

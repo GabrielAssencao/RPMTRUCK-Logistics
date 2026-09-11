@@ -300,7 +300,7 @@ export default function PainelEmpresa() {
           { label: 'COBERTURA', value: `${metricas.totalVeiculos ? Math.round(metricas.totalAtivos / metricas.totalVeiculos * 100) : 0}%`, trend: `${metricas.totalAtivos} veículos ativos`, color: primary },
           { label: 'DISPONIBILIDADE', value: `${metricas.totalVeiculos ? Math.round(metricas.totalOperacionais / metricas.totalVeiculos * 100) : 0}%`, trend: `${metricas.totalOperacionais} operacionais`, color: '#22c55e' },
           { label: 'RISCO', value: alertas.length ? 'Atenção' : 'Baixo', trend: `${alertas.length} alertas pendentes`, color: '#f59e0b' },
-          { label: 'TAREFAS', value: String(metricas.tarefasPendentes), trend: 'pendentes ou em andamento', color: '#38bdf8' },
+          { label: 'CRONOGRAMA', value: String(metricas.tarefasPendentes), trend: 'tarefas pendentes ou em andamento', color: '#38bdf8' },
         ].map((card, index) => (
           <motion.div
             key={card.label}

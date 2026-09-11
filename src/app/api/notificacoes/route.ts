@@ -7,6 +7,7 @@ import { criarNotificacao, escopoNotificacoes, notificarUsuariosDaEmpresa } from
 import { prisma } from '@/lib/prisma'
 import { textoOperacional } from '@/lib/domainValidation'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { entregarLembretesPessoais, entregarLembretesTarefas } from '@/lib/tarefaReminders'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,9 +45,16 @@ export async function GET(request: NextRequest) {
   const auth = await requireAuth(request)
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
 
+  let lembreteScope: { empresaId: string; usuarioId: string } | null = null
   if (!isAdminRole(auth.session.role)) {
     const empresaAuth = await requireEmpresaAuth(request)
     if (empresaAuth.error) return NextResponse.json({ erro: empresaAuth.error }, { status: empresaAuth.status })
+    if (empresaAuth.session?.empresaId) {
+      lembreteScope = {
+        empresaId: empresaAuth.session.empresaId,
+        usuarioId: empresaAuth.session.userId,
+      }
+    }
   }
   const limited = await applyRateLimit(
     request,
@@ -55,6 +63,16 @@ export async function GET(request: NextRequest) {
     RATE_LIMITS.NOTIFICATION_READ.windowMs,
   )
   if (limited) return limited
+  if (lembreteScope) {
+    try {
+      await Promise.all([
+        entregarLembretesTarefas(lembreteScope),
+        entregarLembretesPessoais(lembreteScope),
+      ])
+    } catch (error) {
+      console.error('Falha ao entregar lembretes de tarefas:', error)
+    }
+  }
 
   const lidas = request.nextUrl.searchParams.get('lidas')
   if (lidas !== null && lidas !== 'true' && lidas !== 'false') {

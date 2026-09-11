@@ -3,10 +3,12 @@
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, Loader2, Palette, Save, ShieldCheck, Users } from 'lucide-react'
+import { ArrowLeft, Check, Loader2, MonitorCog, Palette, Save, ShieldCheck, Users } from 'lucide-react'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { CORES_E_LOGOS } from '@/data/temasELogos'
 import { useTheme } from '@/contexts/ThemeContext'
+import DashboardEnvironmentBackground from '@/components/dashboard/DashboardEnvironmentBackground'
+import { OPCOES_FUNDO_EMPRESA, type EstiloFundoEmpresa } from '@/lib/empresaPreferences'
 
 interface UsuarioPersonalizacao {
   id: string
@@ -18,6 +20,7 @@ interface UsuarioPersonalizacao {
   temaClaro: boolean
   rotuloEquipe: string | null
   podePersonalizarTema: boolean
+  estiloFundo: EstiloFundoEmpresa
 }
 
 export default function PersonalizacaoOperadorPage({ params }: { params: Promise<{ id: string }> }) {
@@ -57,6 +60,7 @@ export default function PersonalizacaoOperadorPage({ params }: { params: Promise
           temaClaro: usuario.temaClaro,
           rotuloEquipe: usuario.rotuloEquipe?.trim() || null,
           podePersonalizarTema: usuario.podePersonalizarTema,
+          estiloFundo: usuario.estiloFundo,
         }),
       })
       const data = await response.json()
@@ -133,6 +137,28 @@ export default function PersonalizacaoOperadorPage({ params }: { params: Promise
                     {usuario.corTema === cor.value && <Check size={14} style={{ color: cor.value }} />}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="mt-6 border-t pt-6" style={{ borderColor: 'var(--border)' }}>
+              <div className="mb-3 flex items-start gap-2">
+                <MonitorCog size={16} className="mt-0.5 shrink-0" style={{ color: usuario.corTema }} />
+                <div><span className="block text-[10px] font-bold uppercase tracking-widest">Plano de fundo do operador</span><p className="mt-1 text-[9px] text-foreground-muted">O fundo acompanha esta conta em qualquer dispositivo. As animações respeitam economia de energia e redução de movimento.</p></div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label="Plano de fundo do operador">
+                {OPCOES_FUNDO_EMPRESA.map((opcao) => {
+                  const ativo = usuario.estiloFundo === opcao.value
+                  return (
+                    <button key={opcao.value} type="button" role="radio" aria-checked={ativo} onClick={() => setUsuario({ ...usuario, estiloFundo: opcao.value })} className="interactive-control border p-3 text-left" style={{ borderColor: ativo ? usuario.corTema : 'var(--border)', backgroundColor: ativo ? `${usuario.corTema}12` : 'var(--background)' }}>
+                      <span className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider">{opcao.label}{ativo && <Check size={14} style={{ color: usuario.corTema }} />}</span>
+                      <span className="mt-1 block text-[9px] leading-relaxed text-foreground-muted">{opcao.description}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <div className={`dashboard-ambient-preview relative mt-4 h-32 overflow-hidden border ${usuario.estiloFundo !== 'DESLIGADO' ? 'dashboard-environment-active' : ''}`} style={{ borderColor: usuario.estiloFundo !== 'DESLIGADO' ? usuario.corTema : 'var(--border)', backgroundColor: 'var(--background)', '--primary': usuario.corTema } as React.CSSProperties}>
+                <DashboardEnvironmentBackground estilo={usuario.estiloFundo} preview />
+                <div className="relative z-[1] grid h-full place-items-center"><span className="border px-4 py-2 text-[9px] font-black uppercase tracking-wider" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>Prévia para {usuario.nome}</span></div>
               </div>
             </div>
           </section>

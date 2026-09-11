@@ -65,6 +65,7 @@ export interface AuthResult {
     temaClaro: boolean | null
     rotuloEquipe: string | null
     podePersonalizarTema: boolean
+    estiloFundo: string | null
   }
 }
 
@@ -92,6 +93,7 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
     temaClaro: true,
     rotuloEquipe: true,
     podePersonalizarTema: true,
+    estiloFundo: true,
   } as const
   const usuario = tokenSession.sessionId
     ? (await prisma.sessaoUsuario.findFirst({

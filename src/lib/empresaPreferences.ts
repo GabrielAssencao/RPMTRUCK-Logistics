@@ -15,7 +15,7 @@ export const EMPRESA_NAVIGATION_ITEMS: EmpresaNavigationPreferenceItem[] = [
   { path: '/dashboard/empresa/containers', label: 'Containers', modulo: 'FROTA' },
   { path: '/dashboard/empresa/custos', label: 'Custos / despesas', modulo: 'GESTAO' },
   { path: '/dashboard/empresa/contas-pagar', label: 'Contas a pagar', modulo: 'CONTAS_PAGAR', somenteGestor: true },
-  { path: '/dashboard/empresa/tarefas', label: 'Tarefas', modulo: 'TAREFAS' },
+  { path: '/dashboard/empresa/cronograma', label: 'Cronograma', modulo: 'TAREFAS' },
   { path: '/dashboard/empresa/arquivos', label: 'Arquivo operacional', modulo: null, somenteGestor: true },
   { path: '/dashboard/empresa/relatorios', label: 'Relatórios', modulo: 'RELATORIOS', somenteGestor: true },
   { path: '/dashboard/empresa/usuarios', label: 'Operadores', modulo: null, somenteGestor: true },
@@ -36,6 +36,15 @@ export const ESTILOS_FUNDO_EMPRESA = [
   'VIDRO_CAMADAS',
   'ORGANICO',
 ] as const
+
+export const OPCOES_FUNDO_EMPRESA = [
+  { value: 'DESLIGADO', label: 'Sem fundo', description: 'Interface sólida original.' },
+  { value: 'DIGITAL', label: 'Malha digital', description: 'Luzes e grade em movimento.' },
+  { value: 'TOPOGRAFICO', label: 'Topográfico', description: 'Curvas que se deformam e retornam em ciclo.' },
+  { value: 'VIDRO_FLUIDO', label: 'Aurora de vidro', description: 'Lâminas luminosas em uma onda contínua.' },
+  { value: 'VIDRO_CAMADAS', label: 'Vidro em camadas', description: 'Placas alinhadas que respiram em sequência.' },
+  { value: 'ORGANICO', label: 'Traços orgânicos', description: 'Desenhos minimalistas que fluem e se misturam.' },
+] as const satisfies ReadonlyArray<{ value: EstiloFundoEmpresa; label: string; description: string }>
 
 export type EstiloFundoEmpresa = (typeof ESTILOS_FUNDO_EMPRESA)[number]
 

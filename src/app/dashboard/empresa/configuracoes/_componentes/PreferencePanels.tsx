@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { BellRing, Check, Eye, EyeOff, Info, MonitorCog, ShieldAlert } from 'lucide-react'
 import { CORES_E_LOGOS } from '@/data/temasELogos'
 import DashboardEnvironmentBackground from '@/components/dashboard/DashboardEnvironmentBackground'
-import { EMPRESA_NAVIGATION_ITEMS, type EstiloFundoEmpresa } from '@/lib/empresaPreferences'
+import { EMPRESA_NAVIGATION_ITEMS, OPCOES_FUNDO_EMPRESA, type EstiloFundoEmpresa } from '@/lib/empresaPreferences'
 import type { ModuloCodigo } from '@/utils/planos'
 
 interface AppearancePreferencesProps {
@@ -56,14 +56,7 @@ export function AppearancePreferences({
 
       <SettingsSection title="Ambiente visual" description="Escolha um fundo decorativo para o dashboard ou mantenha a interface sólida.">
         <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Fundo do dashboard">
-          {([
-            { value: 'DESLIGADO', label: 'Sem fundo', description: 'Interface sólida original.' },
-            { value: 'DIGITAL', label: 'Malha digital', description: 'Luzes e grade em movimento.' },
-            { value: 'TOPOGRAFICO', label: 'Topográfico', description: 'Curvas que se deformam e retornam em ciclo.' },
-            { value: 'VIDRO_FLUIDO', label: 'Aurora de vidro', description: 'Lâminas luminosas em uma onda contínua.' },
-            { value: 'VIDRO_CAMADAS', label: 'Vidro em camadas', description: 'Placas alinhadas que respiram em sequência.' },
-            { value: 'ORGANICO', label: 'Traços orgânicos', description: 'Desenhos minimalistas que fluem e se misturam.' },
-          ] as const).map((option) => {
+          {OPCOES_FUNDO_EMPRESA.map((option) => {
             const active = backgroundStyle === option.value
             return (
               <button

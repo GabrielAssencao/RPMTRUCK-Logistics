@@ -131,6 +131,8 @@ export const RATE_LIMITS = {
   NOTIFICATION_READ: { limit: 60, windowMs: 60 * 1000 },
   NOTIFICATION_MUTATION: { limit: 30, windowMs: 60 * 1000 },
   NOTIFICATION_SEND: { limit: 10, windowMs: 60 * 60 * 1000 },
+  TASK_READ: { limit: 90, windowMs: 60 * 1000 },
+  TASK_MUTATION: { limit: 60, windowMs: 60 * 1000 },
   CHAT_READ: { limit: 120, windowMs: 60 * 1000 },
   CHAT_SEND: { limit: 30, windowMs: 60 * 1000 },
   CHAT_EDIT: { limit: 20, windowMs: 60 * 1000 },

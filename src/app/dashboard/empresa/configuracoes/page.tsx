@@ -11,6 +11,7 @@ import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { ProfileSkeleton } from '@/components/motion/OperationalFeedback'
 import {
   lerEstiloFundoEmpresa,
+  estiloFundoEmpresaValido,
   lerModulosOcultosEmpresa,
   salvarEstiloFundoEmpresa,
   salvarModulosOcultosEmpresa,
@@ -84,6 +85,10 @@ export default function ConfiguracoesPage() {
         setModulosPermitidos(normalizarModulos(data.usuario.modulosAcesso))
         setPrimary(data.usuario.corTema)
         setIsLight(Boolean(data.usuario.temaClaro))
+        if (estiloFundoEmpresaValido(data.usuario.estiloFundo)) {
+          setEstiloFundo(data.usuario.estiloFundo)
+          salvarEstiloFundoEmpresa(data.usuario.estiloFundo)
+        }
         if (data.usuario.senhaAlteradaEm) {
           setDiasDesdeAlteracao(Math.max(0, Math.floor((Date.now() - new Date(data.usuario.senhaAlteradaEm).getTime()) / 86_400_000)))
         }
@@ -96,22 +101,29 @@ export default function ConfiguracoesPage() {
     setModulosOcultos(salvarModulosOcultosEmpresa(paths))
   }
 
-  const atualizarEstiloFundo = (estilo: EstiloFundoEmpresa) => {
-    setEstiloFundo(estilo)
-    salvarEstiloFundoEmpresa(estilo)
-  }
-
-  const salvarPreferenciaVisual = async (corTema: string, temaClaro: boolean) => {
+  const salvarPreferenciaVisual = async (corTema: string, temaClaro: boolean, fundo = estiloFundo) => {
     try {
       const response = await fetch('/api/empresa/preferencias-visuais', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ corTema, temaClaro }),
+        body: JSON.stringify({ corTema, temaClaro, estiloFundo: fundo }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.erro || 'Não foi possível salvar o tema.')
+      return true
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Falha ao salvar o tema.')
+      return false
+    }
+  }
+
+  const atualizarEstiloFundo = async (estilo: EstiloFundoEmpresa) => {
+    const anterior = estiloFundo
+    setEstiloFundo(estilo)
+    salvarEstiloFundoEmpresa(estilo)
+    if (!await salvarPreferenciaVisual(primary, isLight, estilo)) {
+      setEstiloFundo(anterior)
+      salvarEstiloFundoEmpresa(anterior)
     }
   }
 
@@ -216,7 +228,7 @@ export default function ConfiguracoesPage() {
                   backgroundStyle={estiloFundo}
                   onPrimaryChange={atualizarCorTema}
                   onThemeChange={atualizarModoTema}
-                  onBackgroundStyleChange={atualizarEstiloFundo}
+                  onBackgroundStyleChange={(estilo) => void atualizarEstiloFundo(estilo)}
                 />
               </motion.div>
             )}
