@@ -43,6 +43,8 @@ organizacionais aplicáveis.
 
 ## Arquitetura
 
+Veja também o [índice da documentação](docs/README.md) e o [inventário de scripts operacionais](scripts/README.md).
+
 ```text
 Navegador
    │

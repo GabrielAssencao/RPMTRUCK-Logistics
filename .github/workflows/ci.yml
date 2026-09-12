@@ -28,6 +28,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -36,11 +38,8 @@ jobs:
       - run: npx prisma generate
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm run test:security
-      - run: npm run test:forms
-      - run: npm run test:billing
-      - run: npm run test:environment
-      - run: npm run test:encryption
+      - run: npm run test:unit
+      - run: npm run security:audit-git
       - run: npm run prisma:validate
       - run: npm run build
       - run: npx playwright install --with-deps chromium
