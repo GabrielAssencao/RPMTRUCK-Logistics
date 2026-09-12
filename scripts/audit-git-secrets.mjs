@@ -15,12 +15,20 @@ const patterns = [
 const findings = []
 
 function inspect(label, path, content) {
+  const normalizedPath = path.replaceAll('\\', '/')
+  if (/(?:^|\/)\.env(?:\.[^/]+)?$/.test(normalizedPath) && !/\.env(?:\.local)?\.example$/.test(normalizedPath)) findings.push(`private-environment: ${label}:${path}`)
+  if (/\.(?:key|pem|p12|pfx|dump|backup|enc)$/i.test(normalizedPath)) findings.push(`private-artifact: ${label}:${path}`)
   if (binaryExtensions.has(extname(path).toLowerCase())) return
   const sample = Buffer.isBuffer(content) ? content : Buffer.from(content)
   if (sample.subarray(0, 8_192).includes(0)) return
   const text = sample.toString('utf8')
   for (const [kind, pattern] of patterns) {
     if (pattern.test(text)) findings.push(`${kind}: ${label}:${path}`)
+  }
+  for (const token of text.matchAll(/\beyJ[A-Za-z0-9_-]+\.([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+\b/g)) {
+    try {
+      if (JSON.parse(Buffer.from(token[1], 'base64url').toString('utf8')).role === 'service_role') findings.push(`supabase-service-role-jwt: ${label}:${path}`)
+    } catch { /* Token-like example, not a valid JWT payload. */ }
   }
 }
 

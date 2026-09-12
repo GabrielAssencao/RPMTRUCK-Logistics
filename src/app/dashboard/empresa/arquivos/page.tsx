@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Archive, CheckCircle2, Download, FileSpreadsheet, ShieldCheck, Trash2 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import ArquivosContasPagar from '@/components/dashboard/ArquivosContasPagar'
+import { DominoLoader, PrinterProgress, type PrinterStage } from '@/components/motion/OperationalFeedback'
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 
 type StatusArquivo = 'PRONTO_DOWNLOAD' | 'DOWNLOAD_REGISTRADO' | 'CONFIRMADO_GESTOR' | 'DADOS_PURGADOS' | 'ARQUIVO_REMOVIDO'
 
@@ -56,6 +58,9 @@ export default function ArquivosOperacionaisPage() {
   const [processando, setProcessando] = useState(false)
   const [podeGerenciar, setPodeGerenciar] = useState(false)
   const [mensagem, setMensagem] = useState('')
+  const [printerStage, setPrinterStage] = useState<PrinterStage | null>(null)
+  const [printerError, setPrinterError] = useState('')
+  const [arquivoParaPurgar, setArquivoParaPurgar] = useState<ArquivoOperacional | null>(null)
 
   const carregar = useCallback(async () => {
     const response = await fetch('/api/relatorios/arquivos', { cache: 'no-store' })
@@ -75,6 +80,7 @@ export default function ArquivosOperacionaisPage() {
   const executar = async (acao: () => Promise<void>) => {
     setProcessando(true)
     setMensagem('')
+    setPrinterStage(null)
     try {
       await acao()
       await carregar()
@@ -85,16 +91,34 @@ export default function ArquivosOperacionaisPage() {
     }
   }
 
-  const gerar = () => executar(async () => {
-    const response = await fetch('/api/relatorios/gerar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inicio, fim }),
-    })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data.erro || 'Não foi possível gerar o Excel.')
-    setMensagem('Excel gerado e armazenado no bucket privado.')
-  })
+  const gerar = async () => {
+    setProcessando(true)
+    setMensagem('')
+    setPrinterError('')
+    setPrinterStage('preparing')
+
+    try {
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+      setPrinterStage('generating')
+      const response = await fetch('/api/relatorios/gerar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inicio, fim }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível gerar o Excel.')
+
+      setPrinterStage('saving')
+      await carregar()
+      setPrinterStage('complete')
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Não foi possível gerar o Excel.'
+      setPrinterError(errorMessage)
+      setPrinterStage('error')
+    } finally {
+      setProcessando(false)
+    }
+  }
 
   const baixar = (id: string) => executar(async () => {
     const response = await fetch(`/api/relatorios/arquivos/${id}/download`, { method: 'POST' })
@@ -112,7 +136,6 @@ export default function ArquivosOperacionaisPage() {
   })
 
   const purgar = (arquivo: ArquivoOperacional) => {
-    if (!window.confirm('Excluir os detalhes operacionais deste período e remover o Excel temporário? Código, origem, destino e data dos containers serão preservados.')) return
     executar(async () => {
       const response = await fetch(`/api/relatorios/arquivos/${arquivo.id}/purgar`, {
         method: 'POST',
@@ -122,6 +145,7 @@ export default function ArquivosOperacionaisPage() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.erro || 'Não foi possível limpar os detalhes.')
       setMensagem(data.aviso || 'Limpeza concluída; histórico permanente preservado.')
+      setArquivoParaPurgar(null)
     })
   }
 
@@ -134,6 +158,14 @@ export default function ArquivosOperacionaisPage() {
 
       {mensagem && <div role="status" className="border px-4 py-3 text-xs font-bold" style={{ borderColor: `${primary}55`, color: primary }}>{mensagem}</div>}
 
+      {printerStage && (
+        <PrinterProgress
+          stage={printerStage}
+          errorMessage={printerError}
+          onDismiss={() => setPrinterStage(null)}
+        />
+      )}
+
       <section className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
         <div className="space-y-4 border p-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
           <h2 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest"><FileSpreadsheet size={17} style={{ color: primary }} /> Gerar Excel</h2>
@@ -141,7 +173,7 @@ export default function ArquivosOperacionaisPage() {
             <label className="text-[10px] font-bold uppercase">Início<input type="date" value={inicio} max={fim} onChange={event => setInicio(event.target.value)} className="mt-1 w-full border bg-transparent px-3 py-2 text-xs" style={{ borderColor: 'var(--border)' }} /></label>
             <label className="text-[10px] font-bold uppercase">Fim<input type="date" value={fim} min={inicio} max={hoje} onChange={event => setFim(event.target.value)} className="mt-1 w-full border bg-transparent px-3 py-2 text-xs" style={{ borderColor: 'var(--border)' }} /></label>
           </div>
-          <button type="button" onClick={gerar} disabled={!podeGerenciar || processando || !inicio || !fim || inicio > fim} className="flex w-full items-center justify-center gap-2 px-4 py-3 text-xs font-black uppercase text-black disabled:opacity-40" style={{ backgroundColor: primary }}><Archive size={15} /> {processando ? 'Processando...' : podeGerenciar ? 'Gerar e proteger Excel' : 'Somente o gestor pode gerar'}</button>
+          <button type="button" onClick={() => void gerar()} disabled={!podeGerenciar || processando || !inicio || !fim || inicio > fim} className="flex w-full items-center justify-center gap-2 px-4 py-3 text-xs font-black uppercase text-black disabled:opacity-40" style={{ backgroundColor: primary }}><Archive size={15} /> {processando ? 'Processando...' : podeGerenciar ? 'Gerar e proteger Excel' : 'Somente o gestor pode gerar'}</button>
           <p className="flex items-start gap-2 text-[10px] text-foreground-muted"><ShieldCheck size={15} className="mt-0.5 shrink-0" style={{ color: primary }} /> O arquivo inclui containers, abastecimentos, manutenções, custos, resumo e aba de auditoria com checksum SHA-256.</p>
         </div>
 
@@ -163,7 +195,7 @@ export default function ArquivosOperacionaisPage() {
 
       <section className="border" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
         <div className="border-b p-4" style={{ borderColor: 'var(--border)' }}><h2 className="text-xs font-black uppercase tracking-widest">Ciclo dos arquivos</h2></div>
-        {carregando ? <p className="p-6 text-xs text-foreground-muted">Carregando arquivos...</p> : arquivos.length === 0 ? <p className="p-6 text-xs text-foreground-muted">Nenhum Excel operacional foi gerado.</p> : (
+        {carregando ? <DominoLoader label="Carregando arquivos operacionais" /> : arquivos.length === 0 ? <p className="p-6 text-xs text-foreground-muted">Nenhum Excel operacional foi gerado.</p> : (
           <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
             {arquivos.map(arquivo => (
               <article key={arquivo.id} className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
@@ -176,7 +208,7 @@ export default function ArquivosOperacionaisPage() {
                 <div className="flex flex-wrap gap-2">
                   {!arquivo.arquivo_removido_em && <button type="button" disabled={processando} onClick={() => baixar(arquivo.id)} className="flex items-center gap-1 border px-3 py-2 text-[10px] font-bold uppercase disabled:opacity-40" style={{ borderColor: 'var(--border)' }}><Download size={12} /> Baixar</button>}
                   {podeGerenciar && arquivo.status === 'DOWNLOAD_REGISTRADO' && <button type="button" disabled={processando} onClick={() => confirmar(arquivo.id)} className="flex items-center gap-1 border px-3 py-2 text-[10px] font-bold uppercase disabled:opacity-40" style={{ borderColor: primary, color: primary }}><CheckCircle2 size={12} /> Confirmar guarda</button>}
-                  {podeGerenciar && arquivo.pode_purgar && <button type="button" disabled={processando} onClick={() => purgar(arquivo)} className="flex items-center gap-1 border border-red-500/50 px-3 py-2 text-[10px] font-bold uppercase text-red-500 disabled:opacity-40"><Trash2 size={12} /> Limpar detalhes</button>}
+                  {podeGerenciar && arquivo.pode_purgar && <button type="button" disabled={processando} onClick={() => setArquivoParaPurgar(arquivo)} className="flex items-center gap-1 border border-red-500/50 px-3 py-2 text-[10px] font-bold uppercase text-red-500 disabled:opacity-40"><Trash2 size={12} /> Limpar detalhes</button>}
                 </div>
               </article>
             ))}
@@ -184,6 +216,7 @@ export default function ArquivosOperacionaisPage() {
         )}
       </section>
       <ArquivosContasPagar />
+      <ActionConfirmDialog open={Boolean(arquivoParaPurgar)} title="Limpar detalhes operacionais" description="Os detalhes deste período e o Excel temporário serão excluídos. Código, origem, destino e data dos containers permanecerão preservados." confirmLabel="Limpar detalhes" cancelLabel="Manter arquivo" loading={processando} onClose={() => { if (!processando) setArquivoParaPurgar(null) }} onConfirm={() => { if (arquivoParaPurgar) purgar(arquivoParaPurgar) }} />
     </div>
   )
 }

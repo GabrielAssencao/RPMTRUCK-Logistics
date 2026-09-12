@@ -4,20 +4,32 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
-import { CORES_E_LOGOS } from '@/data/temasELogos'
 import SubscriptionManagement from './_componentes/SubscriptionManagement'
+import { AppearancePreferences, NavigationPreferences, NotificationPreferences } from './_componentes/PreferencePanels'
+import SecuritySessions from './_componentes/SecuritySessions'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { ProfileSkeleton } from '@/components/motion/OperationalFeedback'
+import {
+  lerEstiloFundoEmpresa,
+  estiloFundoEmpresaValido,
+  lerModulosOcultosEmpresa,
+  salvarEstiloFundoEmpresa,
+  salvarModulosOcultosEmpresa,
+  type EstiloFundoEmpresa,
+} from '@/lib/empresaPreferences'
+import { normalizarModulos, type ModuloCodigo } from '@/utils/planos'
 import { 
   Building2, 
   Palette, 
   ShieldCheck, 
   Save, 
-  Moon, 
-  Sun,
-  Check,
   CreditCard,
   Trash2,
   KeyRound,
+  UserRound,
+  PanelLeft,
+  BellRing,
+  TriangleAlert,
 } from 'lucide-react'
 
 // As opções de cor vêm de src/data/temasELogos.ts — a MESMA fonte usada pela
@@ -28,10 +40,12 @@ import {
 // aqui. Centralizando, escolher uma cor em Configurações agora sempre bate
 // com uma logo real.
 
+type SettingsTab = 'PERFIL' | 'APARENCIA' | 'NAVEGACAO' | 'NOTIFICACOES' | 'SEGURANCA' | 'ASSINATURA' | 'RISCO'
+
 export default function ConfiguracoesPage() {
   const { primary, setPrimary, isLight, setIsLight } = useTheme()
   const [montado, setMontado] = useState(false)
-  const [tabAtiva, setTabAtiva] = useState<'PERFIL' | 'APARENCIA' | 'SEGURANCA' | 'ASSINATURA'>('APARENCIA')
+  const [tabAtiva, setTabAtiva] = useState<SettingsTab>('PERFIL')
 
   const [form, setForm] = useState({
     nome: '', cnpj: '', email: '', telefone: ''
@@ -41,11 +55,87 @@ export default function ConfiguracoesPage() {
   const [diasDesdeAlteracao, setDiasDesdeAlteracao] = useState<number | null>(null)
   const [solicitandoReset, setSolicitandoReset] = useState(false)
   const [feedbackSenha, setFeedbackSenha] = useState('')
+  const [carregandoPerfil, setCarregandoPerfil] = useState(true)
+  const [identidade, setIdentidade] = useState({ role: '', plano: '', ativo: true })
+  const [modulosPermitidos, setModulosPermitidos] = useState<ModuloCodigo[]>([])
+  const [modulosOcultos, setModulosOcultos] = useState<string[]>([])
+  const [estiloFundo, setEstiloFundo] = useState<EstiloFundoEmpresa>('DESLIGADO')
 
   useEffect(() => {
-    queueMicrotask(() => setMontado(true))
-    fetch('/api/empresa/perfil', { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setForm({ nome: data.empresa.nome || '', cnpj: data.empresa.cnpj || '', email: data.empresa.email || '', telefone: data.empresa.telefone || '' }); if (data.usuario.senhaAlteradaEm) setDiasDesdeAlteracao(Math.max(0, Math.floor((Date.now() - new Date(data.usuario.senhaAlteradaEm).getTime()) / 86_400_000))) }).catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar perfil.'))
-  }, [])
+    queueMicrotask(() => {
+      setMontado(true)
+      setModulosOcultos(lerModulosOcultosEmpresa())
+      setEstiloFundo(lerEstiloFundoEmpresa())
+    })
+    fetch('/api/empresa/perfil', { cache: 'no-store' })
+      .then(async response => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.erro)
+        setForm({
+          nome: data.empresa.nome || '',
+          cnpj: data.empresa.cnpj || '',
+          email: data.empresa.email || '',
+          telefone: data.empresa.telefone || '',
+        })
+        setIdentidade({
+          role: data.usuario.role || '',
+          plano: data.empresa.plano || '',
+          ativo: data.usuario.ativo !== false,
+        })
+        setModulosPermitidos(normalizarModulos(data.usuario.modulosAcesso))
+        setPrimary(data.usuario.corTema)
+        setIsLight(Boolean(data.usuario.temaClaro))
+        if (estiloFundoEmpresaValido(data.usuario.estiloFundo)) {
+          setEstiloFundo(data.usuario.estiloFundo)
+          salvarEstiloFundoEmpresa(data.usuario.estiloFundo)
+        }
+        if (data.usuario.senhaAlteradaEm) {
+          setDiasDesdeAlteracao(Math.max(0, Math.floor((Date.now() - new Date(data.usuario.senhaAlteradaEm).getTime()) / 86_400_000)))
+        }
+      })
+      .catch(error => setFeedback(error instanceof Error ? error.message : 'Falha ao carregar perfil.'))
+      .finally(() => setCarregandoPerfil(false))
+  }, [setIsLight, setPrimary])
+
+  const atualizarModulosOcultos = (paths: string[]) => {
+    setModulosOcultos(salvarModulosOcultosEmpresa(paths))
+  }
+
+  const salvarPreferenciaVisual = async (corTema: string, temaClaro: boolean, fundo = estiloFundo) => {
+    try {
+      const response = await fetch('/api/empresa/preferencias-visuais', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ corTema, temaClaro, estiloFundo: fundo }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível salvar o tema.')
+      return true
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : 'Falha ao salvar o tema.')
+      return false
+    }
+  }
+
+  const atualizarEstiloFundo = async (estilo: EstiloFundoEmpresa) => {
+    const anterior = estiloFundo
+    setEstiloFundo(estilo)
+    salvarEstiloFundoEmpresa(estilo)
+    if (!await salvarPreferenciaVisual(primary, isLight, estilo)) {
+      setEstiloFundo(anterior)
+      salvarEstiloFundoEmpresa(anterior)
+    }
+  }
+
+  const atualizarCorTema = (corTema: string) => {
+    setPrimary(corTema)
+    void salvarPreferenciaVisual(corTema, isLight)
+  }
+
+  const atualizarModoTema = (temaClaro: boolean) => {
+    setIsLight(temaClaro)
+    void salvarPreferenciaVisual(primary, temaClaro)
+  }
 
   const salvarPerfil = async () => {
     setSalvando(true); setFeedback('')
@@ -90,10 +180,10 @@ export default function ConfiguracoesPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[240px_minmax(0,1fr)] lg:gap-8">
         
         {/* ─── MENU LATERAL (TABS) ─── */}
-        <div className="md:col-span-1 space-y-2 font-mono">
+        <div className="flex gap-2 overflow-x-auto pb-2 font-mono md:sticky md:top-0 md:block md:self-start md:space-y-1 md:overflow-visible md:pb-0">
           <TabButton 
             ativa={tabAtiva === 'PERFIL'} onClick={() => setTabAtiva('PERFIL')} 
             icone={<Building2 size={16} />} label="PERFIL DA EMPRESA" primary={primary} 
@@ -101,6 +191,14 @@ export default function ConfiguracoesPage() {
           <TabButton 
             ativa={tabAtiva === 'APARENCIA'} onClick={() => setTabAtiva('APARENCIA')} 
             icone={<Palette size={16} />} label="APARÊNCIA & TEMA" primary={primary} 
+          />
+          <TabButton
+            ativa={tabAtiva === 'NAVEGACAO'} onClick={() => setTabAtiva('NAVEGACAO')}
+            icone={<PanelLeft size={16} />} label="NAVEGAÇÃO" primary={primary}
+          />
+          <TabButton
+            ativa={tabAtiva === 'NOTIFICACOES'} onClick={() => setTabAtiva('NOTIFICACOES')}
+            icone={<BellRing size={16} />} label="NOTIFICAÇÕES" primary={primary}
           />
           <TabButton 
             ativa={tabAtiva === 'SEGURANCA'} onClick={() => setTabAtiva('SEGURANCA')} 
@@ -110,85 +208,65 @@ export default function ConfiguracoesPage() {
             ativa={tabAtiva === 'ASSINATURA'} onClick={() => setTabAtiva('ASSINATURA')}
             icone={<CreditCard size={16} />} label="GESTÃO DO PLANO" primary={primary}
           />
+          <TabButton
+            ativa={tabAtiva === 'RISCO'} onClick={() => setTabAtiva('RISCO')}
+            icone={<TriangleAlert size={16} />} label="ÁREA DE RISCO" primary={primary}
+            danger
+          />
         </div>
 
         {/* ─── ÁREA DE CONTEÚDO DAS TABS ─── */}
-        <div className="md:col-span-3">
+        <div className="min-w-0">
           <AnimatePresence mode="wait">
             
             {/* TIPO: APARÊNCIA */}
             {tabAtiva === 'APARENCIA' && (
-              <motion.div key="aparencia" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
-                
-                <div className="p-6 border" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
-                  <h3 className="text-xs font-bold font-mono uppercase tracking-widest mb-6" style={{ color: 'var(--foreground)' }}>
-                    Modo de Exibição
-                  </h3>
-                  <div className="flex gap-4">
-                    <button 
-                      onClick={() => setIsLight(false)}
-                      className="flex-1 p-6 border flex flex-col items-center gap-3 transition-all"
-                      style={{ 
-                        borderColor: !isLight ? primary : 'var(--border)', 
-                        backgroundColor: !isLight ? `${primary}10` : 'var(--background)',
-                        color: 'var(--foreground)'
-                      }}
-                    >
-                      <Moon size={24} style={{ color: !isLight ? primary : 'var(--foreground-muted)' }} />
-                      <span className="font-mono text-xs font-bold uppercase tracking-widest">Modo Escuro (Dark)</span>
-                    </button>
-                    <button 
-                      onClick={() => setIsLight(true)}
-                      className="flex-1 p-6 border flex flex-col items-center gap-3 transition-all"
-                      style={{ 
-                        borderColor: isLight ? primary : 'var(--border)', 
-                        backgroundColor: isLight ? `${primary}10` : 'var(--background)',
-                        color: 'var(--foreground)'
-                      }}
-                    >
-                      <Sun size={24} style={{ color: isLight ? primary : 'var(--foreground-muted)' }} />
-                      <span className="font-mono text-xs font-bold uppercase tracking-widest">Modo Claro (Light)</span>
-                    </button>
-                  </div>
-                </div>
+              <motion.div key="aparencia" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.24 }}>
+                <AppearancePreferences
+                  primary={primary}
+                  isLight={isLight}
+                  backgroundStyle={estiloFundo}
+                  onPrimaryChange={atualizarCorTema}
+                  onThemeChange={atualizarModoTema}
+                  onBackgroundStyleChange={(estilo) => void atualizarEstiloFundo(estilo)}
+                />
+              </motion.div>
+            )}
 
-                <div className="p-6 border" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
-                  <h3 className="text-xs font-bold font-mono uppercase tracking-widest mb-6" style={{ color: 'var(--foreground)' }}>
-                    Cor Destaque da Empresa
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {CORES_E_LOGOS.map((cor) => (
-                      <button
-                        key={cor.value}
-                        onClick={() => setPrimary(cor.value)}
-                        className="p-4 border flex items-center justify-between transition-all group"
-                        style={{ 
-                          borderColor: primary === cor.value ? cor.value : 'var(--border)',
-                          backgroundColor: primary === cor.value ? `${cor.value}15` : 'var(--background)',
-                        }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-4 h-4 rounded-full border border-black/20" style={{ backgroundColor: cor.value }} />
-                          <span className="font-mono text-[10px] uppercase tracking-widest font-bold" style={{ color: 'var(--foreground)' }}>{cor.label}</span>
-                        </div>
-                        {primary === cor.value && <Check size={14} style={{ color: cor.value }} />}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[10px] font-mono mt-4 text-foreground-muted">
-                    Essas são as mesmas cores usadas na Landing Page — a logo do sistema muda automaticamente conforme a cor escolhida.
-                  </p>
-                </div>
+            {tabAtiva === 'NAVEGACAO' && (
+              <motion.div key="navegacao" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.24 }}>
+                <NavigationPreferences
+                  primary={primary}
+                  allowedModules={modulosPermitidos}
+                  hiddenPaths={modulosOcultos}
+                  onHiddenPathsChange={atualizarModulosOcultos}
+                />
+              </motion.div>
+            )}
 
+            {tabAtiva === 'NOTIFICACOES' && (
+              <motion.div key="notificacoes" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.24 }}>
+                <NotificationPreferences primary={primary} />
               </motion.div>
             )}
 
             {/* TIPO: PERFIL */}
             {tabAtiva === 'PERFIL' && (
               <motion.div key="perfil" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                {carregandoPerfil ? <ProfileSkeleton /> : (
                 <div className="p-6 border space-y-6" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
-                  <h3 className="text-xs font-bold font-mono uppercase tracking-widest mb-6 border-b pb-4" style={{ color: 'var(--foreground)', borderColor: 'var(--border)' }}>
-                    Informações Fiscais
+                  <CompanyIdentityCard
+                    nome={form.nome}
+                    email={form.email}
+                    cnpj={form.cnpj}
+                    role={identidade.role}
+                    plano={identidade.plano}
+                    ativo={identidade.ativo}
+                    primary={primary}
+                  />
+
+                  <h3 className="border-b pb-4 text-xs font-bold font-mono uppercase tracking-widest" style={{ color: 'var(--foreground)', borderColor: 'var(--border)' }}>
+                    Dados cadastrais
                   </h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -213,12 +291,13 @@ export default function ConfiguracoesPage() {
                     </motion.button>
                   </div>
                 </div>
+                )}
               </motion.div>
             )}
 
             {/* TIPO: SEGURANÇA */}
             {tabAtiva === 'SEGURANCA' && (
-              <motion.div key="seguranca" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+              <motion.div key="seguranca" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.24 }} className="space-y-6">
                 <div className="p-6 border space-y-6 mb-6" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
                   <h3 className="text-xs font-bold font-mono uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--foreground)' }}>
                     <ShieldCheck size={16} style={{ color: primary }}/> Credenciais de Acesso
@@ -253,12 +332,24 @@ export default function ConfiguracoesPage() {
                   </div>
                 </div>
 
-                <div className="border border-red-500/30 bg-red-500/5 p-6">
-                  <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-red-500"><Trash2 size={16} /> Exclusão de conta</h3>
-                  <p className="mt-3 text-sm text-foreground-muted">Exporte o backup completo e consulte o fluxo protegido para encerrar a conta da empresa.</p>
-                  <Link href="/dashboard/empresa/configuracoes/exclusao-conta" className="mt-4 inline-flex min-h-11 items-center border border-red-500/40 px-4 text-xs font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10">Abrir exclusão de conta</Link>
-                </div>
+                <SecuritySessions primary={primary} />
 
+              </motion.div>
+            )}
+
+            {tabAtiva === 'RISCO' && (
+              <motion.div key="risco" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.24 }}>
+                <section className="border border-red-500/30 bg-red-500/5 p-5 sm:p-6">
+                  <div className="border-b border-red-500/20 pb-4">
+                    <h2 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-red-500"><Trash2 size={16} /> Exclusão da empresa</h2>
+                    <p className="mt-2 text-[10px] leading-relaxed text-foreground-muted">Ações irreversíveis ficam separadas das configurações rotineiras para reduzir erros.</p>
+                  </div>
+                  <div className="mt-5 border border-red-500/20 bg-background p-4">
+                    <h3 className="text-xs font-bold uppercase tracking-wider">Encerrar conta e remover dados</h3>
+                    <p className="mt-2 text-sm text-foreground-muted">Exporte o backup completo e consulte o fluxo protegido antes de encerrar a conta da empresa.</p>
+                    <Link href="/dashboard/empresa/configuracoes/exclusao-conta" className="interactive-control mt-4 inline-flex min-h-11 items-center border border-red-500/50 px-4 text-xs font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10">Abrir exclusão de conta</Link>
+                  </div>
+                </section>
               </motion.div>
             )}
 
@@ -278,15 +369,97 @@ export default function ConfiguracoesPage() {
 
 // ─── COMPONENTES AUXILIARES ──────────────────────────────────────────────────
 
-function TabButton({ ativa, onClick, icone, label, primary }: { ativa: boolean, onClick: () => void, icone: React.ReactNode, label: string, primary: string }) {
+function CompanyIdentityCard({
+  nome,
+  email,
+  cnpj,
+  role,
+  plano,
+  ativo,
+  primary,
+}: {
+  nome: string
+  email: string
+  cnpj: string
+  role: string
+  plano: string
+  ativo: boolean
+  primary: string
+}) {
+  const roleLabel = role === 'GESTOR_EMPRESA' || role === 'GESTOR'
+    ? 'Gestor da empresa'
+    : role === 'OPERADOR'
+      ? 'Operador'
+      : role === 'VISUALIZADOR'
+        ? 'Visualizador'
+        : 'Usuário da empresa'
+
+  return (
+    <section
+      aria-label="Cartão de identidade da empresa"
+      className="relative overflow-hidden border p-5 sm:p-6"
+      style={{
+        borderColor: `color-mix(in srgb, ${primary} 42%, var(--border))`,
+        background: `linear-gradient(125deg, color-mix(in srgb, ${primary} 10%, var(--background)) 0%, var(--background) 58%)`,
+      }}
+    >
+      <span className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: primary }} aria-hidden="true" />
+      <span className="absolute -right-10 -top-12 h-32 w-32 rotate-12 border opacity-20" style={{ borderColor: primary }} aria-hidden="true" />
+
+      <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(260px,0.8fr)] lg:items-center">
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
+          <div
+            className="flex h-20 w-20 shrink-0 items-center justify-center border"
+            style={{ borderColor: primary, backgroundColor: `${primary}14`, color: primary }}
+            aria-hidden="true"
+          >
+            <UserRound size={38} strokeWidth={1.5} />
+          </div>
+
+          <div className="min-w-0">
+            <p className="text-[9px] font-black uppercase tracking-[0.22em]" style={{ color: primary }}>Identidade corporativa</p>
+            <h3 className="mt-1 truncate font-rajdhani text-2xl font-black uppercase tracking-tight" title={nome || undefined}>
+              {nome || 'Nome da transportadora'}
+            </h3>
+            <p className="mt-1 truncate text-xs text-foreground-muted" title={email || undefined}>{email || 'E-mail não informado'}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="border px-2 py-1 text-[8px] font-black uppercase tracking-widest" style={{ borderColor: `${primary}66`, color: primary }}>
+                {plano ? `Plano ${plano.replaceAll('_', ' ')}` : 'Plano não informado'}
+              </span>
+              <span className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest" style={{ color: ativo ? 'var(--status-success)' : 'var(--status-danger)' }}>
+                <i className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" /> {ativo ? 'Acesso ativo' : 'Acesso inativo'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <dl className="grid grid-cols-1 gap-3 border-t pt-4 sm:grid-cols-2 lg:grid-cols-1 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" style={{ borderColor: 'var(--border)' }}>
+          <div>
+            <dt className="text-[8px] font-black uppercase tracking-[0.18em] text-foreground-muted">Perfil de acesso</dt>
+            <dd className="mt-1 text-xs font-bold uppercase">{roleLabel}</dd>
+          </div>
+          <div>
+            <dt className="text-[8px] font-black uppercase tracking-[0.18em] text-foreground-muted">Identificação fiscal</dt>
+            <dd className="mt-1 text-xs font-bold">{cnpj || 'CNPJ não informado'}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  )
+}
+
+function TabButton({ ativa, onClick, icone, label, primary, danger = false }: { ativa: boolean; onClick: () => void; icone: React.ReactNode; label: string; primary: string; danger?: boolean }) {
+  const activeColor = danger ? 'var(--status-danger)' : primary
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-4 text-xs font-bold uppercase tracking-widest transition-all"
+      aria-pressed={ativa}
+      className="flex min-h-12 min-w-max items-center gap-3 px-4 text-xs font-bold uppercase tracking-widest transition-all md:w-full"
       style={{
-        backgroundColor: ativa ? `${primary}15` : 'transparent',
-        color: ativa ? primary : 'var(--foreground-muted)',
-        borderLeft: `3px solid ${ativa ? primary : 'transparent'}`
+        backgroundColor: ativa ? `color-mix(in srgb, ${activeColor} 12%, transparent)` : 'transparent',
+        color: ativa || danger ? activeColor : 'var(--foreground-muted)',
+        borderLeft: `3px solid ${ativa ? activeColor : 'transparent'}`,
       }}
     >
       <span className={ativa ? '' : 'opacity-70'}>{icone}</span>

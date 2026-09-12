@@ -33,7 +33,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   const limited = await applyRateLimit(request, `admin-mutation:${auth.session.userId}`, RATE_LIMITS.ADMIN_MUTATION.limit, RATE_LIMITS.ADMIN_MUTATION.windowMs)
   if (limited) return limited
 
-  const parsed = atualizarEmpresaSchema.safeParse(await request.json())
+  const parsed = atualizarEmpresaSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ erro: 'Configuração de plano inválida.' }, { status: 400 })
   }
@@ -85,6 +85,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     const { empresa } = resultado
 
     const alteracoes = [
+      usuariosAdicionais !== empresaAtual.usuarios_adicionais || veiculosAdicionais !== empresaAtual.veiculos_adicionais ? 'capacidades de usuários e veículos atualizadas' : null,
       plano !== empresaAtual.plano ? `plano ${empresaAtual.plano} → ${plano}` : null,
       status !== empresaAtual.status ? `status ${empresaAtual.status} → ${status}` : null,
       JSON.stringify(modulos) !== JSON.stringify(normalizarModulos(empresaAtual.modulos)) ? 'módulos atualizados' : null,

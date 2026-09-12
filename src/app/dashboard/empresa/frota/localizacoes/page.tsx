@@ -149,8 +149,8 @@ export default function LocalizacoesPage() {
 
       {/* ─── MODAL DE CADASTRO/EDIÇÃO DE LOCALIZAÇÃO ─── */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="w-full max-w-md border p-6 font-mono space-y-4" style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+        <div className="adaptive-form-overlay fixed inset-0 z-50 flex bg-black/70 backdrop-blur-xs">
+          <motion.div role="dialog" aria-modal="true" initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="adaptive-form-panel w-full max-w-md space-y-4 overflow-y-auto border p-4 font-mono sm:p-5" style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
             <div className="flex justify-between items-center border-b pb-3" style={{ borderColor: 'var(--border)' }}>
               <h3 className="text-sm font-bold uppercase">{editandoId ? 'Editar Base' : 'Cadastrar Nova Base'}</h3>
               <button onClick={() => setModalOpen(false)}>✕</button>

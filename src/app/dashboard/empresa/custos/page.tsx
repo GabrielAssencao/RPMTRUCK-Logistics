@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useContainers } from '@/contexts/ContainersContext'
 import { obterAnoMesSemana, MESES } from '@/lib/dataUtils'
 import { PLANOS_CONFIG, type PlanoTipo } from '@/utils/planos'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { DominoLoader } from '@/components/motion/OperationalFeedback'
 import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 import { 
   DollarSign, 
@@ -75,6 +76,7 @@ interface LinhaExibicao {
 
 export default function CustosPage() {
   const { primary } = useTheme()
+  const reduzirMovimento = useReducedMotion()
   const { duplas, loading: carregandoDuplas } = useContainers()
   const [montado, setMontado] = useState(false)
 
@@ -114,6 +116,7 @@ export default function CustosPage() {
   })
 
   const [custos, setCustos] = useState<RegistroCusto[]>([])
+  const [carregandoCustos, setCarregandoCustos] = useState(true)
 
   useEffect(() => {
     queueMicrotask(() => setMontado(true))
@@ -125,6 +128,9 @@ export default function CustosPage() {
 
   useEffect(() => {
     const controller = new AbortController()
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) setCarregandoCustos(true)
+    })
     fetch(`/api/custos?ano=${anoSelecionado}`, { cache: 'no-store', signal: controller.signal })
       .then(async response => {
         const data = await response.json()
@@ -134,12 +140,14 @@ export default function CustosPage() {
       .catch(error => {
         if (error instanceof Error && error.name !== 'AbortError') setErroFormulario(error.message)
       })
+      .finally(() => {
+        if (!controller.signal.aborted) setCarregandoCustos(false)
+      })
     return () => controller.abort()
   }, [anoSelecionado])
 
-  if (!montado) return null
+  if (!montado || carregandoDuplas || carregandoCustos) return <DominoLoader label="Carregando custos e despesas" />
 
-  if (carregandoDuplas) return <div className="p-12 text-center text-sm text-foreground-muted">Carregando dados operacionais...</div>
   if (duplas.length === 0) return <div className="border border-dashed p-12 text-center text-sm text-foreground-muted">Cadastre ao menos um veículo antes de lançar custos.</div>
   const duplaAtiva = duplas[indexDupla] || duplas[0]
 
@@ -940,9 +948,9 @@ export default function CustosPage() {
 
       {/* ─── MODAL LANÇAMENTO DE CUSTO ─── */}
       {modalRegistroOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-stretch justify-end" role="dialog" aria-modal="true" aria-labelledby="titulo-lancamento-custo">
-          <motion.div initial={{ x: 60, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="w-full max-w-xl h-full border-l font-mono flex flex-col shadow-2xl" style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
-            <div className="flex justify-between items-start border-b p-5" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+        <div className="adaptive-form-overlay fixed inset-0 z-50 flex bg-black/70 backdrop-blur-xs" role="dialog" aria-modal="true" aria-labelledby="titulo-lancamento-custo">
+          <motion.div initial={reduzirMovimento ? false : { x: 48, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: reduzirMovimento ? 0 : 0.3, ease: [0.2, 0, 0, 1] }} className="adaptive-form-panel flex w-full flex-col overflow-hidden border font-mono shadow-2xl sm:w-[min(92vw,40rem)]" style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b px-4 py-3 sm:px-5" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
               <div>
                 <h3 id="titulo-lancamento-custo" className="text-lg font-black uppercase font-rajdhani">Lançar despesa operacional</h3>
                 <p className="text-[10px] text-foreground-muted mt-1">Preencha uma vez ou mantenha o painel aberto para uma sequência de lançamentos.</p>
@@ -950,7 +958,7 @@ export default function CustosPage() {
               <button onClick={() => setModalRegistroOpen(false)} className="p-2 border hover:bg-white/5" style={{ borderColor: 'var(--border)' }} aria-label="Fechar lançamento"><X size={16} /></button>
             </div>
 
-            <form onSubmit={handleSalvarDespesa} className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
+            <form id="form-despesa-operacional" onSubmit={handleSalvarDespesa} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 text-xs sm:p-5">
               {erroFormulario && (
                 <ActionFeedback message={erroFormulario} tone="error" className="text-[10px] font-bold" />
               )}
@@ -1076,20 +1084,21 @@ export default function CustosPage() {
                 </div>
               </div>
 
-              <div className="sticky bottom-0 -mx-5 -mb-5 mt-6 p-4 border-t flex flex-col sm:flex-row sm:items-center gap-2" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+            </form>
+
+              <div className="grid shrink-0 grid-cols-2 gap-2 border-t px-3 py-2 sm:flex sm:items-center sm:px-4 sm:py-2.5" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
                 <button type="button" onClick={resetarFormulario} className="px-3 py-2.5 border uppercase text-[10px] flex items-center justify-center gap-2" style={{ borderColor: 'var(--border)' }}>
                   <RotateCcw size={13} /> Limpar
                 </button>
-                <div className="flex-1" />
+                <div className="hidden flex-1 sm:block" />
                 <button type="button" onClick={() => setModalRegistroOpen(false)} className="px-4 py-2.5 border uppercase text-[10px]" style={{ borderColor: 'var(--border)' }}>Cancelar</button>
-                <button type="submit" value="continuar" className="px-4 py-2.5 border uppercase font-bold text-[10px] flex items-center justify-center gap-2" style={{ borderColor: primary, color: primary }}>
+                <button type="submit" form="form-despesa-operacional" value="continuar" className="col-span-2 flex min-h-11 items-center justify-center gap-2 border px-4 py-2.5 text-[10px] font-bold uppercase sm:col-span-1" style={{ borderColor: primary, color: primary }}>
                   <Save size={13} /> Salvar e lançar outro
                 </button>
-                <button type="submit" value="fechar" className="px-5 py-2.5 uppercase font-bold text-black text-[10px] flex items-center justify-center gap-2" style={{ backgroundColor: primary }}>
+                <button type="submit" form="form-despesa-operacional" value="fechar" className="col-span-2 flex min-h-11 items-center justify-center gap-2 px-5 py-2.5 text-[10px] font-bold uppercase text-black sm:col-span-1" style={{ backgroundColor: primary }}>
                   <CheckCircle size={13} /> Salvar despesa
                 </button>
               </div>
-            </form>
           </motion.div>
         </div>
       )}

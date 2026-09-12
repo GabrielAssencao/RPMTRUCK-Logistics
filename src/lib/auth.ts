@@ -2,6 +2,7 @@ import { SignJWT } from 'jose'
 import { cookies } from 'next/headers'
 import type { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import {
   getJwtSecret,
   isAdminRole,
@@ -61,6 +62,11 @@ export interface AuthResult {
     excluidoEm: Date | null
     sessaoVersao: number
     senhaAlteradaEm: Date
+    corTema: string | null
+    temaClaro: boolean | null
+    rotuloEquipe: string | null
+    podePersonalizarTema: boolean
+    estiloFundo: string | null
   }
 }
 
@@ -70,6 +76,17 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
   const tokenSession = await verifySession(request)
   if (!tokenSession) {
     return { error: 'Não autenticado', status: 401, session: null }
+  }
+
+  // A identidade vem do JWT verificado; a autorização continua sendo revalidada
+  // abaixo. Este teto cobre também rotas sem limitador específico.
+  const leitura = ['GET', 'HEAD', 'OPTIONS'].includes(request.method)
+  const regra = leitura ? RATE_LIMITS.AUTHENTICATED_READ : RATE_LIMITS.AUTHENTICATED_MUTATION
+  const limited = await applyRateLimit(request, `authenticated-${leitura ? 'read' : 'mutation'}:${tokenSession.userId}`, regra.limit, regra.windowMs)
+  if (limited) return {
+    error: limited.status === 429 ? 'Muitas requisições. Aguarde um minuto e tente novamente.' : 'Proteção de acesso temporariamente indisponível. Tente novamente.',
+    status: limited.status,
+    session: null,
   }
 
   const usuarioSelect = {
@@ -84,6 +101,11 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
     excluidoEm: true,
     sessaoVersao: true,
     senhaAlteradaEm: true,
+    corTema: true,
+    temaClaro: true,
+    rotuloEquipe: true,
+    podePersonalizarTema: true,
+    estiloFundo: true,
   } as const
   const usuario = tokenSession.sessionId
     ? (await prisma.sessaoUsuario.findFirst({

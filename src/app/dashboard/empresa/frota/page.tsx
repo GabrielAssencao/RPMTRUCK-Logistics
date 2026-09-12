@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import GenericDrawer, { FieldConfig } from '@/components/dashboard/GenericDrawer'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { DominoLoader } from '@/components/motion/OperationalFeedback'
 import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
 type StatusVeiculo = 'OPERACIONAL' | 'OFICINA' | 'INATIVO'
@@ -46,6 +47,7 @@ interface VeiculoApi extends Omit<VeiculoCompleto, 'localizacao' | 'motoristaAtu
 export default function FrotaPage() {
   const { primary } = useTheme()
   const [montado, setMontado] = useState(false)
+  const [carregando, setCarregando] = useState(true)
   
   // Estado do Drawer e Edição
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -92,10 +94,10 @@ export default function FrotaPage() {
     }).catch(error => {
       setFeedbackTone('error')
       setFeedback(error instanceof Error ? error.message : 'Falha ao carregar a frota.')
-    })
+    }).finally(() => setCarregando(false))
   }, [])
 
-  if (!montado) return null
+  if (!montado || carregando) return <DominoLoader label="Carregando frota e veículos" />
 
   // Configuração Dinâmica dos Campos do Drawer com as Localizações do Sistema
   const camposFrotaDinamicos: FieldConfig[] = [
@@ -120,8 +122,10 @@ export default function FrotaPage() {
       name: 'localizacao', 
       label: 'Base / Pátio de Origem', 
       type: 'select', 
-      required: true,
-      options: listaLocalizacoes.map(loc => ({ label: loc.nome, value: loc.id }))
+      options: [
+        { label: 'Sem base / pátio definido', value: 'SEM_BASE' },
+        ...listaLocalizacoes.map(loc => ({ label: loc.nome, value: loc.id })),
+      ]
     },
     { 
       name: 'status', 
@@ -237,7 +241,11 @@ export default function FrotaPage() {
       ano: Number(formData.ano),
       tipo: formData.tipo,
       quilometragem: Number(formData.quilometragem),
-      localizacaoId: typeof formData.localizacao === 'string' && formData.localizacao ? formData.localizacao : null,
+      localizacaoId: typeof formData.localizacao === 'string'
+        && formData.localizacao
+        && formData.localizacao !== 'SEM_BASE'
+        ? formData.localizacao
+        : null,
       status: formData.status,
     }
     const response = await fetch(veiculoParaEditar ? `/api/veiculos/${veiculoParaEditar.id}` : '/api/veiculos', {
@@ -710,7 +718,7 @@ export default function FrotaPage() {
           ano: veiculoParaEditar.ano,
           tipo: veiculoParaEditar.tipo,
           quilometragem: veiculoParaEditar.quilometragem,
-          localizacao: veiculoParaEditar.localizacaoId || listaLocalizacoes[0]?.id || '',
+          localizacao: veiculoParaEditar.localizacaoId || 'SEM_BASE',
           status: veiculoParaEditar.status
         } : undefined}
         onSubmit={handleSalvarVeiculo}

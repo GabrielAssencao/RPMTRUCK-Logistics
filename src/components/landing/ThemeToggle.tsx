@@ -4,18 +4,21 @@
 import { useTheme } from '@/contexts/ThemeContext'
 import { Sun, Moon } from 'lucide-react'
 
-export default function ThemeToggle() {
+export default function ThemeToggle({ disabled = false, onToggle }: { disabled?: boolean; onToggle?: (isLight: boolean) => void }) {
   const { isLight, setIsLight, primary } = useTheme()
 
   return (
     <button
-      onClick={() => setIsLight(!isLight)}
-      className="p-2 border rounded-sm transition-all flex items-center justify-center hover:bg-white/5"
+      type="button"
+      disabled={disabled}
+      onClick={() => onToggle ? onToggle(!isLight) : setIsLight(!isLight)}
+      className="flex min-h-11 min-w-11 items-center justify-center rounded-sm border p-2 transition-all hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-45"
       style={{ 
         borderColor: 'var(--border)', 
         color: 'var(--foreground)' 
       }}
-      title={isLight ? 'Mudar para Modo Escuro' : 'Mudar para Modo Claro'}
+      title={disabled ? 'Tema administrado pelo gestor' : isLight ? 'Mudar para Modo Escuro' : 'Mudar para Modo Claro'}
+      aria-label={disabled ? 'Tema administrado pelo gestor' : isLight ? 'Mudar para modo escuro' : 'Mudar para modo claro'}
     >
       {isLight ? (
         <Moon size={16} style={{ color: primary }} />

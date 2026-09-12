@@ -48,6 +48,11 @@ export function normalizarCorTema(cor: string | null | undefined): string {
     : COR_TEMA_PADRAO
 }
 
+export function corTemaValida(cor: string): boolean {
+  const normalizada = cor.trim().toLowerCase()
+  return CORES_E_LOGOS.some((tema) => tema.value === normalizada)
+}
+
 export function obterLogoPorTema(primary: string): string {
   const cor = normalizarCorTema(primary)
   return CORES_E_LOGOS.find(c => c.value === cor)?.logoName || LOGO_PADRAO

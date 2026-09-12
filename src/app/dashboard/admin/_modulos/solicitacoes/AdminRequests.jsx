@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Phone, User, Truck, CheckCircle, XCircle, Copy, KeyRound } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { criarMensagensPrimeiroAcesso } from '@/lib/accessMessages';
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog';
 
 export default function AdminRequests() {
   const { primary } = useTheme();
@@ -15,6 +16,7 @@ export default function AdminRequests() {
   const [entrega, setEntrega] = useState(null);
   const [copiado, setCopiado] = useState('');
   const [erroAcao, setErroAcao] = useState('');
+  const [decisao, setDecisao] = useState(null);
 
   const carregarSolicitacoes = async () => {
     try {
@@ -36,10 +38,9 @@ export default function AdminRequests() {
   }, []);
 
   const aprovarSolicitacao = async (id) => {
-    if (confirm("Confirmar aprovação deste lead? Isso criará a empresa e a conta do gestor automaticamente.")) {
-      setProcessando(id);
-      setErroAcao('');
-      try {
+    setProcessando(id);
+    setErroAcao('');
+    try {
         const solicitacao = solicitacoes.find((item) => item.id === id);
         const res = await fetch(`/api/solicitacoes/${id}/aprovar`, { method: 'POST' });
         const data = await res.json();
@@ -56,13 +57,13 @@ export default function AdminRequests() {
           loginUrl: `${window.location.origin}/auth/login`,
         });
         setEntrega({ solicitacao, credencial: data.credencialTemporaria, mensagens });
+        setDecisao(null);
         await carregarSolicitacoes();
       } catch {
         setErroAcao('Erro de conexão ao aprovar a solicitação.');
       } finally {
         setProcessando(null);
       }
-    }
   };
 
   const copiar = async (tipo, texto) => {
@@ -72,10 +73,19 @@ export default function AdminRequests() {
   };
 
   const rejeitarSolicitacao = async (id) => {
-    if (confirm("Deseja rejeitar esta solicitação de acesso?")) {
-      setProcessando(id);
+    setProcessando(id);
+    setErroAcao('');
+    try {
       const res = await fetch(`/api/solicitacoes/${id}/rejeitar`, { method: 'POST' });
-      if (res.ok) carregarSolicitacoes();
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.erro || 'Não foi possível rejeitar a solicitação.');
+      }
+      setDecisao(null);
+      await carregarSolicitacoes();
+    } catch (error) {
+      setErroAcao(error instanceof Error ? error.message : 'Erro de conexão ao rejeitar a solicitação.');
+    } finally {
       setProcessando(null);
     }
   };
@@ -182,14 +192,14 @@ export default function AdminRequests() {
                   {req.status?.toLowerCase() === 'pendente' && (
                     <div className="flex gap-2 w-full md:w-auto shrink-0 pt-2 md:pt-0">
                       <button 
-                        onClick={() => aprovarSolicitacao(req.id)} 
+                        onClick={() => setDecisao({ tipo: 'APROVAR', solicitacao: req })}
                         disabled={processando !== null}
                         className="flex-1 md:flex-initial flex items-center justify-center gap-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 px-4 py-2 text-[10px] font-black border border-green-500/20 tracking-wider transition-colors"
                       >
                         <CheckCircle size={14} /> APROVAR
                       </button>
                       <button 
-                        onClick={() => rejeitarSolicitacao(req.id)} 
+                        onClick={() => setDecisao({ tipo: 'REJEITAR', solicitacao: req })}
                         disabled={processando !== null}
                         className="p-2 border border-border text-red-500 hover:bg-red-500/10 hover:border-red-500/20 transition-all bg-background" 
                         title="Rejeitar Solicitação"
@@ -216,6 +226,25 @@ export default function AdminRequests() {
           </AnimatePresence>
         )}
       </div>
+
+      <ActionConfirmDialog
+        open={Boolean(decisao)}
+        tone={decisao?.tipo === 'APROVAR' ? 'warning' : 'danger'}
+        eyebrow="Decisão administrativa"
+        title={decisao?.tipo === 'APROVAR' ? 'Aprovar solicitação de acesso' : 'Rejeitar solicitação de acesso'}
+        description={decisao?.tipo === 'APROVAR'
+          ? `A empresa ${decisao?.solicitacao?.empresa ?? ''} e a conta do gestor serão criadas automaticamente.`
+          : `A solicitação de ${decisao?.solicitacao?.empresa ?? ''} será rejeitada.`}
+        confirmLabel={decisao?.tipo === 'APROVAR' ? 'Aprovar e criar acesso' : 'Rejeitar solicitação'}
+        cancelLabel="Voltar"
+        loading={processando !== null}
+        onClose={() => { if (processando === null) setDecisao(null) }}
+        onConfirm={() => {
+          if (!decisao) return;
+          if (decisao.tipo === 'APROVAR') void aprovarSolicitacao(decisao.solicitacao.id);
+          else void rejeitarSolicitacao(decisao.solicitacao.id);
+        }}
+      />
 
       <AnimatePresence>
         {entrega && (

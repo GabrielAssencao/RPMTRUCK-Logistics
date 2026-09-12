@@ -2,7 +2,7 @@
 
 // src/contexts/ThemeContext.tsx
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react'
 import {
   CORES_E_LOGOS,
   COR_TEMA_PADRAO,
@@ -92,16 +92,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.classList.toggle('light', isLight)
   }, [primary, isLight, ready])
 
-  const setPrimary = (c: string) => {
+  const setPrimary = useCallback((c: string) => {
     const corNormalizada = normalizarCorTema(c)
     setPrimaryState(corNormalizada)
     salvarPreferencia('rpm-primary', corNormalizada)
-  }
+  }, [])
 
-  const setIsLight = (v: boolean) => {
+  const setIsLight = useCallback((v: boolean) => {
     setIsLightState(v)
     salvarPreferencia('rpm-light', String(v))
-  }
+  }, [])
 
   return (
     <ThemeContext.Provider value={{

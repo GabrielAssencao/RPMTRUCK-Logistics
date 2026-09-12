@@ -8,6 +8,119 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const read = (path) => readFileSync(resolve(root, path), 'utf8')
 
+test('todas as APIs autenticadas recebem teto global antes da consulta de sessão', () => {
+  const auth = read('src/lib/auth.ts')
+  assert.ok(auth.indexOf('await verifySession(request)') < auth.indexOf('await applyRateLimit(request'))
+  assert.ok(auth.indexOf('await applyRateLimit(request') < auth.indexOf('prisma.sessaoUsuario.findFirst'))
+  assert.match(auth, /AUTHENTICATED_READ : RATE_LIMITS.AUTHENTICATED_MUTATION/)
+  assert.match(auth, /tokenSession\.userId/)
+  assert.match(read('src/app/api/planos/route.ts'), /applyRateLimit\(/)
+  assert.match(read('src/app/api/internal/retencao/route.ts'), /RATE_LIMITS.RETENTION_RUN/)
+})
+
+test('Preview possui cotas finitas editáveis sem apagar registros existentes', async () => {
+  const typescript = await import('typescript')
+  const js = typescript.transpileModule(read('src/utils/planos.ts'), {
+    compilerOptions: { module: typescript.ModuleKind.ESNext, target: typescript.ScriptTarget.ES2022 },
+  }).outputText
+  const { PLANOS_CONFIG } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
+  assert.equal(PLANOS_CONFIG.PREVIEW.usuariosBase, 1)
+  assert.equal(PLANOS_CONFIG.PREVIEW.veiculosBase, 0)
+  assert.equal(PLANOS_CONFIG.ESSENCIAL.usuariosBase, 4)
+  assert.equal(PLANOS_CONFIG.ESSENCIAL.veiculosBase, 10)
+  const ui = read('src/app/dashboard/admin/_modulos/empresas/CompanyFinancialControl.jsx')
+  assert.match(ui, /Total de usuários \(inclui o gestor\)/)
+  assert.match(ui, /Total de veículos/)
+  assert.match(ui, /usuarios_adicionais: uExtra/)
+  assert.match(ui, /veiculos_adicionais: vExtra/)
+  assert.doesNotMatch(read('src/app/api/empresas/[id]/route.ts'), /veiculo.delete|usuario.delete/)
+})
+
+test('cadastro de frota verifica cota e localização na mesma transação serializável', async () => {
+  const typescript = await import('typescript')
+  let source = read('src/lib/veiculosEmpresa.ts')
+  source = source.replace(/^import .*$/gm, '')
+  source = `const Prisma = { TransactionIsolationLevel: { Serializable: 'Serializable' } };
+    const PLANOS_CONFIG = { PREVIEW: { veiculosBase: 0 }, ESSENCIAL: { veiculosBase: 10 } };
+    let testTx;
+    export function configure(tx) { testTx = tx; }
+    async function executarComAuditoria(context, callback, options) {
+      if (options.isolationLevel !== 'Serializable') throw new Error('isolamento incorreto');
+      return callback(testTx);
+    }
+    ${source}`
+  const js = typescript.transpileModule(source, {
+    compilerOptions: { module: typescript.ModuleKind.ESNext, target: typescript.ScriptTarget.ES2022 },
+  }).outputText
+  const vehicleService = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
+  let total = 2
+  let created = 0
+  let readings = 0
+  vehicleService.configure({
+    empresa: { findUnique: async () => ({ plano: 'PREVIEW', veiculos_adicionais: 2 }) },
+    veiculo: {
+      count: async () => total,
+      create: async ({ data }) => { created++; return { ...data, id: 'vehicle', quilometragem: 0 } },
+    },
+    localizacao: { findFirst: async () => null },
+    leituraQuilometragem: { create: async () => { readings++ } },
+  })
+  const input = { empresaId: 'tenant', usuarioId: 'actor', dados: { modelo: 'Volvo', placa: 'ABC1D23', tipo: 'Sider' } }
+  await assert.rejects(vehicleService.criarVeiculoEmpresaComLimite(input), error => error.status === 409)
+  assert.equal(created, 0)
+  total = 1
+  await assert.rejects(vehicleService.criarVeiculoEmpresaComLimite({ ...input, dados: { ...input.dados, localizacaoId: 'other-tenant' } }), error => error.status === 400)
+  assert.equal(created, 0)
+  await vehicleService.criarVeiculoEmpresaComLimite(input)
+  assert.equal(created, 1)
+  assert.equal(readings, 1)
+  for (const route of ['src/app/api/veiculos/route.ts', 'src/app/api/empresas/[id]/veiculos/route.ts']) {
+    assert.match(read(route), /criarVeiculoEmpresaComLimite\(/)
+    assert.doesNotMatch(read(route), /veiculo.create\(/)
+  }
+})
+
+test('migração fecha acesso direto a suporte, lembretes, alertas e contas a pagar', () => {
+  const migration = read('prisma/migrations/20260911160000_security_rls_missing_tables/migration.sql')
+  for (const table of ['conversas_suporte', 'mensagens_suporte', 'lembretes_pessoais', 'alertas_sistema', 'alertas_leituras', 'contas_pagar']) {
+    assert.ok(migration.includes(`ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY`))
+  }
+  assert.match(migration, /REVOKE ALL ON TABLE/)
+  assert.match(migration, /ARRAY\['anon', 'authenticated'\]/)
+})
+
+test('IP na Vercel ignora cf-connecting-ip forjado e produção sem proxy não confia em forwarded', async () => {
+  const typescript = await import('typescript')
+  const source = read('src/lib/rateLimit.ts').match(/export function getClientIp[\s\S]*?(?=export const RATE_LIMITS)/)[0]
+  const js = typescript.transpileModule(source, {
+    compilerOptions: { module: typescript.ModuleKind.ESNext, target: typescript.ScriptTarget.ES2022 },
+  }).outputText
+  const { getClientIp } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
+  const keys = ['NODE_ENV', 'VERCEL', 'TRUST_CLOUDFLARE_PROXY', 'TRUST_FORWARDED_PROXY']
+  const original = Object.fromEntries(keys.map(key => [key, process.env[key]]))
+  const request = { headers: new Headers({
+    'cf-connecting-ip': '198.51.100.200',
+    'x-vercel-forwarded-for': '203.0.113.10',
+    'x-forwarded-for': '203.0.113.10, 192.0.2.5',
+  }) }
+  try {
+    process.env.NODE_ENV = 'production'
+    process.env.VERCEL = '1'
+    delete process.env.TRUST_CLOUDFLARE_PROXY
+    delete process.env.TRUST_FORWARDED_PROXY
+    assert.equal(getClientIp(request), '203.0.113.10')
+    delete process.env.VERCEL
+    assert.equal(getClientIp(request), 'unknown')
+    process.env.TRUST_FORWARDED_PROXY = 'true'
+    assert.equal(getClientIp(request), '203.0.113.10')
+  } finally {
+    for (const key of keys) {
+      if (original[key] === undefined) delete process.env[key]
+      else process.env[key] = original[key]
+    }
+  }
+})
+
 test('login e recuperação não revelam a existência da conta', () => {
   const login = read('src/app/api/auth/login/route.ts')
   const password = read('src/lib/password.ts')
@@ -83,6 +196,22 @@ test('troca de senha autenticada revoga todas as sessões', () => {
   assert.match(route, /sessaoUsuario\.updateMany/)
   assert.match(route, /revogadaEm: agora/)
   assert.match(route, /senhaAlteradaEm: agora/)
+})
+
+test('usuário gerencia somente as próprias sessões e não revoga a sessão atual pelo painel', () => {
+  const route = read('src/app/api/auth/sessions/route.ts')
+  const panel = read('src/app/dashboard/empresa/configuracoes/_componentes/SecuritySessions.tsx')
+
+  assert.match(route, /const auth = await requireAuth\(request\)/)
+  assert.match(route, /usuarioId: auth\.session\.userId/)
+  assert.match(route, /parsed\.data\.sessionId === auth\.session\.sessionId/)
+  assert.match(route, /SESSAO_REVOGADA/)
+  assert.match(route, /RATE_LIMITS\.SESSION_MUTATION/)
+  assert.doesNotMatch(route, /usuarioId: parsed\.data/)
+  assert.match(panel, /session\.atual/)
+  assert.doesNotMatch(panel, /window\.confirm/)
+  assert.match(panel, /<ActionConfirmDialog/)
+  assert.match(panel, /setSessionToRevoke\(session\)/)
 })
 
 test('gestor solicita redefinição ao superadmin sem confiar em email do cliente', () => {
@@ -181,6 +310,36 @@ test('chat restringe empresas ao gestor e deriva o tenant da sessão', () => {
   assert.match(proxy, /\/dashboard\/empresa\/chat/)
 })
 
+test('assistente faz triagem limitada e entrega o chamado ao atendimento humano', async () => {
+  const typescript = await import('typescript')
+  const source = read('src/lib/suporteBot.ts')
+  const javascript = typescript.transpileModule(source, {
+    compilerOptions: { module: typescript.ModuleKind.ESNext, target: typescript.ScriptTarget.ES2022 },
+  }).outputText
+  const bot = await import(`data:text/javascript;base64,${Buffer.from(javascript).toString('base64')}`)
+  const chat = read('src/app/api/chat/route.ts')
+
+  const contexto = { assunto: 'Problema de acesso', categoria: 'SUPORTE_TECNICO' }
+  const confirmacao = bot.montarRespostaTriagemBot({ ...contexto, mensagensUsuario: ['Descrição inicial', 'sim'], interacoesAutomaticas: 1 })
+  const orientacao = bot.montarRespostaTriagemBot({ ...contexto, mensagensUsuario: ['Descrição inicial', 'sim', 'Não consigo entrar com minha senha'], interacoesAutomaticas: 2 })
+  const resolvido = bot.montarRespostaTriagemBot({ ...contexto, mensagensUsuario: ['Descrição inicial', 'sim', 'Não consigo entrar com minha senha', 'sim, funcionou'], interacoesAutomaticas: 3 })
+  const entrega = bot.montarRespostaTriagemBot({ ...contexto, mensagensUsuario: ['Descrição inicial', 'sim', 'Não consigo entrar com minha senha', 'não resolveu'], interacoesAutomaticas: 3 })
+
+  assert.match(confirmacao.resposta, /Agora descreva exatamente o problema/)
+  assert.match(orientacao.resposta, /Esqueci minha senha/)
+  assert.equal(resolvido.acao, 'RESOLVER')
+  assert.equal(entrega.acao, 'ESCALAR')
+  assert.match(entrega.resumoAdmin, /RESUMO INTERNO DA TRIAGEM/)
+  assert.equal(bot.montarRespostaTriagemBot({ ...contexto, mensagensUsuario: ['Mais detalhes'], interacoesAutomaticas: 4 }), null)
+  assert.match(chat, /!escopo\.admin && ticket\.status === 'ABERTO'/)
+  assert.match(chat, /interacoesAutomaticas: ticket\.etapaTriagem/)
+  assert.match(chat, /etapaTriagem: ticket\.etapaTriagem[\s\S]*triagemConcluidaEm: null/)
+  assert.match(chat, /reivindicacaoTriagem\?\.count === 1/)
+  assert.match(chat, /tipo: 'SISTEMA'[\s\S]*automatica: true[\s\S]*lida_em: agora/)
+  assert.match(chat, /visibilidade: 'ADMIN'/)
+  assert.match(chat, /resultadoTriagem\?\.acao === 'ESCALAR'/)
+})
+
 test('franquia de suporte ignora apenas bugs confirmados pelo superadmin', () => {
   const plans = read('src/utils/planos.ts')
   const tickets = read('src/app/api/chat/tickets/route.ts')
@@ -202,7 +361,9 @@ test('franquia de suporte ignora apenas bugs confirmados pelo superadmin', () =>
   assert.match(support, /WHEN ordenados\."classificacao_cobranca" = 'BUG_SISTEMA_CONFIRMADO' THEN 0/)
   assert.match(support, /ELSE ordenados\.ordem > conversa\."franquia_no_momento"/)
   assert.doesNotMatch(support, /SET[\s\S]{0,80}"franquia_no_momento"\s*=/)
-  assert.match(adminUi, /window\.confirm/)
+  assert.doesNotMatch(adminUi, /window\.confirm/)
+  assert.match(adminUi, /classificacaoPendente/)
+  assert.match(adminUi, /<ActionConfirmDialog/)
   assert.match(migration, /CREATE TYPE "ClassificacaoCobrancaTicket"/)
   assert.match(migration, /FOREIGN KEY \("classificado_por_id"\)/)
 })
@@ -225,9 +386,11 @@ test('tickets geram notificacoes individuais e sincronizam leitura ao abrir', ()
   const notifications = read('src/lib/notificacoes.ts')
   const migration = read('prisma/migrations/20260903020000_tickets_suporte_e_rate_limit/migration.sql')
 
-  assert.match(tickets, /notificarAdmins\(/)
+  assert.doesNotMatch(tickets, /notificarAdmins\(/)
   assert.match(chat, /notificarUsuariosDaEmpresa\(escopo\.empresaId, aviso, \['GESTOR_EMPRESA'\], tx\)/)
   assert.match(chat, /notificarAdmins\(aviso, tx\)/)
+  assert.match(chat, /Triagem concluída/)
+  assert.match(chat, /visibilidade: escopo\.admin \? undefined : 'TODOS'/)
   assert.match(chat, /ticketSuporteId: ticketSelecionado\.id, lida: false/)
   assert.match(adminTicket, /\['GESTOR_EMPRESA'\], tx/)
   assert.match(notifications, /usuarioId: id[\s\S]*ticketSuporteId: input\.ticketSuporteId/)
@@ -292,17 +455,46 @@ test('retencao automatica exige segredo e aplica prazos limitados', () => {
   assert.match(migration, /current_setting\('rpm\.retention_cleanup', true\) = 'authorized'/)
 })
 
-test('atalho de auditoria pode ser ocultado visualmente sem alterar autorizacao', () => {
+test('logs permanecem acessíveis e suas seções podem ser recolhidas localmente', () => {
   const layout = read('src/app/dashboard/admin/_estrutura/AdminLayout.tsx')
   const settings = read('src/app/dashboard/admin/_modulos/configuracoes/SettingsModule.jsx')
   const preferences = read('src/lib/adminSidebarPreferences.ts')
+  const security = read('src/app/dashboard/admin/_modulos/seguranca/SecurityModule.tsx')
 
-  assert.match(layout, /item\.id !== 'security' \|\| atalhoSegurancaVisivel/)
-  assert.match(layout, /min-h-0 flex-1 overflow-y-auto/)
-  assert.match(settings, /Mostrar logs na sidebar/)
-  assert.match(settings, /somente visual e não altera suas permissões/)
-  assert.match(preferences, /usuario\.id \|\| 'local'/)
-  assert.match(preferences, /ADMIN_SIDEBAR_UPDATED_EVENT/)
+  assert.match(layout, /NAV_ADMIN\.map/)
+  assert.doesNotMatch(layout, /atalhoSegurancaVisivel/)
+  assert.match(layout, /min-h-0 flex-1 overflow-x-hidden overflow-y-auto/)
+  assert.doesNotMatch(settings, /Mostrar logs na sidebar/)
+  assert.match(preferences, /SECOES_LOG_ADMIN/)
+  assert.match(preferences, /usuario\.id \|\| usuario\.email \|\| 'local'/)
+  assert.match(security, /role="switch"/)
+  assert.match(security, /salvarSecoesLogsAdmin/)
+})
+
+test('superadmin possui ambiente visual, central de notificações e exclusão integral de ticket', () => {
+  const layout = read('src/app/dashboard/admin/_estrutura/AdminLayout.tsx')
+  const page = read('src/app/dashboard/admin/page.tsx')
+  const settings = read('src/app/dashboard/admin/_modulos/configuracoes/SettingsModule.jsx')
+  const notifications = read('src/app/dashboard/admin/_modulos/notificacoes/NotificationsModule.tsx')
+  const ticketRoute = read('src/app/api/admin/chat/[id]/route.ts')
+  const ticketUi = read('src/app/dashboard/admin/_modulos/chat/ChatModule.tsx')
+
+  assert.match(layout, /<DashboardEnvironmentBackground estilo=\{estiloFundo\}/)
+  assert.match(layout, /onOpenCentral=\{\(\) => changeTab\('notifications'\)\}/)
+  assert.match(layout, /CENTRAL DE NOTIFICAÇÕES/)
+  assert.match(layout, /changeTab\(NOTIFICATIONS_ITEM\.id\)/)
+  assert.match(page, /case 'notifications'/)
+  assert.match(settings, /<AppearancePreferences/)
+  assert.match(settings, /salvarEstiloFundoAdmin/)
+  assert.match(settings, /Redefinição de senha/)
+  assert.match(settings, /max-w-\[1200px\]/)
+  assert.match(notifications, /Central de notificações/i)
+  assert.match(ticketRoute, /export async function DELETE/)
+  assert.match(ticketRoute, /tx\.notificacao\.deleteMany\(\{ where: \{ ticketSuporteId: ticket\.id \} \}\)/)
+  assert.match(ticketRoute, /tx\.conversaSuporte\.delete/)
+  assert.match(ticketRoute, /recalcularCoberturaCompetencia\(tx, ticket\.empresaId, ticket\.competencia\)/)
+  assert.match(ticketUi, /role="alertdialog"/)
+  assert.match(ticketUi, /Excluir permanentemente/)
 })
 
 test('logout revoga a sessao no servidor e sempre remove o cookie do navegador', () => {
@@ -366,4 +558,51 @@ test('relatorios e dashboard respeitam os modulos efetivos do funcionario', () =
   assert.match(dashboard, /frotaHabilitada = auth\.empresa\.modulos\.includes\('FROTA'\)/)
   assert.match(dashboard, /gestaoHabilitada = auth\.empresa\.modulos\.includes\('GESTAO'\)/)
   assert.match(dashboard, /tarefasHabilitadas = auth\.empresa\.modulos\.includes\('TAREFAS'\)/)
+})
+
+test('edicao de mensagem do suporte preserva original e exige autor e empresa corretos', () => {
+  const chat = read('src/app/api/chat/route.ts')
+  const schema = read('prisma/schema.prisma')
+  const migration = read('prisma/migrations/20260909180000_edicao_mensagens_suporte/migration.sql')
+
+  assert.match(chat, /export async function PATCH\(request: NextRequest\)/)
+  assert.match(chat, /conversa: \{ empresaId: escopo\.empresaId \}/)
+  assert.match(chat, /atual\.autorId !== escopo\.auth\.session!\.userId/)
+  assert.match(chat, /atual\.tipo !== 'USUARIO' \|\| atual\.automatica/)
+  assert.match(chat, /conteudoOriginal: atual\.conteudoOriginal \?\? atual\.conteudo/)
+  assert.match(chat, /RATE_LIMITS\.CHAT_EDIT/)
+  assert.match(chat, /executarComAuditoria/)
+  assert.match(schema, /conteudoOriginal String\?\s+@map\("conteudo_original"\)/)
+  assert.match(schema, /editado_em\s+DateTime\?/)
+  assert.match(migration, /ADD COLUMN "conteudo_original" TEXT/)
+  assert.match(migration, /ADD COLUMN "editado_em" TIMESTAMP\(3\)/)
+})
+
+test('personalizacao visual de operadores respeita gestor, empresa e liberdade individual', () => {
+  const managerRoute = read('src/app/api/empresa/usuarios/[id]/personalizacao/route.ts')
+  const selfRoute = read('src/app/api/empresa/preferencias-visuais/route.ts')
+  const creation = read('src/lib/usuariosEmpresa.ts')
+  const schema = read('prisma/schema.prisma')
+  const migration = read('prisma/migrations/20260910130000_personalizacao_visual_usuarios/migration.sql')
+  const backgroundMigration = read('prisma/migrations/20260911170000_fundo_visual_usuario/migration.sql')
+  const personalizationPage = read('src/app/dashboard/empresa/usuarios/[id]/personalizacao/page.tsx')
+  const visualPreferences = read('src/lib/preferenciasVisuaisUsuario.ts')
+
+  assert.match(managerRoute, /requireEmpresaAuth\(request, \{ acao: 'GESTAO' \}\)/)
+  assert.match(managerRoute, /id, empresaId: auth\.session\.empresaId, excluidoEm: null/)
+  assert.match(managerRoute, /z\.string\(\)\.trim\(\)\.toLowerCase\(\)\.refine\(corTemaValida\)/)
+  assert.match(selfRoute, /!gestor && !auth\.usuario\.podePersonalizarTema/)
+  assert.match(selfRoute, /O tema desta conta é administrado pelo gestor/)
+  assert.match(creation, /id: input\.criadoPorId, empresaId: input\.empresaId/)
+  assert.match(creation, /corTema: normalizarCorTema\(criador\?\.corTema/)
+  assert.match(creation, /podePersonalizarTema: false/)
+  assert.match(schema, /rotuloEquipe\s+String\?\s+@map\("rotulo_equipe"\)/)
+  assert.match(schema, /estiloFundo\s+String\?\s+@map\("estilo_fundo"\)/)
+  assert.match(migration, /"pode_personalizar_tema" BOOLEAN NOT NULL DEFAULT false/)
+  assert.match(backgroundMigration, /CHECK \([\s\S]*'TOPOGRAFICO'[\s\S]*'VIDRO_FLUIDO'[\s\S]*'ORGANICO'/)
+  assert.match(managerRoute, /estiloFundo: z\.enum\(ESTILOS_FUNDO_EMPRESA\)/)
+  assert.match(managerRoute, /data: \{[\s\S]*estiloFundo: parsed\.data\.estiloFundo/)
+  assert.match(selfRoute, /estiloFundo: z\.enum\(ESTILOS_FUNDO_EMPRESA\)/)
+  assert.match(visualPreferences, /estiloFundo \?\?= gestor\?\.estiloFundo \?\? 'DESLIGADO'/)
+  assert.match(personalizationPage, /Plano de fundo do operador[\s\S]*OPCOES_FUNDO_EMPRESA\.map/)
 })

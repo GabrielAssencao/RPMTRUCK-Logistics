@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import type { LucideIcon } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { DominoLoader } from '@/components/motion/OperationalFeedback'
 import { useContainers, StatusContainer, TipoContainer, type RegistroContainer } from '@/contexts/ContainersContext'
 import { obterAnoMesSemana, MESES } from '@/lib/dataUtils'
 import {
@@ -87,6 +88,7 @@ export default function ContainersPage() {
   const {
     containers,
     duplas,
+    loading,
     erro: erroContainers,
     adicionarContainer,
     atualizarContainer,
@@ -131,6 +133,7 @@ export default function ContainersPage() {
   const [form, setForm] = useState(FORM_INICIAL)
   const [novoItemNome, setNovoItemNome] = useState('')
   const [novoItemPorcentagem, setNovoItemPorcentagem] = useState('')
+  const [feedbackFormulario, setFeedbackFormulario] = useState('')
 
   // Exclusão inline
   const [excluindoId, setExcluindoId] = useState<string | null>(null)
@@ -189,6 +192,8 @@ export default function ContainersPage() {
       window.clearTimeout(timeout)
     }
   }, [buscaHistorico, paginaHistorico, revisaoHistorico])
+
+  if (loading) return <DominoLoader label="Carregando containers e operações" />
 
   // ─── FILTRAGEM DE DADOS ─────────────────────────────────────────────────
   const containersFiltrados = containers.filter(c => {
@@ -267,13 +272,14 @@ export default function ContainersPage() {
 
   // ─── FORMULÁRIO DE CARGA ────────────────────────────────────────────────
   const handleAdicionarItemConteudo = () => {
+    setFeedbackFormulario('')
     if (!novoItemNome.trim() || !novoItemPorcentagem) return
     const porcentagemNum = Number(novoItemPorcentagem)
     if (porcentagemNum <= 0 || porcentagemNum > 100) return
 
     const totalAtual = form.itensConteudo.reduce((acc, i) => acc + i.porcentagem, 0)
     if (totalAtual + porcentagemNum > 100) {
-      alert(`O limite total de carga é 100%. Você já preencheu ${totalAtual}%.`)
+      setFeedbackFormulario(`O limite total da carga é 100%. Já foram preenchidos ${totalAtual}%; reduza o novo item para continuar.`)
       return
     }
 
@@ -297,12 +303,14 @@ export default function ContainersPage() {
 
   // ─── CRIAÇÃO E EDIÇÃO ──────────────────────────────────────────────────
   const handleAbrirNovo = () => {
+    setFeedbackFormulario('')
     setContainerEditandoId(null)
     setForm({ ...FORM_INICIAL, duplaId: duplas[0]?.id ?? '' })
     setModalOpen(true)
   }
 
   const handleAbrirEditar = (registro: RegistroContainer) => {
+    setFeedbackFormulario('')
     setContainerEditandoId(registro.id)
     setForm({
       data: registro.data,
@@ -1153,15 +1161,27 @@ export default function ContainersPage() {
       {/* ─── MODAL LANÇAMENTO COM FORMULÁRIO DE CARGA POR PORCENTAGEM ─── */}
       <AnimatePresence>
         {modalOpen && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <motion.div
+            className="adaptive-form-overlay fixed inset-0 z-50 flex bg-black/70 backdrop-blur-xs"
+            initial={reduzirMovimento ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduzirMovimento ? 0 : 0.18 }}
+          >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-lg border p-4 font-mono space-y-4 max-h-[92dvh] overflow-y-auto sm:p-6"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="titulo-modal-container"
+              initial={reduzirMovimento ? false : { y: 12, scale: 0.98, opacity: 0 }}
+              animate={{ y: 0, scale: 1, opacity: 1 }}
+              exit={reduzirMovimento ? { opacity: 0 } : { y: 8, scale: 0.985, opacity: 0 }}
+              transition={{ duration: reduzirMovimento ? 0 : 0.28, ease: [0.2, 0, 0, 1] }}
+              className="adaptive-form-panel w-full max-w-xl space-y-3 overflow-y-auto border p-4 font-mono shadow-2xl sm:p-5"
               style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}
             >
-              <div className="flex justify-between items-center border-b pb-3" style={{ borderColor: 'var(--border)' }}>
+              <div className="sticky -top-4 z-10 flex items-center justify-between border-b pb-3 pt-0 sm:-top-5" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
                 <div>
-                  <h3 className="text-sm font-bold uppercase font-rajdhani">
+                  <h3 id="titulo-modal-container" className="text-sm font-bold uppercase font-rajdhani">
                     {containerEditandoId ? 'Editar Container' : 'Lançar Novo Container'}
                   </h3>
                   <p className="text-[10px] text-foreground-muted">Preencha os dados e os itens da carga (opcional).</p>
@@ -1171,8 +1191,10 @@ export default function ContainersPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSalvar} className="space-y-3 text-xs">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {feedbackFormulario && <ActionFeedback message={feedbackFormulario} tone="error" className="text-xs" />}
+
+              <form onSubmit={handleSalvar} className="space-y-2.5 text-xs">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                   <div>
                     <label className="block text-[10px] uppercase font-bold mb-1">Data *</label>
                     <input
@@ -1200,7 +1222,7 @@ export default function ContainersPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                   <div>
                     <label className="block text-[10px] uppercase font-bold mb-1">Tipo *</label>
                     <select
@@ -1232,7 +1254,7 @@ export default function ContainersPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                   <div>
                     <label className="block text-[10px] uppercase font-bold mb-1">Terminal Início *</label>
                     <input
@@ -1275,7 +1297,7 @@ export default function ContainersPage() {
                   </span>
                 </label>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <div className="grid grid-cols-1 items-end gap-2.5 sm:grid-cols-3">
                   <div>
                     <label className="block text-[10px] uppercase font-bold mb-1">Frete (R$) *</label>
                     <input
@@ -1317,21 +1339,22 @@ export default function ContainersPage() {
                     : 'Nenhuma comissão automática será lançada. Salários e comissões manuais continuam disponíveis no módulo de Custos.'}
                 </p>
 
+                <div className="space-y-2.5">
                 {/* ── SEÇÃO OPCIONAL DE PREENCHIMENTO DE CARGA (% DO VEÍCULO) ── */}
-                <div className="p-3 border space-y-3 bg-background-secondary" style={{ borderColor: 'var(--border)' }}>
-                  <label className="block text-[10px] uppercase font-bold flex items-center justify-between">
+                <div className="space-y-2.5 border bg-background-secondary p-3" style={{ borderColor: 'var(--border)' }}>
+                  <label className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase">
                     <span>Conteúdo da Carga (Opcional - % Ocupada)</span>
-                    <span className="text-foreground-muted">{form.itensConteudo.reduce((a, b) => a + b.porcentagem, 0)}% Total</span>
+                    <span className="shrink-0 text-foreground-muted">{form.itensConteudo.reduce((a, b) => a + b.porcentagem, 0)}% Total</span>
                   </label>
 
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_4rem_2.5rem] gap-2">
                     <input
                       type="text"
                       placeholder="Ex: Pneus, Peças Automotivas"
                       maxLength={100}
                       value={novoItemNome}
                       onChange={e => setNovoItemNome(e.target.value)}
-                      className="flex-1 p-2 border text-xs bg-transparent outline-none"
+                      className="min-w-0 border bg-transparent p-2 text-xs outline-none"
                       style={{ borderColor: 'var(--border)' }}
                     />
                     <input
@@ -1340,13 +1363,13 @@ export default function ContainersPage() {
                       min="1" max="100"
                       value={novoItemPorcentagem}
                       onChange={e => setNovoItemPorcentagem(e.target.value)}
-                      className="w-16 p-2 border text-xs bg-transparent outline-none"
+                      className="w-full border bg-transparent p-2 text-xs outline-none"
                       style={{ borderColor: 'var(--border)' }}
                     />
                     <button
                       type="button"
                       onClick={handleAdicionarItemConteudo}
-                      className="px-3 border text-xs font-bold uppercase cursor-pointer"
+                      className="grid min-h-9 place-items-center border text-xs font-bold uppercase cursor-pointer"
                       style={{ backgroundColor: primary, color: '#000', borderColor: primary }}
                     >
                       +
@@ -1378,6 +1401,7 @@ export default function ContainersPage() {
                   )}
                 </div>
 
+                <div className="grid gap-2.5 sm:grid-cols-2">
                 <div>
                   <label className="block text-[10px] uppercase font-bold mb-1">Status *</label>
                   <select
@@ -1404,16 +1428,18 @@ export default function ContainersPage() {
                     style={{ borderColor: 'var(--border)' }}
                   />
                 </div>
+                </div>
+                </div>
 
-                <div className="pt-3 flex justify-end gap-2 border-t" style={{ borderColor: 'var(--border)' }}>
-                  <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 border uppercase cursor-pointer">Cancelar</button>
-                  <button type="submit" className="px-6 py-2 uppercase font-bold text-black cursor-pointer" style={{ backgroundColor: primary }}>
+                <div className="sticky -bottom-4 z-10 grid grid-cols-2 gap-2 border-t pt-3 sm:-bottom-5 sm:flex sm:justify-end" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+                  <button type="button" onClick={() => setModalOpen(false)} className="min-h-10 border px-3 py-2 uppercase cursor-pointer">Cancelar</button>
+                  <button type="submit" className="min-h-10 px-4 py-2 uppercase font-bold text-black cursor-pointer" style={{ backgroundColor: primary }}>
                     {containerEditandoId ? 'Salvar Alterações' : 'Confirmar Lançamento'}
                   </button>
                 </div>
               </form>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 

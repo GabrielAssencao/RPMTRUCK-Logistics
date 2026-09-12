@@ -300,7 +300,7 @@ export default function PainelEmpresa() {
           { label: 'COBERTURA', value: `${metricas.totalVeiculos ? Math.round(metricas.totalAtivos / metricas.totalVeiculos * 100) : 0}%`, trend: `${metricas.totalAtivos} veículos ativos`, color: primary },
           { label: 'DISPONIBILIDADE', value: `${metricas.totalVeiculos ? Math.round(metricas.totalOperacionais / metricas.totalVeiculos * 100) : 0}%`, trend: `${metricas.totalOperacionais} operacionais`, color: '#22c55e' },
           { label: 'RISCO', value: alertas.length ? 'Atenção' : 'Baixo', trend: `${alertas.length} alertas pendentes`, color: '#f59e0b' },
-          { label: 'TAREFAS', value: String(metricas.tarefasPendentes), trend: 'pendentes ou em andamento', color: '#38bdf8' },
+          { label: 'CRONOGRAMA', value: String(metricas.tarefasPendentes), trend: 'tarefas pendentes ou em andamento', color: '#38bdf8' },
         ].map((card, index) => (
           <motion.div
             key={card.label}
@@ -408,7 +408,7 @@ export default function PainelEmpresa() {
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              className="w-full max-w-xl border"
+              className="max-h-[88dvh] w-full max-w-xl overflow-y-auto border"
               style={{ backgroundColor: 'var(--background)', borderColor: primary }}
             >
               <div className="flex items-start justify-between gap-4 border-b p-5" style={{ borderColor: 'var(--border)' }}>
@@ -434,7 +434,7 @@ export default function PainelEmpresa() {
       <AnimatePresence>
         {podeDelegarTarefas && alertaParaDelegar && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
-            <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} className="w-full max-w-lg space-y-5 border p-6" style={{ backgroundColor: 'var(--background)', borderColor: primary }}>
+            <motion.div role="dialog" aria-modal="true" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} className="max-h-[88dvh] w-full max-w-lg space-y-4 overflow-y-auto border p-4 sm:p-5" style={{ backgroundColor: 'var(--background)', borderColor: primary }}>
               <div className="flex items-start justify-between border-b pb-4" style={{ borderColor: 'var(--border)' }}>
                 <div><p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: primary }}>Delegar alerta</p><h2 className="mt-1 font-bold">{alertaParaDelegar.foco}</h2></div>
                 <button onClick={() => setAlertaParaDelegar(null)} aria-label="Fechar"><X size={18} /></button>
@@ -453,7 +453,9 @@ export default function PainelEmpresa() {
           <div className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-4">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-md border p-6 space-y-4 font-mono relative overflow-hidden"
+              role="dialog"
+              aria-modal="true"
+              className="relative max-h-[88dvh] w-full max-w-md space-y-4 overflow-y-auto border p-4 font-mono sm:p-5"
               style={{ backgroundColor: 'var(--background)', borderColor: primary }}
             >
               <div className="flex justify-between items-start border-b pb-3" style={{ borderColor: 'var(--border)' }}>

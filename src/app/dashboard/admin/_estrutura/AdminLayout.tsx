@@ -3,10 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/contexts/ThemeContext'
-import { obterLogoPorTema } from '@/data/temasELogos'
 import { 
   LayoutDashboard, 
   Building2, 
@@ -19,12 +17,16 @@ import {
   CreditCard,
   MessageSquare,
   Megaphone,
+  Bell,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
+import SidebarBrandMark, { SidebarBrandIdentity } from '@/components/dashboard/SidebarBrandMark'
+import DashboardEnvironmentBackground from '@/components/dashboard/DashboardEnvironmentBackground'
 import { useSessionActivity } from '@/hooks/useSessionActivity'
 import { DashboardMotion } from '@/components/motion/DashboardMotion'
-import { ADMIN_SIDEBAR_UPDATED_EVENT, lerAtalhoSegurancaVisivel } from '@/lib/adminSidebarPreferences'
+import { ADMIN_BACKGROUND_PREFERENCES_EVENT, lerEstiloFundoAdmin } from '@/lib/adminSidebarPreferences'
+import { estiloFundoEmpresaValido, type EstiloFundoEmpresa } from '@/lib/empresaPreferences'
 
 // ─── Marcadores Operacionais do Super Admin ─────────────────────────────────
 const NAV_ADMIN = [
@@ -38,10 +40,11 @@ const NAV_ADMIN = [
 ] as const
 
 const CONFIG_ITEM = { id: 'settings', icon: Settings, label: 'CONFIGURAÇÕES' } as const
+const NOTIFICATIONS_ITEM = { id: 'notifications', icon: Bell, label: 'CENTRAL DE NOTIFICAÇÕES' } as const
 
 const LARGURA_RECOLHIDA = '72px'
 const LARGURA_EXPANDIDA = '16rem'
-export type AdminTab = 'dashboard' | 'companies' | 'requests' | 'subscriptions' | 'resets' | 'security' | 'chat' | 'alerts' | 'settings'
+export type AdminTab = 'dashboard' | 'companies' | 'requests' | 'subscriptions' | 'resets' | 'security' | 'chat' | 'alerts' | 'notifications' | 'settings'
 
 // Dicionário para traduzir o activeTab no Header
 const TAB_LABELS: Record<AdminTab, string> = {
@@ -53,6 +56,7 @@ const TAB_LABELS: Record<AdminTab, string> = {
   'subscriptions': 'PLANOS / ASSINATURAS',
   'resets': 'SOLICITAÇÕES',
   'security': 'SEGURANÇA',
+  'notifications': 'NOTIFICAÇÕES',
   'settings': 'CONFIGURAÇÕES'
 }
 
@@ -65,23 +69,23 @@ interface AdminLayoutProps {
 export default function AdminLayout({ children, activeTab, setActiveTab }: AdminLayoutProps) {
   const router = useRouter()
   useSessionActivity()
-  const { primary, isLight, themeReady } = useTheme()
+  const { primary, isLight } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarExpandida, setSidebarExpandida] = useState(false)
   const [pendenciasPorModulo, setPendenciasPorModulo] = useState<Record<string, number>>({})
   const [ticketsNaoLidos, setTicketsNaoLidos] = useState(0)
-  const [atalhoSegurancaVisivel, setAtalhoSegurancaVisivel] = useState(true)
+  const [estiloFundo, setEstiloFundo] = useState<EstiloFundoEmpresa>('DESLIGADO')
 
   useEffect(() => {
     const sincronizar = (event?: Event) => {
-      const visivel = (event as CustomEvent<{ visivel?: boolean }> | undefined)?.detail?.visivel
-      setAtalhoSegurancaVisivel(typeof visivel === 'boolean' ? visivel : lerAtalhoSegurancaVisivel())
+      const detalhe = (event as CustomEvent<EstiloFundoEmpresa> | undefined)?.detail
+      setEstiloFundo(estiloFundoEmpresaValido(detalhe) ? detalhe : lerEstiloFundoAdmin())
     }
     const initial = window.setTimeout(sincronizar, 0)
-    window.addEventListener(ADMIN_SIDEBAR_UPDATED_EVENT, sincronizar)
+    window.addEventListener(ADMIN_BACKGROUND_PREFERENCES_EVENT, sincronizar)
     return () => {
       window.clearTimeout(initial)
-      window.removeEventListener(ADMIN_SIDEBAR_UPDATED_EVENT, sincronizar)
+      window.removeEventListener(ADMIN_BACKGROUND_PREFERENCES_EVENT, sincronizar)
     }
   }, [])
 
@@ -122,44 +126,23 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
   }
 
   const renderSidebarContent = (expandida: boolean) => {
-    const itensVisiveis = NAV_ADMIN.filter((item) => item.id !== 'security' || atalhoSegurancaVisivel)
+    const totalNotificacoes = Object.values(pendenciasPorModulo).reduce((total, quantidade) => total + quantidade, 0)
     return (
       <div className="flex flex-col h-full justify-between p-4 font-mono">
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1 custom-scrollbar">
-          <div className="mb-6 py-3 border-b border-white/10 flex items-center justify-center min-h-[64px]">
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1 custom-scrollbar">
+          <div className="-mx-4 -mt-4 mb-6 flex h-16 items-center justify-start border-b border-white/10 px-4">
             {expandida ? (
-              <div className="w-full px-2 flex flex-col justify-center">
-                <div className="flex items-center gap-2">
-                  <Image
-                    src={`/logos/${obterLogoPorTema(primary)}`}
-                    alt="RPMTRUCK"
-                    width={32}
-                    height={28}
-                    className={`h-7 w-auto object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
-                  />
-                  <span className="font-black text-xl tracking-tight whitespace-nowrap" style={{ color: 'var(--foreground)' }}>
-                    RPM<span style={{ color: primary }}>TRUCK</span>
-                  </span>
-                </div>
-                <div className="text-[9px] uppercase tracking-[0.2em] mt-1 truncate pl-0.5" style={{ color: primary }}>
-                  SUPER ADMIN
-                </div>
-              </div>
+              <SidebarBrandIdentity
+                primary={primary}
+                subtitle="ADMIN MASTER"
+              />
             ) : (
-              <div className="w-10 h-10 flex items-center justify-center shrink-0 p-1 rounded bg-white/5 hover:bg-white/10 transition-all">
-                <Image
-                  src={`/logos/${obterLogoPorTema(primary)}`}
-                  alt="RPMTRUCK"
-                  width={40}
-                  height={40}
-                  className={`h-full w-full object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
-                />
-              </div>
+              <SidebarBrandMark primary={primary} />
             )}
           </div>
 
           <nav className="space-y-1">
-            {itensVisiveis.map((item) => {
+            {NAV_ADMIN.map((item) => {
               const active = activeTab === item.id
               const Icon = item.icon
               const moduloNotificacao = item.id === 'requests' ? 'ACESSO' : item.id === 'subscriptions' ? 'ASSINATURA' : item.id === 'resets' ? 'SENHAS' : item.id === 'companies' ? 'EMPRESAS' : 'SISTEMA'
@@ -207,6 +190,23 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
 
         <div className="shrink-0 space-y-1 pt-4 border-t border-white/10">
           <button
+            onClick={() => changeTab(NOTIFICATIONS_ITEM.id)}
+            title={!expandida ? NOTIFICATIONS_ITEM.label : undefined}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${activeTab === NOTIFICATIONS_ITEM.id ? 'text-black font-black' : 'text-foreground-muted hover:text-foreground hover:bg-white/5'}`}
+            style={{
+              backgroundColor: activeTab === NOTIFICATIONS_ITEM.id ? primary : 'transparent',
+              clipPath: activeTab === NOTIFICATIONS_ITEM.id ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
+            }}
+          >
+            <span className="relative shrink-0">
+              <Bell size={18} />
+              {totalNotificacoes > 0 && !expandida && <span className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full border border-black" style={{ backgroundColor: primary }} />}
+            </span>
+            {expandida && <span className="flex-1 truncate text-left">{NOTIFICATIONS_ITEM.label}</span>}
+            {expandida && totalNotificacoes > 0 && <span className="min-w-5 rounded-full px-1.5 py-0.5 text-center text-[9px] font-black text-black" style={{ backgroundColor: primary }}>{totalNotificacoes > 99 ? '99+' : totalNotificacoes}</span>}
+          </button>
+
+          <button
             onClick={() => changeTab(CONFIG_ITEM.id)}
             title={!expandida ? CONFIG_ITEM.label : undefined}
             className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${
@@ -239,14 +239,16 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
   return (
     <div className="flex h-dvh overflow-hidden transition-colors duration-300" style={{ backgroundColor: 'var(--background)' }}>
       
-      <aside 
+      <aside
         onMouseEnter={() => setSidebarExpandida(true)}
         onMouseLeave={() => setSidebarExpandida(false)}
-        className="hidden md:block border-r shrink-0 z-20 overflow-hidden transition-[width] duration-300 ease-in-out relative"
-        style={{ 
-          backgroundColor: isLight ? '#f9f9f9' : '#090909', 
+        className="relative z-20 hidden shrink-0 overflow-hidden border-r transition-[width] duration-300 ease-in-out motion-reduce:transition-none md:block"
+        aria-label="Navegação principal do Superadmin"
+        style={{
+          backgroundColor: isLight ? '#f9f9f9' : '#090909',
           borderColor: 'var(--border)',
-          width: sidebarExpandida ? LARGURA_EXPANDIDA : LARGURA_RECOLHIDA
+          width: sidebarExpandida ? LARGURA_EXPANDIDA : LARGURA_RECOLHIDA,
+          willChange: 'width',
         }}
       >
         <div style={{ width: LARGURA_EXPANDIDA }} className="h-full">
@@ -254,7 +256,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         
         <header 
           className="h-16 shrink-0 border-b flex items-center justify-between px-3 sm:px-6 z-40"
@@ -272,7 +274,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
 
           <div className="flex items-center gap-4">
             <button type="button" onClick={() => changeTab('chat')} aria-label="Abrir suporte e tickets" title="Suporte e tickets" className="relative flex min-h-11 min-w-11 items-center justify-center border transition-colors hover:text-foreground" style={{ borderColor: activeTab === 'chat' ? primary : 'var(--border)', color: activeTab === 'chat' ? primary : 'var(--foreground-muted)' }}><MessageSquare size={18} />{ticketsNaoLidos > 0 && <span className="absolute -right-1.5 -top-1.5 min-w-5 rounded-full px-1 py-0.5 text-center text-[9px] font-black text-black" style={{ backgroundColor: primary }}>{ticketsNaoLidos > 99 ? '99+' : ticketsNaoLidos}</span>}</button>
-            <NotificacoesPanel onPendenciasChange={setPendenciasPorModulo} centralHref={null} />
+            <NotificacoesPanel onPendenciasChange={setPendenciasPorModulo} centralHref={null} onOpenCentral={() => changeTab('notifications')} />
             <ThemeToggle />
             <div className="w-px h-6 bg-border hidden sm:block" style={{ backgroundColor: 'var(--border)' }} />
             <div className="hidden sm:flex flex-col text-right font-mono">
@@ -282,8 +284,15 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5 md:p-8 custom-scrollbar">
-          <DashboardMotion motionKey={activeTab}>{children}</DashboardMotion>
+        <main
+          className={`relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain custom-scrollbar ${estiloFundo !== 'DESLIGADO' ? 'dashboard-environment-active' : ''}`}
+          data-dashboard-environment={estiloFundo.toLowerCase()}
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          <DashboardEnvironmentBackground estilo={estiloFundo} />
+          <div className="relative z-[1] p-3 sm:p-5 md:p-8">
+            <DashboardMotion motionKey={activeTab}>{children}</DashboardMotion>
+          </div>
         </main>
       </div>
 

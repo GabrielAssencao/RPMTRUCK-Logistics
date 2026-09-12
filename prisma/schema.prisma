@@ -174,6 +174,11 @@ enum TipoMensagemSuporte {
   SISTEMA
 }
 
+enum VisibilidadeMensagemSuporte {
+  TODOS
+  ADMIN
+}
+
 // =============================================================================
 // MODELOS / TABELAS DO BANCO DE DADOS (MULTI-TENANT INFRAS)
 // =============================================================================
@@ -256,6 +261,7 @@ model Empresa {
   movimentacoes_container MovimentacaoContainerPermanente[]
   containers              Container[]
   tarefas                 Tarefa[]
+  lembretes_pessoais      LembretePessoal[]
   leituras_quilometragem  LeituraQuilometragem[]
   sessoes                 SessaoUsuario[]
   eventos_seguranca       EventoSeguranca[]
@@ -281,6 +287,11 @@ model Usuario {
   exigeTrocaSenha         Boolean   @default(false) @map("exige_troca_senha")
   senhaTemporariaExpiraEm DateTime? @map("senha_temporaria_expira_em")
   senhaAlteradaEm         DateTime  @default(now()) @map("senha_alterada_em")
+  corTema                 String?   @map("cor_tema") @db.VarChar(16)
+  temaClaro               Boolean?  @map("tema_claro")
+  rotuloEquipe            String?   @map("rotulo_equipe") @db.VarChar(48)
+  podePersonalizarTema    Boolean   @default(false) @map("pode_personalizar_tema")
+  estiloFundo             String?   @map("estilo_fundo") @db.VarChar(24)
 
   // Se for nulo, indica que o usuário é da equipe interna RPMTruck (Geral Admin)
   empresaId String?
@@ -293,6 +304,7 @@ model Usuario {
   notificacoes                      Notificacao[]           @relation("NotificacoesUsuario")
   tarefas_criadas                   Tarefa[]                @relation("TarefasCriadas")
   tarefas_atribuidas                Tarefa[]                @relation("TarefasResponsavel")
+  lembretes_pessoais                LembretePessoal[]
   sessoes                           SessaoUsuario[]
   eventos_seguranca                 EventoSeguranca[]
   solicitacoes_assinatura_criadas   SolicitacaoAssinatura[] @relation("SolicitacaoAssinaturaCriadaPor")
@@ -512,6 +524,9 @@ model Notificacao {
   tarefaId String?
   tarefa   Tarefa? @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
 
+  lembretePessoalId String?          @map("lembrete_pessoal_id")
+  lembretePessoal   LembretePessoal? @relation(fields: [lembretePessoalId], references: [id], onDelete: Cascade)
+
   ticketSuporteId String?
   ticketSuporte   ConversaSuporte? @relation(fields: [ticketSuporteId], references: [id], onDelete: SetNull)
 
@@ -520,6 +535,7 @@ model Notificacao {
   @@index([usuarioId, lida, criado_em])
   @@index([empresaId, lida, criado_em])
   @@index([ticketSuporteId, usuarioId, lida])
+  @@index([lembretePessoalId])
   @@map("notificacoes")
 }
 
@@ -538,6 +554,8 @@ model ConversaSuporte {
   classificadoEm        DateTime?                   @map("classificado_em")
   primeiraRespostaEm    DateTime?                   @map("primeira_resposta_em")
   encerradoEm           DateTime?                   @map("encerrado_em")
+  etapaTriagem          Int                         @default(1) @map("etapa_triagem")
+  triagemConcluidaEm    DateTime?                   @map("triagem_concluida_em")
 
   classificadoPorId String?  @map("classificado_por_id")
   classificadoPor   Usuario? @relation("TicketsSuporteClassificadosPor", fields: [classificadoPorId], references: [id], onDelete: SetNull)
@@ -560,11 +578,14 @@ model ConversaSuporte {
 }
 
 model MensagemSuporte {
-  id         String              @id @default(uuid())
-  conteudo   String
-  tipo       TipoMensagemSuporte @default(USUARIO)
-  automatica Boolean             @default(false)
-  lida_em    DateTime?
+  id               String                      @id @default(uuid())
+  conteudo         String
+  conteudoOriginal String?                     @map("conteudo_original")
+  tipo             TipoMensagemSuporte         @default(USUARIO)
+  automatica       Boolean                     @default(false)
+  visibilidade     VisibilidadeMensagemSuporte @default(TODOS)
+  lida_em          DateTime?
+  editado_em       DateTime?
 
   conversaId String
   conversa   ConversaSuporte @relation(fields: [conversaId], references: [id], onDelete: Cascade)
@@ -575,6 +596,7 @@ model MensagemSuporte {
   criado_em DateTime @default(now())
 
   @@index([conversaId, criado_em])
+  @@index([conversaId, visibilidade, criado_em])
   @@index([conversaId, lida_em])
   @@map("mensagens_suporte")
 }
@@ -617,14 +639,20 @@ model AlertaLeitura {
 }
 
 model Tarefa {
-  id         String    @id @default(uuid())
-  titulo     String
-  descricao  String?
-  prazo      DateTime?
-  prioridade String    @default("MEDIA")
-  status     String    @default("PENDENTE")
-  modulo     String?
-  origem_id  String?
+  id                String    @id @default(uuid())
+  titulo            String
+  descricao         String?
+  prazo             DateTime?
+  inicio            DateTime?
+  duracaoMinutos    Int?      @map("duracao_minutos")
+  ordem             Int       @default(0)
+  exibirCalendario  Boolean   @default(true) @map("exibir_calendario")
+  lembreteEm        DateTime? @map("lembrete_em")
+  lembreteEnviadoEm DateTime? @map("lembrete_enviado_em")
+  prioridade        String    @default("MEDIA")
+  status            String    @default("PENDENTE")
+  modulo            String?
+  origem_id         String?
 
   empresaId String
   empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
@@ -643,7 +671,37 @@ model Tarefa {
 
   @@index([empresaId, status, prazo])
   @@index([responsavelId, status, prazo])
+  @@index([empresaId, status, ordem])
+  @@index([responsavelId, lembreteEm, lembreteEnviadoEm])
   @@map("tarefas")
+}
+
+model LembretePessoal {
+  id              String    @id @default(uuid())
+  titulo          String
+  descricao       String?
+  dataHora        DateTime  @map("data_hora")
+  urgencia        String    @default("MEDIA")
+  modoNotificacao String    @default("AUTOMATICA") @map("modo_notificacao")
+  notificarEm     DateTime  @map("notificar_em")
+  notificacaoEm   DateTime? @map("notificacao_enviada_em")
+  concluido       Boolean   @default(false)
+  ordem           Int       @default(0)
+
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  notificacoes Notificacao[]
+
+  criado_em     DateTime @default(now())
+  atualizado_em DateTime @updatedAt
+
+  @@index([empresaId, usuarioId, concluido, ordem])
+  @@index([usuarioId, notificarEm, notificacaoEm])
+  @@map("lembretes_pessoais")
 }
 
 model Container {

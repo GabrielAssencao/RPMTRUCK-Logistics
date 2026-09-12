@@ -1,0 +1,355 @@
+.loaderContainer {
+  display: flex;
+  min-height: 7rem;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  color: var(--foreground-muted);
+}
+
+.loaderCompact {
+  min-height: auto;
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.loaderLabel,
+.eyebrow,
+.stageList {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.domino {
+  display: grid;
+  grid-template-columns: repeat(8, 0.34rem);
+  gap: 0.18rem;
+  align-items: end;
+}
+
+.domino > span {
+  width: 0.34rem;
+  height: 1.15rem;
+  transform-origin: bottom center;
+  background: var(--primary);
+  animation: domino-wave 880ms cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+  opacity: 0.22;
+}
+
+.domino > span:nth-child(2), .domino > span:nth-child(8) { animation-delay: 80ms; }
+.domino > span:nth-child(3), .domino > span:nth-child(7) { animation-delay: 160ms; }
+.domino > span:nth-child(4), .domino > span:nth-child(6) { animation-delay: 240ms; }
+.domino > span:nth-child(5) { animation-delay: 320ms; }
+
+@keyframes domino-wave {
+  0%, 30% { transform: scaleY(0.35); opacity: 0.22; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+
+.printerProgress {
+  --printer-status: var(--primary);
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 70;
+  display: grid;
+  width: min(32rem, calc(100vw - 2.5rem));
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--printer-status) 42%, var(--border));
+  background: color-mix(in srgb, var(--printer-status) 5%, var(--background-secondary));
+  padding: 1rem;
+  overflow: hidden;
+  box-shadow: 0 1.25rem 3.5rem rgb(0 0 0 / 42%);
+  animation: status-enter 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.printerVisual {
+  position: relative;
+  display: flex;
+  height: 5.25rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.printerBody {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: 4.2rem;
+  height: 2.65rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--printer-status) 55%, var(--border));
+  background: var(--background);
+  color: var(--printer-status);
+  box-shadow: 0 0 1.25rem color-mix(in srgb, var(--printer-status) 12%, transparent);
+}
+
+.printerBody i {
+  position: absolute;
+  top: 0.38rem;
+  right: 0.4rem;
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 50%;
+  background: var(--printer-status);
+}
+
+.inputPaper,
+.outputPaper {
+  position: absolute;
+  left: 50%;
+  width: 2.9rem;
+  margin-left: -1.45rem;
+  border: 1px solid var(--border-strong);
+  background: var(--background-secondary);
+}
+
+.inputPaper {
+  top: 0;
+  height: 2.4rem;
+  padding: 0.3rem;
+  color: var(--printer-status);
+  animation: paper-enter 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.inputPaper span {
+  display: block;
+  height: 1px;
+  margin-top: 0.18rem;
+  background: var(--border-strong);
+}
+
+.outputPaper {
+  bottom: 0;
+  display: flex;
+  height: 2rem;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 0.2rem;
+  color: var(--status-success);
+  transform: translateY(-1.2rem);
+  opacity: 0;
+}
+
+[data-printer-stage='generating'] .inputPaper { animation: paper-process 520ms ease-out both; }
+[data-printer-stage='saving'] .outputPaper,
+[data-printer-stage='complete'] .outputPaper { animation: paper-exit 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+[data-printer-stage='complete'] .printerBody { animation: printer-complete 340ms ease-out both; }
+[data-printer-stage='error'] .printerBody { animation: printer-error 300ms ease-out both; }
+
+.errorIcon {
+  position: absolute;
+  z-index: 3;
+  right: 0.15rem;
+  bottom: 0.15rem;
+  color: var(--status-danger);
+}
+
+@keyframes paper-enter {
+  from { transform: translateY(-0.5rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes paper-process {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(0.55rem); opacity: 0.55; }
+}
+
+@keyframes paper-exit {
+  from { transform: translateY(-1.2rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes printer-complete {
+  50% { transform: translateY(-0.18rem); }
+}
+
+@keyframes printer-error {
+  25% { transform: translateX(-0.15rem); }
+  75% { transform: translateX(0.15rem); }
+}
+
+@keyframes status-enter {
+  from { transform: translateY(0.75rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.printerContent { min-width: 0; }
+
+.printerHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: var(--printer-status);
+}
+
+.printerHeading strong {
+  display: block;
+  color: var(--foreground);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.printerContent p {
+  margin-top: 0.2rem;
+  color: var(--foreground-muted);
+  font-size: 0.75rem;
+}
+
+.dismissButton {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  color: var(--foreground-muted);
+}
+
+.dismissButton:hover,
+.dismissButton:focus-visible {
+  border-color: var(--printer-status);
+  color: var(--printer-status);
+  outline: none;
+}
+
+.progressTrack {
+  height: 0.2rem;
+  margin-top: 0.75rem;
+  overflow: hidden;
+  background: var(--border);
+}
+
+.progressTrack span {
+  display: block;
+  height: 100%;
+  background: var(--printer-status);
+  transition: width 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.stageList {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  color: var(--foreground-muted);
+  font-size: 0.5rem;
+  letter-spacing: 0.06em;
+}
+
+.stageList span:last-child { text-align: right; }
+.stageList span:nth-child(2), .stageList span:nth-child(3) { text-align: center; }
+.stageList .stageActive { color: var(--printer-status); }
+
+.profileSkeleton {
+  border: 1px solid var(--border);
+  background: var(--background-secondary);
+  padding: 1.5rem;
+}
+
+.skeletonHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.skeletonHeader > div { flex: 1; }
+.skeletonAvatar { width: 2.75rem; height: 2.75rem; }
+.skeletonHeader div span:first-child { width: min(15rem, 65%); height: 0.75rem; }
+.skeletonHeader div span:last-child { width: min(10rem, 45%); height: 0.5rem; margin-top: 0.5rem; }
+
+.skeletonDivider {
+  height: 1px;
+  margin: 1.5rem 0;
+  background: var(--border);
+}
+
+.skeletonGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.skeletonGrid div span:first-child { width: 35%; height: 0.45rem; }
+.skeletonGrid div span:last-child { width: 100%; height: 2.65rem; margin-top: 0.55rem; }
+
+.skeletonAvatar,
+.skeletonHeader div span,
+.skeletonGrid span {
+  display: block;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--foreground) 7%, var(--background-secondary));
+  position: relative;
+}
+
+.skeletonAvatar::after,
+.skeletonHeader div span::after,
+.skeletonGrid span::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--foreground) 10%, transparent), transparent);
+  animation: skeleton-shimmer 1.35s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  to { transform: translateX(100%); }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 640px) {
+  .printerProgress { right: 0.75rem; bottom: 0.75rem; width: calc(100vw - 1.5rem); grid-template-columns: 4.5rem minmax(0, 1fr); gap: 0.75rem; padding: 0.85rem; }
+  .printerVisual { transform: scale(0.88); transform-origin: center; }
+  .printerContent p { font-size: 0.6875rem; }
+  .stageList { display: none; }
+  .skeletonGrid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .domino > span,
+  .printerProgress,
+  .inputPaper,
+  .outputPaper,
+  .printerBody,
+  .skeletonAvatar::after,
+  .skeletonHeader div span::after,
+  .skeletonGrid span::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .domino > span { transform: scaleY(0.7); opacity: 0.75; }
+  [data-printer-stage='saving'] .outputPaper,
+  [data-printer-stage='complete'] .outputPaper { transform: translateY(0); opacity: 1; }
+  .skeletonAvatar::after,
+  .skeletonHeader div span::after,
+  .skeletonGrid span::after { display: none; }
+}

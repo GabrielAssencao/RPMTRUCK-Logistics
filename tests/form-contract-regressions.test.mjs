@@ -7,6 +7,35 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const read = (path) => readFileSync(resolve(root, path), 'utf8')
 
+test('tutoriais ficam após o chat e estão disponíveis sem ampliar permissões', () => {
+  const layout = read('src/app/dashboard/empresa/layout.tsx')
+  const page = read('src/app/dashboard/empresa/tutoriais/page.tsx')
+  const tools = layout.slice(layout.indexOf('aria-label="Abrir suporte e tickets"'))
+  assert.ok(tools.indexOf('aria-label="Abrir tutoriais"') < tools.indexOf('<NotificacoesPanel'))
+  assert.match(layout, /TUTORIAIS_ITEM: NavEmpresaItem = \{[^\n]*modulo: null/)
+  assert.doesNotMatch(layout.match(/TUTORIAIS_ITEM: NavEmpresaItem = [^\n]*/)[0], /somenteGestor/)
+  assert.match(page, /TUTORIAIS_SUPORTE.map/)
+  assert.match(page, /<details[\s\S]*<summary/)
+  assert.match(page, /Os recursos disponíveis dependem do seu papel/)
+})
+
+test('cada tutorial tem passos, explicação e dica com identificador único', async () => {
+  const typescript = await import('typescript')
+  const js = typescript.transpileModule(read('src/data/tutoriais.ts'), {
+    compilerOptions: { module: typescript.ModuleKind.ESNext, target: typescript.ScriptTarget.ES2022 },
+  }).outputText
+  const { TUTORIAIS_MODULOS } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
+  assert.equal(new Set(TUTORIAIS_MODULOS.map(item => item.id)).size, TUTORIAIS_MODULOS.length)
+  for (const item of TUTORIAIS_MODULOS) {
+    assert.ok(item.passos.length >= 3, item.titulo)
+    assert.ok(item.objetivo && item.logica && item.dica, item.titulo)
+    assert.match(item.id, /^[a-z-]+$/)
+  }
+  for (const id of ['frota', 'motoristas', 'containers', 'custos', 'contas-pagar', 'tarefas', 'lembretes', 'notificacoes', 'relatorios', 'operadores']) {
+    assert.ok(TUTORIAIS_MODULOS.some(item => item.id === id), id)
+  }
+})
+
 test('login aponta a solicitação de acesso para a rota existente', () => {
   const login = read('src/app/auth/login/page.tsx')
 
@@ -56,6 +85,17 @@ test('cadastro de veículo envia somente o contrato aceito pela API', () => {
   assert.doesNotMatch(handler, /JSON\.stringify\(\{\s*\.\.\.formData/)
 })
 
+test('frota permite cadastro sem base preservando o contrato seguro da API', () => {
+  const page = read('src/app/dashboard/empresa/frota/page.tsx')
+  const collection = read('src/app/api/veiculos/route.ts')
+  const item = read('src/app/api/veiculos/[id]/route.ts')
+
+  assert.match(page, /Sem base \/ pátio definido[\s\S]*value: 'SEM_BASE'/)
+  assert.match(page, /formData\.localizacao !== 'SEM_BASE'[\s\S]*: null/)
+  assert.match(collection, /localizacaoId: z\.string\(\)\.uuid\(\)\.optional\(\)\.nullable\(\)/)
+  assert.match(item, /localizacaoId: z\.string\(\)\.uuid\(\)\.nullable\(\)\.optional\(\)/)
+})
+
 test('drawer mantém os dados no erro e bloqueia submissão duplicada', () => {
   const drawer = read('src/components/dashboard/GenericDrawer.tsx')
 
@@ -63,6 +103,36 @@ test('drawer mantém os dados no erro e bloqueia submissão duplicada', () => {
   assert.match(drawer, /if \(sucesso === false\) return/)
   assert.match(drawer, /disabled=\{loading\}/)
   assert.match(drawer, /role="alert"/)
+  assert.match(drawer, /adaptive-form-overlay/)
+  assert.match(drawer, /adaptive-form-panel/)
+  assert.match(drawer, /min-h-0 flex-1[\s\S]*overflow-y-auto/)
+  assert.match(drawer, /role="dialog"[\s\S]*aria-modal="true"/)
+  assert.doesNotMatch(drawer, /fixed top-0 right-0 h-full/)
+})
+
+test('modais operacionais respeitam a viewport sem sobrepor os campos', () => {
+  const styles = read('src/app/globals.css')
+  const containers = read('src/app/dashboard/empresa/containers/page.tsx')
+  const custos = read('src/app/dashboard/empresa/custos/page.tsx')
+  const localizacoes = read('src/app/dashboard/empresa/frota/localizacoes/page.tsx')
+  const manutencao = read('src/app/dashboard/empresa/frota/manutencao/page.tsx')
+  const relatorios = read('src/app/dashboard/empresa/relatorios/page.tsx')
+
+  assert.match(styles, /\.adaptive-form-overlay[\s\S]*top: 4rem;[\s\S]*bottom: 0;[\s\S]*height: auto/)
+  assert.match(styles, /\.adaptive-form-panel[\s\S]*max-height: calc\(100% - 1\.5rem\)/)
+  assert.match(styles, /@media \(min-width: 1100px\) and \(min-height: 720px\)[\s\S]*justify-content: flex-end/)
+  assert.match(styles, /\.adaptive-form-panel \{[\s\S]*height: 100%;[\s\S]*max-height: 100%/)
+  assert.match(containers, /adaptive-form-panel[\s\S]*overflow-y-auto/)
+  assert.match(containers, /grid-cols-\[minmax\(0,1fr\)_4rem_2\.5rem\]/)
+  assert.doesNotMatch(containers, /sm:grid-cols-\[minmax\(0,1\.15fr\)_minmax\(0,0\.85fr\)\]/)
+  assert.match(custos, /id="form-despesa-operacional"[\s\S]*min-h-0 flex-1[\s\S]*overflow-y-auto/)
+  assert.match(custos, /border-b px-4 py-3 sm:px-5/)
+  assert.match(custos, /border-t px-3 py-2[\s\S]*sm:py-2\.5/)
+  assert.match(custos, /form="form-despesa-operacional" value="continuar"/)
+  for (const modal of [custos, localizacoes, manutencao, relatorios]) {
+    assert.match(modal, /adaptive-form-overlay/)
+    assert.match(modal, /adaptive-form-panel/)
+  }
 })
 
 test('cadastro de usuário usa payload explícito e protege o campo de senha', () => {
@@ -159,12 +229,15 @@ test('central de notificações fica disponível na navegação sem regra de pla
 
 test('personalização da sidebar é visual, persistente por usuário e posterior à autorização', () => {
   const layout = read('src/app/dashboard/empresa/layout.tsx')
+  const preferences = read('src/lib/empresaPreferences.ts')
 
   assert.match(layout, /const itensPermitidos = NAV_EMPRESA\.filter\(itemPermitido\)/)
   assert.match(layout, /const itensVisiveis = itensPermitidos\.filter/)
   assert.match(layout, /Atalhos compactos/)
   assert.match(layout, /Apenas visual: permissões e acesso permanecem iguais/)
-  assert.match(layout, /usuario\.id \|\| usuario\.email/)
+  assert.match(preferences, /usuario\.id \|\| usuario\.email/)
+  assert.match(preferences, /rotasValidas\.has\(path\)/)
+  assert.match(layout, /if \(item\.modulo && !modulosAtivos\.includes\(item\.modulo\)\) return false/)
 })
 
 test('tema vermelho separa marca, criticidade e atenção nas manutenções', () => {

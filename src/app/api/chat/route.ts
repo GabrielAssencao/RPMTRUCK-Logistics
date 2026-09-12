@@ -8,12 +8,20 @@ import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { inicioCompetencia } from '@/lib/suporte'
 import { obterPoliticaSuporte } from '@/lib/suporteConfig'
 import { notificarAdmins, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
+import { executarComAuditoria } from '@/lib/auditoria'
+import { montarRespostaTriagemBot } from '@/lib/suporteBot'
 
 export const dynamic = 'force-dynamic'
 
 const mensagemSchema = z.object({
   mensagem: textoOperacional(1, 2000),
   ticketId: z.string().uuid(),
+  empresaId: z.string().uuid().optional(),
+}).strict()
+
+const editarMensagemSchema = z.object({
+  mensagemId: z.string().uuid(),
+  mensagem: textoOperacional(1, 2000),
   empresaId: z.string().uuid().optional(),
 }).strict()
 
@@ -60,6 +68,7 @@ function filtroNaoLidas(admin: boolean) {
   }
   return {
     lida_em: null,
+    visibilidade: 'TODOS' as const,
     OR: [
       { tipo: 'SISTEMA' as const },
       { tipo: 'USUARIO' as const, autor: { role: 'ADMIN_RPM' as const } },
@@ -99,6 +108,7 @@ export async function GET(request: NextRequest) {
       atualizado_em: true,
       primeiraRespostaEm: true,
       mensagens: {
+        where: escopo.admin ? undefined : { visibilidade: 'TODOS' },
         orderBy: { criado_em: 'desc' },
         take: 1,
         select: { conteudo: true, criado_em: true, automatica: true, autor: { select: { role: true } } },
@@ -117,8 +127,10 @@ export async function GET(request: NextRequest) {
     conteudo: string
     tipo: 'USUARIO' | 'SISTEMA'
     automatica: boolean
+    visibilidade: 'TODOS' | 'ADMIN'
     criado_em: Date
     lida_em: Date | null
+    editado_em: Date | null
     autor: { id: string; nome: string; role: string } | null
   }> = []
 
@@ -134,7 +146,10 @@ export async function GET(request: NextRequest) {
       }),
     ])
     mensagens = await prisma.mensagemSuporte.findMany({
-      where: { conversaId: ticketSelecionado.id },
+      where: {
+        conversaId: ticketSelecionado.id,
+        visibilidade: escopo.admin ? undefined : 'TODOS',
+      },
       orderBy: { criado_em: 'desc' },
       take: 200,
       select: {
@@ -142,8 +157,10 @@ export async function GET(request: NextRequest) {
         conteudo: true,
         tipo: true,
         automatica: true,
+        visibilidade: true,
         criado_em: true,
         lida_em: true,
+        editado_em: true,
         autor: { select: { id: true, nome: true, role: true } },
       },
     }).then((itens) => itens.reverse())
@@ -186,7 +203,26 @@ export async function POST(request: NextRequest) {
 
   const ticket = await prisma.conversaSuporte.findFirst({
     where: { id: parsed.data.ticketId, empresaId: escopo.empresaId },
-    select: { id: true, protocolo: true, assunto: true, status: true, primeiraRespostaEm: true },
+    select: {
+      id: true,
+      protocolo: true,
+      assunto: true,
+      categoria: true,
+      status: true,
+      primeiraRespostaEm: true,
+      etapaTriagem: true,
+      triagemConcluidaEm: true,
+      mensagens: {
+        where: {
+          automatica: false,
+          tipo: 'USUARIO',
+          autor: { role: { not: 'ADMIN_RPM' } },
+        },
+        orderBy: { criado_em: 'asc' },
+        take: 10,
+        select: { conteudo: true },
+      },
+    },
   })
   if (!ticket) return NextResponse.json({ erro: 'Ticket não encontrado.' }, { status: 404 })
   if (ticket.status === 'FECHADO' || ticket.status === 'RESOLVIDO') {
@@ -194,7 +230,15 @@ export async function POST(request: NextRequest) {
   }
 
   const agora = new Date()
-  const mensagem = await prisma.$transaction(async (tx) => {
+  const resultadoTriagemPlanejado = !escopo.admin && ticket.status === 'ABERTO' && !ticket.triagemConcluidaEm
+    ? montarRespostaTriagemBot({
+        assunto: ticket.assunto,
+        categoria: ticket.categoria,
+        mensagensUsuario: [...ticket.mensagens.map((mensagem) => mensagem.conteudo), parsed.data.mensagem],
+        interacoesAutomaticas: ticket.etapaTriagem,
+      })
+    : null
+  const resultado = await prisma.$transaction(async (tx) => {
     const criada = await tx.mensagemSuporte.create({
       data: { conversaId: ticket.id, autorId: escopo.auth.session!.userId, conteudo: parsed.data.mensagem },
       select: {
@@ -202,11 +246,70 @@ export async function POST(request: NextRequest) {
         conteudo: true,
         tipo: true,
         automatica: true,
+        visibilidade: true,
         criado_em: true,
         lida_em: true,
+        editado_em: true,
         autor: { select: { id: true, nome: true, role: true } },
       },
     })
+    const reivindicacaoTriagem = resultadoTriagemPlanejado
+      ? await tx.conversaSuporte.updateMany({
+          where: {
+            id: ticket.id,
+            status: 'ABERTO',
+            etapaTriagem: ticket.etapaTriagem,
+            triagemConcluidaEm: null,
+          },
+          data: {
+            etapaTriagem: { increment: 1 },
+            triagemConcluidaEm: resultadoTriagemPlanejado.acao === 'CONTINUAR' ? undefined : agora,
+            categoria: resultadoTriagemPlanejado.categoriaDetectada,
+            status: resultadoTriagemPlanejado.acao === 'RESOLVER'
+              ? 'RESOLVIDO'
+              : resultadoTriagemPlanejado.acao === 'ESCALAR'
+                ? 'EM_ATENDIMENTO'
+                : undefined,
+            encerradoEm: resultadoTriagemPlanejado.acao === 'RESOLVER' ? agora : undefined,
+          },
+        })
+      : null
+    const resultadoTriagem = reivindicacaoTriagem?.count === 1 ? resultadoTriagemPlanejado : null
+    const respostaAutomatica = resultadoTriagem
+      ? await tx.mensagemSuporte.create({
+          data: {
+            conversaId: ticket.id,
+            tipo: 'SISTEMA',
+            automatica: true,
+            conteudo: resultadoTriagem.resposta,
+            lida_em: agora,
+            criado_em: new Date(agora.getTime() + 1),
+          },
+          select: {
+            id: true,
+            conteudo: true,
+            tipo: true,
+            automatica: true,
+            visibilidade: true,
+            criado_em: true,
+            lida_em: true,
+            editado_em: true,
+            autor: { select: { id: true, nome: true, role: true } },
+          },
+        })
+      : null
+    if (resultadoTriagem?.acao === 'ESCALAR' && resultadoTriagem.resumoAdmin) {
+      await tx.mensagemSuporte.create({
+        data: {
+          conversaId: ticket.id,
+          tipo: 'SISTEMA',
+          automatica: true,
+          visibilidade: 'ADMIN',
+          conteudo: resultadoTriagem.resumoAdmin,
+          criado_em: new Date(agora.getTime() + 2),
+        },
+      })
+    }
     await tx.conversaSuporte.update({
       where: { id: ticket.id },
       data: escopo.admin
@@ -216,7 +319,7 @@ export async function POST(request: NextRequest) {
             atualizado_em: agora,
           }
         : {
-            status: ticket.status === 'AGUARDANDO_CLIENTE' ? 'ABERTO' : undefined,
+            status: !resultadoTriagem && ticket.status === 'AGUARDANDO_CLIENTE' ? 'ABERTO' : undefined,
             atualizado_em: agora,
           },
     })
@@ -228,11 +331,79 @@ export async function POST(request: NextRequest) {
     }
     if (escopo.admin) {
       await notificarUsuariosDaEmpresa(escopo.empresaId, aviso, ['GESTOR_EMPRESA'], tx)
-    } else {
+    } else if (resultadoTriagem?.acao === 'ESCALAR') {
+      await notificarAdmins({
+        ...aviso,
+        titulo: `Triagem concluída · ${ticket.protocolo}`,
+        mensagem: `${escopo.empresa.nome}: ${ticket.assunto}. Atendimento humano necessário.`,
+      }, tx)
+    } else if (!resultadoTriagemPlanejado) {
       await notificarAdmins(aviso, tx)
     }
-    return criada
+    return { mensagem: criada, respostaAutomatica }
   })
 
-  return NextResponse.json({ mensagem }, { status: 201, headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json(resultado, { status: 201, headers: { 'Cache-Control': 'no-store' } })
+}
+
+export async function PATCH(request: NextRequest) {
+  const preAuth = await requireAuth(request)
+  if (preAuth.error || !preAuth.session) return NextResponse.json({ erro: preAuth.error }, { status: preAuth.status })
+
+  const parsed = editarMensagemSchema.safeParse(await request.json().catch(() => null))
+  if (!parsed.success) return NextResponse.json({ erro: 'Mensagem ou identificador inválido.' }, { status: 400 })
+
+  const escopo = await resolverEscopo(request, parsed.data.empresaId)
+  if ('error' in escopo) return NextResponse.json({ erro: escopo.error }, { status: escopo.status })
+
+  const limited = await applyRateLimit(request, `chat-edit:${escopo.auth.session!.userId}`, RATE_LIMITS.CHAT_EDIT.limit, RATE_LIMITS.CHAT_EDIT.windowMs)
+  if (limited) return limited
+
+  const atual = await prisma.mensagemSuporte.findFirst({
+    where: {
+      id: parsed.data.mensagemId,
+      conversa: { empresaId: escopo.empresaId },
+    },
+    select: {
+      id: true,
+      autorId: true,
+      conteudo: true,
+      conteudoOriginal: true,
+      tipo: true,
+      automatica: true,
+    },
+  })
+  if (!atual) return NextResponse.json({ erro: 'Mensagem não encontrada.' }, { status: 404 })
+  if (atual.autorId !== escopo.auth.session!.userId) {
+    return NextResponse.json({ erro: 'Você só pode editar mensagens enviadas pela sua própria conta.' }, { status: 403 })
+  }
+  if (atual.tipo !== 'USUARIO' || atual.automatica) {
+    return NextResponse.json({ erro: 'Mensagens automáticas do sistema não podem ser editadas.' }, { status: 409 })
+  }
+
+  const editadoEm = new Date()
+  const mensagem = await executarComAuditoria(
+    { usuarioId: escopo.auth.session!.userId, origem: escopo.admin ? 'SUPERADMIN' : 'API' },
+    (tx) => tx.mensagemSuporte.update({
+      where: { id: atual.id },
+      data: {
+        conteudo: parsed.data.mensagem,
+        conteudoOriginal: atual.conteudoOriginal ?? atual.conteudo,
+        editado_em: editadoEm,
+      },
+      select: {
+        id: true,
+        conteudo: true,
+        tipo: true,
+        automatica: true,
+        visibilidade: true,
+        criado_em: true,
+        lida_em: true,
+        editado_em: true,
+        autor: { select: { id: true, nome: true, role: true } },
+      },
+    }),
+  )
+
+  return NextResponse.json({ mensagem }, { headers: { 'Cache-Control': 'private, no-store' } })
 }

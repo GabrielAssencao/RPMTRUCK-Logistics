@@ -15,6 +15,7 @@ import SecurityModule from './_modulos/seguranca/SecurityModule'
 import SubscriptionsModule from './_modulos/assinaturas/SubscriptionsModule'
 import ChatModule from './_modulos/chat/ChatModule'
 import AlertasModule from './_modulos/alertas/AlertasModule'
+import NotificationsModule from './_modulos/notificacoes/NotificationsModule'
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard')
@@ -58,6 +59,8 @@ export default function AdminPage() {
         return <ChatModule key="chat" initialTicketId={ticketSuporteId} />
       case 'alerts':
         return <AlertasModule key="alerts" />
+      case 'notifications':
+        return <NotificationsModule key="notifications" />
       default:
         return <DashboardModule key="dashboard" />
     }

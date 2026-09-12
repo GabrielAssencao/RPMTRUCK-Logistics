@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { motion } from 'framer-motion';
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog';
 import CompanyUsersManager from './CompanyUsersManager'; 
 import CompanyVehiclesManager from './CompanyVehiclesManager'; 
 import { MODULOS, MODULOS_CONFIG, obterModulosPadrao, PLANOS, PLANOS_CONFIG } from '@/utils/planos';
@@ -27,6 +28,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
   const [salvando, setSalvando] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [catalogoComercial, setCatalogoComercial] = useState([]);
+  const [faturaParaLiquidar, setFaturaParaLiquidar] = useState(null);
 
   const config = PLANOS_CONFIG[plano];
   const comercial = catalogoComercial.find(item => item.id === plano);
@@ -56,6 +58,11 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
   };
 
   const salvarAlteracoes = async () => {
+    if (salvando) return;
+    if (!Number.isInteger(uExtra) || uExtra < 0 || uExtra > 10000 || !Number.isInteger(vExtra) || vExtra < 0 || vExtra > 100000) {
+      setFeedback('Informe capacidades inteiras dentro dos limites indicados.');
+      return;
+    }
     setSalvando(true);
     setFeedback('');
     try {
@@ -84,7 +91,6 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
   };
 
   const liquidarFatura = async (fatura) => {
-    if (!window.confirm(`Confirmar o recebimento de R$ ${Number(fatura.valor).toFixed(2)}? Esta baixa ficará registrada em seu usuário.`)) return;
     setSalvando(true);
     setFeedback('');
     try {
@@ -93,6 +99,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
       if (!response.ok) throw new Error(data.erro || 'Não foi possível dar baixa na fatura.');
       setFaturas(prev => prev.map(item => item.id === fatura.id ? { ...item, ...data, status: 'pago' } : item));
       setFeedback('Pagamento confirmado e registrado no histórico.');
+      setFaturaParaLiquidar(null);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Não foi possível dar baixa na fatura.');
     } finally {
@@ -179,6 +186,20 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
                       </button>
                    ))}
                 </div>
+                {plano === 'PREVIEW' && (
+                  <div className="mt-4 space-y-3 border p-4" style={{ borderColor: 'var(--border)' }}>
+                    <p className="text-xs font-bold">Capacidade do Preview</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="text-xs">Total de usuários (inclui o gestor)
+                        <input type="number" min="1" max="10001" step="1" value={Number.isNaN(uExtra) ? '' : uExtra + 1} onChange={event => setUExtra(event.target.value === '' ? NaN : Number(event.target.value) - 1)} className="mt-2 w-full border bg-background p-3 text-foreground" />
+                      </label>
+                      <label className="text-xs">Total de veículos
+                        <input type="number" min="0" max="100000" step="1" value={Number.isNaN(vExtra) ? '' : vExtra} onChange={event => setVExtra(event.target.value === '' ? NaN : Number(event.target.value))} className="mt-2 w-full border bg-background p-3 text-foreground" />
+                      </label>
+                    </div>
+                    <p className="text-xs text-foreground-muted">Salve as alterações para aplicar os limites. Reduzir a capacidade não apaga registros existentes, mas impede novos cadastros até haver vagas. Zero veículos bloqueia novos cadastros de frota.</p>
+                  </div>
+                )}
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <div className="border p-3" style={{borderColor: 'var(--border)'}}><p className="text-[9px] font-black uppercase tracking-widest opacity-50">Mensalidade calculada</p><p className="mt-1 font-rajdhani text-xl font-black">R$ {mensalidadeCalculada.toFixed(2)}</p></div>
                   <div className="border p-3" style={{borderColor: 'var(--border)'}}><p className="text-[9px] font-black uppercase tracking-widest opacity-50">Implantação do catálogo</p><p className="mt-1 font-rajdhani text-xl font-black">R$ {Number(taxaImplantacaoCatalogo).toFixed(2)}</p></div>
@@ -201,10 +222,11 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
 
         {tabAtiva === 'usuarios' && (
           <div className="space-y-6">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             {plano !== 'PREVIEW' && <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <CounterCard label="LICENÇAS EXTRAS" desc={`Custo: R$ ${Number(precoUsuarioAdicional).toFixed(2)}/cada`} val={uExtra} setVal={setUExtra} />
                 <CounterCard label="VEÍCULOS EXTRAS" desc={`Custo: R$ ${Number(precoVeiculoAdicional).toFixed(2)}/cada`} val={vExtra} setVal={setVExtra} />
-             </div>
+             </div>}
+             {plano === 'PREVIEW' && <p className="text-xs text-foreground-muted">Ajuste os totais de usuários e veículos na aba Módulos &amp; Plano.</p>}
              <CompanyUsersManager empresa={empresa} limiteTotal={config.usuariosBase + uExtra} primary={primary} />
           </div>
         )}
@@ -222,7 +244,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
                  <article key={f.id} className="border p-4" style={{borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)'}}>
                    <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-xs font-bold">{f.mes} / {f.ano}</p><p className="mt-1 text-[10px] font-black uppercase opacity-60">{f.tipo === 'IMPLEMENTACAO' ? 'TAXA DE CONFIGURAÇÃO' : f.tipo}</p></div><span className={`border px-2 py-1 text-[9px] font-black uppercase ${f.status === 'pago' ? 'border-green-500/20 text-green-500' : 'border-red-500/20 text-red-500'}`}>{f.status}</span></div>
                    <p className="my-4 font-rajdhani text-2xl font-black">R$ {Number(f.valor).toFixed(2)}</p>
-                   {f.status === 'pendente' ? <button type="button" disabled={salvando} onClick={() => void liquidarFatura(f)} className="min-h-11 w-full border text-[10px] font-black uppercase hover:border-green-500 hover:text-green-500 disabled:opacity-50" style={{borderColor: 'var(--border)'}}>Confirmar pagamento</button> : <p className="text-[10px] font-bold text-green-500">✓ RECEBIMENTO CONFERIDO</p>}
+                   {f.status === 'pendente' ? <button type="button" disabled={salvando} onClick={() => { setFeedback(''); setFaturaParaLiquidar(f) }} className="min-h-11 w-full border text-[10px] font-black uppercase hover:border-green-500 hover:text-green-500 disabled:opacity-50" style={{borderColor: 'var(--border)'}}>Confirmar pagamento</button> : <p className="text-[10px] font-bold text-green-500">✓ RECEBIMENTO CONFERIDO</p>}
                  </article>
                ))}
              </div>
@@ -271,7 +293,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
                             <td className="px-5 py-4">
                                {f.status === 'pendente' ? (
                                  <button 
-                                   onClick={() => void liquidarFatura(f)}
+                                   onClick={() => { setFeedback(''); setFaturaParaLiquidar(f) }}
                                    disabled={salvando}
                                    className="px-3 py-1.5 text-[10px] font-black border hover:border-green-500 hover:text-green-500 transition-all"
                                    style={{ borderColor: 'var(--border)' }}
@@ -305,6 +327,19 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
            </button>
          </div>
       </div>
+
+      <ActionConfirmDialog
+        open={Boolean(faturaParaLiquidar)}
+        tone="warning"
+        eyebrow="Confirmação financeira"
+        title="Registrar recebimento"
+        description={faturaParaLiquidar ? `Confirme o recebimento de R$ ${Number(faturaParaLiquidar.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}. A baixa ficará vinculada ao seu usuário no histórico.` : ''}
+        confirmLabel="Confirmar recebimento"
+        loadingLabel="Registrando..."
+        loading={salvando}
+        onClose={() => setFaturaParaLiquidar(null)}
+        onConfirm={() => { if (faturaParaLiquidar) void liquidarFatura(faturaParaLiquidar) }}
+      />
     </div>
   );
 }

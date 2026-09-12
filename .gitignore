@@ -34,6 +34,17 @@ next-env.d.ts
 *.db
 *.db-journal
 
+# Backups, exports and recovery artifacts (never publish private data)
+*.dump
+*.dump.*
+*.backup
+*.bak
+*.enc
+backups/
+recovery/
+RPMTruckBackups/
+RPMTruckRecoveryKeys/
+
 # Hosting and tooling
 .vercel/
 .turbo/
