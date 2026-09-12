@@ -8,6 +8,119 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const read = (path) => readFileSync(resolve(root, path), 'utf8')
 
+test('todas as APIs autenticadas recebem teto global antes da consulta de sessão', () => {
+  const auth = read('src/lib/auth.ts')
+  assert.ok(auth.indexOf('await verifySession(request)') < auth.indexOf('await applyRateLimit(request'))
+  assert.ok(auth.indexOf('await applyRateLimit(request') < auth.indexOf('prisma.sessaoUsuario.findFirst'))
+  assert.match(auth, /AUTHENTICATED_READ : RATE_LIMITS.AUTHENTICATED_MUTATION/)
+  assert.match(auth, /tokenSession\.userId/)
+  assert.match(read('src/app/api/planos/route.ts'), /applyRateLimit\(/)
+  assert.match(read('src/app/api/internal/retencao/route.ts'), /RATE_LIMITS.RETENTION_RUN/)
+})
+
+test('Preview possui cotas finitas editáveis sem apagar registros existentes', async () => {
+  const typescript = await import('typescript')
+  const js = typescript.transpileModule(read('src/utils/planos.ts'), {
+    compilerOptions: { module: typescript.ModuleKind.ESNext, target: typescript.ScriptTarget.ES2022 },
+  }).outputText
+  const { PLANOS_CONFIG } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
+  assert.equal(PLANOS_CONFIG.PREVIEW.usuariosBase, 1)
+  assert.equal(PLANOS_CONFIG.PREVIEW.veiculosBase, 0)
+  assert.equal(PLANOS_CONFIG.ESSENCIAL.usuariosBase, 4)
+  assert.equal(PLANOS_CONFIG.ESSENCIAL.veiculosBase, 10)
+  const ui = read('src/app/dashboard/admin/_modulos/empresas/CompanyFinancialControl.jsx')
+  assert.match(ui, /Total de usuários \(inclui o gestor\)/)
+  assert.match(ui, /Total de veículos/)
+  assert.match(ui, /usuarios_adicionais: uExtra/)
+  assert.match(ui, /veiculos_adicionais: vExtra/)
+  assert.doesNotMatch(read('src/app/api/empresas/[id]/route.ts'), /veiculo.delete|usuario.delete/)
+})
+
+test('cadastro de frota verifica cota e localização na mesma transação serializável', async () => {
+  const typescript = await import('typescript')
+  let source = read('src/lib/veiculosEmpresa.ts')
+  source = source.replace(/^import .*$/gm, '')
+  source = `const Prisma = { TransactionIsolationLevel: { Serializable: 'Serializable' } };
+    const PLANOS_CONFIG = { PREVIEW: { veiculosBase: 0 }, ESSENCIAL: { veiculosBase: 10 } };
+    let testTx;
+    export function configure(tx) { testTx = tx; }
+    async function executarComAuditoria(context, callback, options) {
+      if (options.isolationLevel !== 'Serializable') throw new Error('isolamento incorreto');
+      return callback(testTx);
+    }
+    ${source}`
+  const js = typescript.transpileModule(source, {
+    compilerOptions: { module: typescript.ModuleKind.ESNext, target: typescript.ScriptTarget.ES2022 },
+  }).outputText
+  const vehicleService = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
+  let total = 2
+  let created = 0
+  let readings = 0
+  vehicleService.configure({
+    empresa: { findUnique: async () => ({ plano: 'PREVIEW', veiculos_adicionais: 2 }) },
+    veiculo: {
+      count: async () => total,
+      create: async ({ data }) => { created++; return { ...data, id: 'vehicle', quilometragem: 0 } },
+    },
+    localizacao: { findFirst: async () => null },
+    leituraQuilometragem: { create: async () => { readings++ } },
+  })
+  const input = { empresaId: 'tenant', usuarioId: 'actor', dados: { modelo: 'Volvo', placa: 'ABC1D23', tipo: 'Sider' } }
+  await assert.rejects(vehicleService.criarVeiculoEmpresaComLimite(input), error => error.status === 409)
+  assert.equal(created, 0)
+  total = 1
+  await assert.rejects(vehicleService.criarVeiculoEmpresaComLimite({ ...input, dados: { ...input.dados, localizacaoId: 'other-tenant' } }), error => error.status === 400)
+  assert.equal(created, 0)
+  await vehicleService.criarVeiculoEmpresaComLimite(input)
+  assert.equal(created, 1)
+  assert.equal(readings, 1)
+  for (const route of ['src/app/api/veiculos/route.ts', 'src/app/api/empresas/[id]/veiculos/route.ts']) {
+    assert.match(read(route), /criarVeiculoEmpresaComLimite\(/)
+    assert.doesNotMatch(read(route), /veiculo.create\(/)
+  }
+})
+
+test('migração fecha acesso direto a suporte, lembretes, alertas e contas a pagar', () => {
+  const migration = read('prisma/migrations/20260911160000_security_rls_missing_tables/migration.sql')
+  for (const table of ['conversas_suporte', 'mensagens_suporte', 'lembretes_pessoais', 'alertas_sistema', 'alertas_leituras', 'contas_pagar']) {
+    assert.ok(migration.includes(`ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY`))
+  }
+  assert.match(migration, /REVOKE ALL ON TABLE/)
+  assert.match(migration, /ARRAY\['anon', 'authenticated'\]/)
+})
+
+test('IP na Vercel ignora cf-connecting-ip forjado e produção sem proxy não confia em forwarded', async () => {
+  const typescript = await import('typescript')
+  const source = read('src/lib/rateLimit.ts').match(/export function getClientIp[\s\S]*?(?=export const RATE_LIMITS)/)[0]
+  const js = typescript.transpileModule(source, {
+    compilerOptions: { module: typescript.ModuleKind.ESNext, target: typescript.ScriptTarget.ES2022 },
+  }).outputText
+  const { getClientIp } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
+  const keys = ['NODE_ENV', 'VERCEL', 'TRUST_CLOUDFLARE_PROXY', 'TRUST_FORWARDED_PROXY']
+  const original = Object.fromEntries(keys.map(key => [key, process.env[key]]))
+  const request = { headers: new Headers({
+    'cf-connecting-ip': '198.51.100.200',
+    'x-vercel-forwarded-for': '203.0.113.10',
+    'x-forwarded-for': '203.0.113.10, 192.0.2.5',
+  }) }
+  try {
+    process.env.NODE_ENV = 'production'
+    process.env.VERCEL = '1'
+    delete process.env.TRUST_CLOUDFLARE_PROXY
+    delete process.env.TRUST_FORWARDED_PROXY
+    assert.equal(getClientIp(request), '203.0.113.10')
+    delete process.env.VERCEL
+    assert.equal(getClientIp(request), 'unknown')
+    process.env.TRUST_FORWARDED_PROXY = 'true'
+    assert.equal(getClientIp(request), '203.0.113.10')
+  } finally {
+    for (const key of keys) {
+      if (original[key] === undefined) delete process.env[key]
+      else process.env[key] = original[key]
+    }
+  }
+})
+
 test('login e recuperação não revelam a existência da conta', () => {
   const login = read('src/app/api/auth/login/route.ts')
   const password = read('src/lib/password.ts')
@@ -96,7 +209,9 @@ test('usuário gerencia somente as próprias sessões e não revoga a sessão at
   assert.match(route, /RATE_LIMITS\.SESSION_MUTATION/)
   assert.doesNotMatch(route, /usuarioId: parsed\.data/)
   assert.match(panel, /session\.atual/)
-  assert.match(panel, /window\.confirm\('Encerrar esta sessão\? O dispositivo precisará entrar novamente\.'\)/)
+  assert.doesNotMatch(panel, /window\.confirm/)
+  assert.match(panel, /<ActionConfirmDialog/)
+  assert.match(panel, /setSessionToRevoke\(session\)/)
 })
 
 test('gestor solicita redefinição ao superadmin sem confiar em email do cliente', () => {
@@ -195,6 +310,36 @@ test('chat restringe empresas ao gestor e deriva o tenant da sessão', () => {
   assert.match(proxy, /\/dashboard\/empresa\/chat/)
 })
 
+test('assistente faz triagem limitada e entrega o chamado ao atendimento humano', async () => {
+  const typescript = await import('typescript')
+  const source = read('src/lib/suporteBot.ts')
+  const javascript = typescript.transpileModule(source, {
+    compilerOptions: { module: typescript.ModuleKind.ESNext, target: typescript.ScriptTarget.ES2022 },
+  }).outputText
+  const bot = await import(`data:text/javascript;base64,${Buffer.from(javascript).toString('base64')}`)
+  const chat = read('src/app/api/chat/route.ts')
+
+  const contexto = { assunto: 'Problema de acesso', categoria: 'SUPORTE_TECNICO' }
+  const confirmacao = bot.montarRespostaTriagemBot({ ...contexto, mensagensUsuario: ['Descrição inicial', 'sim'], interacoesAutomaticas: 1 })
+  const orientacao = bot.montarRespostaTriagemBot({ ...contexto, mensagensUsuario: ['Descrição inicial', 'sim', 'Não consigo entrar com minha senha'], interacoesAutomaticas: 2 })
+  const resolvido = bot.montarRespostaTriagemBot({ ...contexto, mensagensUsuario: ['Descrição inicial', 'sim', 'Não consigo entrar com minha senha', 'sim, funcionou'], interacoesAutomaticas: 3 })
+  const entrega = bot.montarRespostaTriagemBot({ ...contexto, mensagensUsuario: ['Descrição inicial', 'sim', 'Não consigo entrar com minha senha', 'não resolveu'], interacoesAutomaticas: 3 })
+
+  assert.match(confirmacao.resposta, /Agora descreva exatamente o problema/)
+  assert.match(orientacao.resposta, /Esqueci minha senha/)
+  assert.equal(resolvido.acao, 'RESOLVER')
+  assert.equal(entrega.acao, 'ESCALAR')
+  assert.match(entrega.resumoAdmin, /RESUMO INTERNO DA TRIAGEM/)
+  assert.equal(bot.montarRespostaTriagemBot({ ...contexto, mensagensUsuario: ['Mais detalhes'], interacoesAutomaticas: 4 }), null)
+  assert.match(chat, /!escopo\.admin && ticket\.status === 'ABERTO'/)
+  assert.match(chat, /interacoesAutomaticas: ticket\.etapaTriagem/)
+  assert.match(chat, /etapaTriagem: ticket\.etapaTriagem[\s\S]*triagemConcluidaEm: null/)
+  assert.match(chat, /reivindicacaoTriagem\?\.count === 1/)
+  assert.match(chat, /tipo: 'SISTEMA'[\s\S]*automatica: true[\s\S]*lida_em: agora/)
+  assert.match(chat, /visibilidade: 'ADMIN'/)
+  assert.match(chat, /resultadoTriagem\?\.acao === 'ESCALAR'/)
+})
+
 test('franquia de suporte ignora apenas bugs confirmados pelo superadmin', () => {
   const plans = read('src/utils/planos.ts')
   const tickets = read('src/app/api/chat/tickets/route.ts')
@@ -216,7 +361,9 @@ test('franquia de suporte ignora apenas bugs confirmados pelo superadmin', () =>
   assert.match(support, /WHEN ordenados\."classificacao_cobranca" = 'BUG_SISTEMA_CONFIRMADO' THEN 0/)
   assert.match(support, /ELSE ordenados\.ordem > conversa\."franquia_no_momento"/)
   assert.doesNotMatch(support, /SET[\s\S]{0,80}"franquia_no_momento"\s*=/)
-  assert.match(adminUi, /window\.confirm/)
+  assert.doesNotMatch(adminUi, /window\.confirm/)
+  assert.match(adminUi, /classificacaoPendente/)
+  assert.match(adminUi, /<ActionConfirmDialog/)
   assert.match(migration, /CREATE TYPE "ClassificacaoCobrancaTicket"/)
   assert.match(migration, /FOREIGN KEY \("classificado_por_id"\)/)
 })
@@ -239,9 +386,11 @@ test('tickets geram notificacoes individuais e sincronizam leitura ao abrir', ()
   const notifications = read('src/lib/notificacoes.ts')
   const migration = read('prisma/migrations/20260903020000_tickets_suporte_e_rate_limit/migration.sql')
 
-  assert.match(tickets, /notificarAdmins\(/)
+  assert.doesNotMatch(tickets, /notificarAdmins\(/)
   assert.match(chat, /notificarUsuariosDaEmpresa\(escopo\.empresaId, aviso, \['GESTOR_EMPRESA'\], tx\)/)
   assert.match(chat, /notificarAdmins\(aviso, tx\)/)
+  assert.match(chat, /Triagem concluída/)
+  assert.match(chat, /visibilidade: escopo\.admin \? undefined : 'TODOS'/)
   assert.match(chat, /ticketSuporteId: ticketSelecionado\.id, lida: false/)
   assert.match(adminTicket, /\['GESTOR_EMPRESA'\], tx/)
   assert.match(notifications, /usuarioId: id[\s\S]*ticketSuporteId: input\.ticketSuporteId/)

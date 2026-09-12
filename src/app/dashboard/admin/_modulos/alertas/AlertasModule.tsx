@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 
 type Usuario = { id: string; nome: string; email: string; role: string; empresa: { nome: string } | null }
 type Alerta = { id: string; titulo: string; mensagem: string; severidade: 'INFORMACAO' | 'AVISO' | 'CRITICO'; ativo: boolean; inicio_em: string; fim_em: string | null; criado_em: string; destinatario: Usuario | null; criadoPor: { nome: string }; _count: { leituras: number } }
@@ -26,6 +27,7 @@ export default function AlertasModule() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [alertaParaExcluir, setAlertaParaExcluir] = useState<Alerta | null>(null)
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -65,10 +67,17 @@ export default function AlertasModule() {
   }
 
   const remover = async (alerta: Alerta) => {
-    if (!window.confirm(`Excluir permanentemente o alerta “${alerta.titulo}”?`)) return
-    const response = await fetch(`/api/admin/alertas/${alerta.id}`, { method: 'DELETE' })
-    if (response.ok) { if (editando === alerta.id) setFormAberto(false); await carregar() }
-    else { const body = await response.json(); setError(body.erro || 'Não foi possível excluir o alerta.') }
+    setSaving(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/admin/alertas/${alerta.id}`, { method: 'DELETE' })
+      if (response.ok) { if (editando === alerta.id) setFormAberto(false); setAlertaParaExcluir(null); await carregar() }
+      else { const body = await response.json(); setError(body.erro || 'Não foi possível excluir o alerta.') }
+    } catch {
+      setError('Erro de conexão ao excluir o alerta.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const agora = new Date()
@@ -88,6 +97,7 @@ export default function AlertasModule() {
       <label className="flex items-center gap-2 self-end py-2 text-xs font-bold"><input type="checkbox" checked={form.ativo} onChange={(e) => setForm({...form, ativo:e.target.checked})} style={{accentColor:primary}}/> Alerta ativo</label>
     </div><div className="flex justify-end gap-2"><button type="button" onClick={() => setFormAberto(false)} className="min-h-11 border px-4 text-xs font-bold uppercase" style={{borderColor:'var(--border)'}}>Cancelar</button><button disabled={saving} className="min-h-11 px-5 text-xs font-black uppercase text-black disabled:opacity-50" style={{backgroundColor:primary}}>{saving ? 'Salvando...' : 'Salvar alerta'}</button></div></form>}
 
-    <div className="space-y-3">{loading && alertas.length === 0 ? <p className="border p-8 text-center text-xs text-foreground-muted" style={{borderColor:'var(--border)'}}>Carregando alertas...</p> : alertas.length === 0 ? <div className="border p-10 text-center" style={{borderColor:'var(--border)'}}><AlertTriangle className="mx-auto mb-3 opacity-30"/><p className="text-sm font-bold">Nenhum alerta configurado</p><p className="mt-1 text-xs text-foreground-muted">Crie um aviso de manutenção, alteração de valores ou comunicado geral.</p></div> : alertas.map((alerta) => <article key={alerta.id} className="border p-4" style={{borderColor:'var(--border)', backgroundColor:'var(--background-secondary)'}}><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="break-words text-sm font-black uppercase">{alerta.titulo}</h2><span className="border px-2 py-0.5 text-[9px] font-bold uppercase" style={{borderColor: alerta.severidade === 'CRITICO' ? 'var(--status-danger)' : alerta.severidade === 'AVISO' ? 'var(--status-warning)' : primary}}>{alerta.severidade}</span><span className="text-[9px] font-bold uppercase text-foreground-muted">{estado(alerta)}</span></div><p className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground-muted">{alerta.mensagem}</p><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[9px] uppercase tracking-wider text-foreground-muted"><span>Público: {alerta.destinatario ? `${alerta.destinatario.nome} · ${alerta.destinatario.empresa?.nome || alerta.destinatario.email}` : 'Todos os usuários'}</span><span>Início: {new Date(alerta.inicio_em).toLocaleString('pt-BR')}</span>{alerta.fim_em && <span>Fim: {new Date(alerta.fim_em).toLocaleString('pt-BR')}</span>}<span>Leituras: {alerta._count.leituras}</span></div></div><div className="flex shrink-0 gap-2"><button type="button" onClick={() => abrirEdicao(alerta)} aria-label={`Editar ${alerta.titulo}`} className="min-h-10 min-w-10 border p-2" style={{borderColor:'var(--border)'}}><Pencil size={15}/></button><button type="button" onClick={() => void remover(alerta)} aria-label={`Excluir ${alerta.titulo}`} className="min-h-10 min-w-10 border border-red-500/40 p-2 text-red-500"><Trash2 size={15}/></button></div></div></article>)}</div>
+    <div className="space-y-3">{loading && alertas.length === 0 ? <p className="border p-8 text-center text-xs text-foreground-muted" style={{borderColor:'var(--border)'}}>Carregando alertas...</p> : alertas.length === 0 ? <div className="border p-10 text-center" style={{borderColor:'var(--border)'}}><AlertTriangle className="mx-auto mb-3 opacity-30"/><p className="text-sm font-bold">Nenhum alerta configurado</p><p className="mt-1 text-xs text-foreground-muted">Crie um aviso de manutenção, alteração de valores ou comunicado geral.</p></div> : alertas.map((alerta) => <article key={alerta.id} className="border p-4" style={{borderColor:'var(--border)', backgroundColor:'var(--background-secondary)'}}><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="break-words text-sm font-black uppercase">{alerta.titulo}</h2><span className="border px-2 py-0.5 text-[9px] font-bold uppercase" style={{borderColor: alerta.severidade === 'CRITICO' ? 'var(--status-danger)' : alerta.severidade === 'AVISO' ? 'var(--status-warning)' : primary}}>{alerta.severidade}</span><span className="text-[9px] font-bold uppercase text-foreground-muted">{estado(alerta)}</span></div><p className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground-muted">{alerta.mensagem}</p><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[9px] uppercase tracking-wider text-foreground-muted"><span>Público: {alerta.destinatario ? `${alerta.destinatario.nome} · ${alerta.destinatario.empresa?.nome || alerta.destinatario.email}` : 'Todos os usuários'}</span><span>Início: {new Date(alerta.inicio_em).toLocaleString('pt-BR')}</span>{alerta.fim_em && <span>Fim: {new Date(alerta.fim_em).toLocaleString('pt-BR')}</span>}<span>Leituras: {alerta._count.leituras}</span></div></div><div className="flex shrink-0 gap-2"><button type="button" onClick={() => abrirEdicao(alerta)} aria-label={`Editar ${alerta.titulo}`} className="min-h-10 min-w-10 border p-2" style={{borderColor:'var(--border)'}}><Pencil size={15}/></button><button type="button" onClick={() => setAlertaParaExcluir(alerta)} aria-label={`Excluir ${alerta.titulo}`} className="min-h-10 min-w-10 border border-red-500/40 p-2 text-red-500"><Trash2 size={15}/></button></div></div></article>)}</div>
+    <ActionConfirmDialog open={Boolean(alertaParaExcluir)} title="Excluir alerta" description={`O alerta “${alertaParaExcluir?.titulo ?? ''}” e seu histórico de leituras serão removidos permanentemente.`} confirmLabel="Excluir alerta" cancelLabel="Manter alerta" loading={saving} onClose={() => { if (!saving) setAlertaParaExcluir(null) }} onConfirm={() => { if (alertaParaExcluir) void remover(alertaParaExcluir) }} />
   </div>
 }

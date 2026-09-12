@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Laptop, LogOut, MonitorSmartphone, Smartphone } from 'lucide-react'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { DominoLoader } from '@/components/motion/OperationalFeedback'
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 
 interface UserSession {
   id: string
@@ -28,6 +29,7 @@ export default function SecuritySessions({ primary }: { primary: string }) {
   const [revokingId, setRevokingId] = useState('')
   const [feedback, setFeedback] = useState('')
   const [feedbackTone, setFeedbackTone] = useState<'success' | 'error'>('success')
+  const [sessionToRevoke, setSessionToRevoke] = useState<UserSession | null>(null)
 
   const loadSessions = useCallback(async () => {
     setLoading(true)
@@ -50,7 +52,6 @@ export default function SecuritySessions({ primary }: { primary: string }) {
 
   const revokeSession = async (session: UserSession) => {
     if (session.atual || revokingId) return
-    if (!window.confirm('Encerrar esta sessão? O dispositivo precisará entrar novamente.')) return
 
     setRevokingId(session.id)
     setFeedback('')
@@ -63,6 +64,7 @@ export default function SecuritySessions({ primary }: { primary: string }) {
       const data = await response.json()
       if (!response.ok) throw new Error(data.erro || 'Não foi possível encerrar a sessão.')
       setSessions((current) => current.filter((item) => item.id !== session.id))
+      setSessionToRevoke(null)
       setFeedbackTone('success')
       setFeedback('Sessão encerrada com sucesso.')
     } catch (error) {
@@ -106,7 +108,7 @@ export default function SecuritySessions({ primary }: { primary: string }) {
                   </div>
                 </div>
                 {!session.atual && (
-                  <button type="button" onClick={() => void revokeSession(session)} disabled={Boolean(revokingId)} className="interactive-control flex min-h-10 items-center justify-center gap-2 border border-red-500/40 px-3 text-[9px] font-bold uppercase tracking-wider text-red-500 disabled:opacity-50">
+                  <button type="button" onClick={() => setSessionToRevoke(session)} disabled={Boolean(revokingId)} className="interactive-control flex min-h-10 items-center justify-center gap-2 border border-red-500/40 px-3 text-[9px] font-bold uppercase tracking-wider text-red-500 disabled:opacity-50">
                     <LogOut size={13} /> {revokingId === session.id ? 'Encerrando…' : 'Encerrar sessão'}
                   </button>
                 )}
@@ -115,6 +117,17 @@ export default function SecuritySessions({ primary }: { primary: string }) {
           })}
         </div>
       )}
+      <ActionConfirmDialog
+        open={Boolean(sessionToRevoke)}
+        title="Encerrar sessão em outro dispositivo"
+        description={`${sessionToRevoke ? describeDevice(sessionToRevoke.userAgent).label : 'Este dispositivo'} perderá o acesso imediatamente e precisará entrar novamente.`}
+        confirmLabel="Encerrar sessão"
+        cancelLabel="Manter conectada"
+        eyebrow="Segurança da conta"
+        loading={Boolean(revokingId)}
+        onClose={() => { if (!revokingId) setSessionToRevoke(null) }}
+        onConfirm={() => { if (sessionToRevoke) void revokeSession(sessionToRevoke) }}
+      />
     </section>
   )
 }

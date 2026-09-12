@@ -5,6 +5,29 @@ interface EntregarLembretesInput {
   usuarioId: string
 }
 
+const URGENCIA_LEMBRETE: Record<string, string> = {
+  LEVE: 'Urgência leve',
+  MEDIA: 'Urgência média',
+  ALTA: 'Urgência alta',
+}
+
+const formatoData = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  timeZone: 'America/Sao_Paulo',
+})
+const formatoHora = new Intl.DateTimeFormat('pt-BR', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+  timeZone: 'America/Sao_Paulo',
+})
+
+function dataHoraContextual(data: Date) {
+  return `${formatoData.format(data)} às ${formatoHora.format(data)}`
+}
+
 /**
  * Entrega lembretes vencidos quando o usuário consulta as notificações.
  * O updateMany funciona como claim atômico entre instâncias e evita duplicidade.
@@ -42,8 +65,8 @@ export async function entregarLembretesTarefas({ empresaId, usuarioId }: Entrega
 
       await tx.notificacao.create({
         data: {
-          titulo: 'Lembrete de tarefa',
-          mensagem: `${tarefa.titulo}${tarefa.prazo ? ` — prazo ${tarefa.prazo.toLocaleString('pt-BR')}` : ''}`,
+          titulo: `Tarefa: ${tarefa.titulo}`,
+          mensagem: tarefa.prazo ? `Prazo previsto para ${dataHoraContextual(tarefa.prazo)}.` : 'Esta tarefa está pendente no seu quadro.',
           modulo: 'TAREFAS',
           empresaId: tarefa.empresaId,
           usuarioId: tarefa.responsavelId,
@@ -91,8 +114,8 @@ export async function entregarLembretesPessoais({ empresaId, usuarioId }: Entreg
 
       await tx.notificacao.create({
         data: {
-          titulo: `Lembrete ${lembrete.urgencia.toLocaleLowerCase('pt-BR')}`,
-          mensagem: `${lembrete.titulo} — ${lembrete.dataHora.toLocaleString('pt-BR')}`,
+          titulo: `Lembrete: ${lembrete.titulo}`,
+          mensagem: `${URGENCIA_LEMBRETE[lembrete.urgencia] ?? 'Lembrete pessoal'} · Agendado para ${dataHoraContextual(lembrete.dataHora)}.`,
           modulo: 'TAREFAS',
           empresaId: lembrete.empresaId,
           usuarioId: lembrete.usuarioId,

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { textoOperacional } from '@/lib/domainValidation'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { anteriorAoMinutoDaReferencia } from '@/lib/dataHoraOperacional'
 
 export const dynamic = 'force-dynamic'
 
@@ -96,6 +97,9 @@ export async function POST(request: NextRequest) {
 
   const parsed = criarTarefaSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ erro: 'Dados da tarefa inválidos.' }, { status: 400 })
+  if (parsed.data.inicio && anteriorAoMinutoDaReferencia(new Date(parsed.data.inicio))) {
+    return NextResponse.json({ erro: 'O início da tarefa não pode ser anterior ao momento do cadastro.' }, { status: 400 })
+  }
 
   const responsavel = await prisma.usuario.findFirst({
     where: {

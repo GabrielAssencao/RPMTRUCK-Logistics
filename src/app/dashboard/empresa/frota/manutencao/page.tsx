@@ -983,8 +983,8 @@ function ManutencaoContent() {
 
       {/* ─── MODAL DE LANÇAMENTO ─── */}
       {modalInclusaoOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg border p-6 font-mono space-y-5 shadow-[0_0_50px_rgba(0,0,0,0.5)]" style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+        <div className="adaptive-form-overlay fixed inset-0 z-50 flex bg-black/70 backdrop-blur-xs">
+          <motion.div role="dialog" aria-modal="true" initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="adaptive-form-panel w-full max-w-lg space-y-4 overflow-y-auto border p-4 font-mono shadow-[0_0_50px_rgba(0,0,0,0.5)] sm:p-5" style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
             <div className="flex justify-between items-start border-b pb-4" style={{ borderColor: 'var(--border)' }}>
               <div>
                 <h3 className="text-base font-bold uppercase font-rajdhani">Atualizar HUD Diagnóstico ({veiculoAtivo.placa})</h3>

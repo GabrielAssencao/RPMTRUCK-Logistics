@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { textoOperacional } from '@/lib/domainValidation'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { anteriorAoMinutoDaReferencia, inicioDoMinuto } from '@/lib/dataHoraOperacional'
 
 const atualizarSchema = z.object({
   titulo: textoOperacional(3, 160).optional(),
@@ -77,6 +78,15 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   const novoLembrete = parsed.data.lembreteEm === undefined
     ? atual.lembreteEm
     : parsed.data.lembreteEm ? new Date(parsed.data.lembreteEm) : null
+
+  if (
+    parsed.data.inicio
+    && novoInicio
+    && inicioDoMinuto(novoInicio).getTime() !== (atual.inicio ? inicioDoMinuto(atual.inicio).getTime() : undefined)
+    && anteriorAoMinutoDaReferencia(novoInicio)
+  ) {
+    return NextResponse.json({ erro: 'O início da tarefa não pode ser alterado para uma data passada.' }, { status: 400 })
+  }
 
   if (novoInicio && novoPrazo && novoPrazo < novoInicio) {
     return NextResponse.json({ erro: 'O prazo não pode ser anterior ao início.' }, { status: 400 })

@@ -6,6 +6,7 @@ import { Bell, Check, CheckCheck, ChevronLeft, ChevronRight, Inbox, Loader2, Ref
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { NOTIFICACOES_ATUALIZADAS_EVENT, type Notificacao } from '@/hooks/useNotificacoes'
 import { useTheme } from '@/contexts/ThemeContext'
+import { apresentarNotificacao } from '@/lib/notificationPresentation'
 
 type FiltroLeitura = 'TODAS' | 'NAO_LIDAS' | 'LIDAS'
 
@@ -35,7 +36,13 @@ export default function NotificationsModule() {
       const response = await fetch(`/api/notificacoes?${params}`, { cache: 'no-store', signal })
       const body = await response.json() as RespostaNotificacoes
       if (!response.ok) throw new Error(body.erro || 'Não foi possível carregar as notificações.')
-      setDados(body)
+      setDados({
+        ...body,
+        notificacoes: body.notificacoes.map((notificacao) => ({
+          ...notificacao,
+          ...apresentarNotificacao(notificacao),
+        })),
+      })
       setFeedback(null)
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return

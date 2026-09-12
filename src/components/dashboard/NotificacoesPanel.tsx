@@ -12,6 +12,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
+import { apresentarNotificacao } from '@/lib/notificationPresentation'
 
 type ConfirmacaoNotificacao =
   | { tipo: 'LIMPAR_LIDAS' }
@@ -179,7 +180,9 @@ export default function NotificacoesPanel({
                 </div>
               ) : (
                 <AnimatePresence>
-                  {notificacoes.map((notif) => (
+                  {notificacoes.map((notif) => {
+                    const apresentacao = apresentarNotificacao(notif)
+                    return (
                     <motion.div
                       key={notif.id}
                       initial={{ opacity: 0, x: -10 }}
@@ -202,14 +205,17 @@ export default function NotificacoesPanel({
                         />
 
                         <div className="flex-1 min-w-0">
+                          <span className="inline-block border px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider" style={{ borderColor: `${moduloCorMap[notif.modulo] || primary}88`, color: moduloCorMap[notif.modulo] || primary }}>
+                            {apresentacao.modulo}
+                          </span>
                           {/* Título */}
-                          <p className="font-bold text-sm break-words">
-                            {notif.titulo}
+                          <p className="mt-1.5 font-bold text-sm break-words">
+                            {apresentacao.titulo}
                           </p>
 
                           {/* Mensagem */}
                           <p className="text-xs text-foreground-muted mt-1 break-words">
-                            {notif.mensagem}
+                            {apresentacao.mensagem}
                           </p>
 
                           {notif.ticketSuporteId && (
@@ -267,7 +273,8 @@ export default function NotificacoesPanel({
                         )}
                       </div>
                     </motion.div>
-                  ))}
+                    )
+                  })}
                 </AnimatePresence>
               )}
             </div>

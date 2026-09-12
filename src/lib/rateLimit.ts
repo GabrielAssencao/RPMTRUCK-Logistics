@@ -11,6 +11,10 @@ interface RateLimitResult {
   expira_em: Date
 }
 
+// Este cache limita somente a telemetria; a decisão de bloquear continua
+// exclusivamente no PostgreSQL. Evita uma escrita de log por tentativa negada.
+const blockedEventWindows = new Map<string, number>()
+
 function obterSegredoRateLimit() {
   const segredo = process.env.RATE_LIMIT_HASH_SECRET || process.env.JWT_SECRET
   if (!segredo || segredo.length < 32) {
@@ -65,15 +69,24 @@ export async function applyRateLimit(
     const result = await rateLimit(identifier, limit, windowMs)
 
     if (!result.permitido) {
-      // Registra somente o primeiro bloqueio aproximado da janela para o próprio
-      // log não virar vetor de consumo de banco durante um ataque automatizado.
-      if (result.tentar_novamente >= Math.ceil(windowMs / 1000) - 5) {
-        await recordSecurityEvent({
-          tipo: 'RATE_LIMIT',
-          request: _request,
-          ip: getClientIp(_request),
-          contexto: { categoria: identifier.split(':', 1)[0] || 'unknown' },
-        })
+      const eventKey = hashIdentificador(identifier)
+      const expiresAt = new Date(result.expira_em).getTime()
+      if (blockedEventWindows.get(eventKey) !== expiresAt) {
+        if (blockedEventWindows.size >= 5_000) {
+          for (const [key, expiry] of blockedEventWindows) {
+            if (expiry <= Date.now()) blockedEventWindows.delete(key)
+          }
+        }
+        // Limita memória mesmo sob muitos identificadores distintos.
+        if (blockedEventWindows.has(eventKey) || blockedEventWindows.size < 5_000) {
+          blockedEventWindows.set(eventKey, expiresAt)
+          await recordSecurityEvent({
+            tipo: 'RATE_LIMIT',
+            request: _request,
+            ip: getClientIp(_request),
+            contexto: { categoria: identifier.split(':', 1)[0] || 'unknown' },
+          })
+        }
       }
       return NextResponse.json(
         {
@@ -109,12 +122,23 @@ export function getClientIp(request: NextRequest): string {
   const forwardedFor = request.headers.get('x-forwarded-for')
   const realIp = request.headers.get('x-real-ip')
 
-  const ip = cloudflareIp || forwardedFor?.split(',')[0] || realIp
+  // Na Vercel, apenas os cabeçalhos sanitizados pela própria plataforma são
+  // confiáveis. cf-connecting-ip pode ser enviado diretamente por um atacante.
+  const ip = process.env.VERCEL
+    ? request.headers.get('x-vercel-forwarded-for')?.split(',')[0] || forwardedFor?.split(',')[0] || realIp
+    : process.env.TRUST_CLOUDFLARE_PROXY === 'true'
+      ? cloudflareIp
+      : process.env.NODE_ENV !== 'production' || process.env.TRUST_FORWARDED_PROXY === 'true'
+        ? forwardedFor?.split(',')[0] || realIp
+        : null
   if (ip) return ip.trim().slice(0, 64)
   return 'unknown'
 }
 
 export const RATE_LIMITS = {
+  AUTHENTICATED_READ: { limit: 300, windowMs: 60 * 1000 },
+  AUTHENTICATED_MUTATION: { limit: 60, windowMs: 60 * 1000 },
+  RETENTION_RUN: { limit: 1, windowMs: 5 * 60 * 1000 },
   // O IP recebe uma margem maior para não punir empresas atrás do mesmo NAT.
   LOGIN_IP: { limit: 20, windowMs: 15 * 60 * 1000 },
   LOGIN_ACCOUNT: { limit: 5, windowMs: 15 * 60 * 1000 },

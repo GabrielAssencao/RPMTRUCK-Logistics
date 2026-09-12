@@ -127,6 +127,8 @@ test('sidebars permanecem ancoradas e o chat não move a página em atualizaçõ
   const empresa = read('src/app/dashboard/empresa/layout.tsx')
   const admin = read('src/app/dashboard/admin/_estrutura/AdminLayout.tsx')
   const chat = read('src/components/dashboard/ChatWorkspace.tsx')
+  const chatBot = read('src/components/dashboard/ChatBotOrb.tsx')
+  const globals = read('src/app/globals.css')
 
   for (const layout of [empresa, admin]) {
     assert.match(layout, /transition-\[width\] duration-300 ease-in-out motion-reduce:transition-none/)
@@ -151,16 +153,25 @@ test('sidebars permanecem ancoradas e o chat não move a página em atualizaçõ
   assert.match(chat, /recebeuMensagem && estavaProximoDoFim/)
   assert.match(chat, /caixa\.scrollTo/)
   assert.match(chat, /overflowAnchor: 'none'/)
-  assert.match(chat, /overscrollBehaviorY: 'auto'/)
-  assert.doesNotMatch(chat, /overscroll-contain/)
+  assert.match(chat, /overscrollBehaviorY: 'contain'/)
   assert.match(chat, /onWheelCapture=\{interromperRolagemAutomatica\}/)
+  assert.match(chat, /novasMensagens[\s\S]*Mensagens recentes/)
+  assert.match(chat, /onScroll=\{atualizarPosicaoRolagem\}/)
   assert.doesNotMatch(chat, /behavior: loading \? 'auto' : 'smooth'/)
   assert.match(chat, /mensagem\.autor\?\.id === usuarioAtualId/)
+  assert.match(chat, /ChatBotOrb active=\{loading \|\| sending\}/)
+  assert.match(chat, /Enter envia · Shift \+ Enter quebra a linha/)
+  assert.match(chatBot, /data-active=\{active \? 'true' : 'false'\}/)
+  assert.match(chatBot, /document\.hidden \|\| connection\(\)\?\.saveData === true/)
+  assert.match(globals, /@keyframes chat-bot-fire-rotate/)
+  assert.match(globals, /@keyframes chat-bot-fire-morph/)
+  assert.match(globals, /\.chat-bot-orb\[data-paused='true'\]/)
 })
 
 test('notificações usam confirmação e feedback integrados nos ambientes da empresa e do admin', () => {
   const painel = read('src/components/dashboard/NotificacoesPanel.tsx')
   const centralEmpresa = read('src/app/dashboard/empresa/notificacoes/page.tsx')
+  const centralAdmin = read('src/app/dashboard/admin/_modulos/notificacoes/NotificationsModule.tsx')
   const confirmacao = read('src/components/dashboard/ActionConfirmDialog.tsx')
   const graficoAdmin = read('src/app/dashboard/admin/_modulos/visao-geral/DashboardModule.jsx')
 
@@ -169,10 +180,33 @@ test('notificações usam confirmação e feedback integrados nos ambientes da e
   assert.match(painel, /<ActionFeedback/)
   assert.match(painel, /<ActionConfirmDialog/)
   assert.match(centralEmpresa, /<ActionConfirmDialog/)
+  assert.match(painel, /apresentarNotificacao\(notif\)/)
+  assert.match(centralEmpresa, /apresentarNotificacao\(notificacao\)/)
+  assert.match(centralAdmin, /apresentarNotificacao\(notificacao\)/)
   assert.match(confirmacao, /role="alertdialog"/)
   assert.match(confirmacao, /reducedMotion="user"/)
   assert.match(graficoAdmin, /itemStyle=\{\{ color: 'var\(--foreground\)' \}\}/)
   assert.match(graficoAdmin, /labelStyle=\{\{ color: 'var\(--foreground\)' \}\}/)
+})
+
+test('ações operacionais auditadas não recorrem a diálogos nativos do navegador', () => {
+  for (const path of [
+    'src/app/dashboard/empresa/configuracoes/_componentes/SecuritySessions.tsx',
+    'src/app/dashboard/admin/_modulos/chat/ChatModule.tsx',
+    'src/app/dashboard/admin/_modulos/alertas/AlertasModule.tsx',
+    'src/app/dashboard/admin/_modulos/solicitacoes/AdminRequests.jsx',
+    'src/app/dashboard/admin/_modulos/redefinicoes-senha/AdminPasswordResets.jsx',
+    'src/app/dashboard/admin/_modulos/empresas/CompanyFinancialControl.jsx',
+    'src/app/dashboard/admin/_modulos/empresas/CompanyUsersManager.jsx',
+    'src/app/dashboard/admin/_modulos/empresas/CompanyVehiclesManager.jsx',
+    'src/app/dashboard/empresa/arquivos/page.tsx',
+    'src/app/dashboard/empresa/configuracoes/exclusao-conta/page.tsx',
+    'src/app/dashboard/empresa/relatorios/page.tsx',
+    'src/app/dashboard/empresa/usuarios/page.tsx',
+  ]) {
+    const source = read(path)
+    assert.doesNotMatch(source, /window\.(?:alert|confirm|prompt)|\b(?:alert|confirm|prompt)\s*\(/, path)
+  }
 })
 
 test('ações sensíveis de operadores usam confirmação animada e feedback integrado', () => {

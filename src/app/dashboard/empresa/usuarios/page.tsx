@@ -23,6 +23,7 @@ import {
   Palette,
 } from 'lucide-react'
 import GenericDrawer, { FieldConfig } from '@/components/dashboard/GenericDrawer'
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { MODULOS_CONFIG, normalizarModulos, type ModuloCodigo } from '@/utils/planos'
 
@@ -138,6 +139,8 @@ export default function UsuariosPage() {
   const [erroConfirmacao, setErroConfirmacao] = useState('')
   const [feedbackOperador, setFeedbackOperador] = useState<FeedbackOperador | null>(null)
   const [senhaCopiada, setSenhaCopiada] = useState(false)
+  const [usuarioParaExcluir, setUsuarioParaExcluir] = useState<UsuarioLocal | null>(null)
+  const [excluindoUsuarioId, setExcluindoUsuarioId] = useState<string | null>(null)
   
   const [perfilLogado, setPerfilLogado] = useState<'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'>('VISUALIZADOR')
 
@@ -254,26 +257,38 @@ export default function UsuariosPage() {
 
       if (!res.ok) {
         const errData = await res.json()
-        alert(errData.error || 'Erro ao criar usuário')
+        setFeedbackOperador({ mensagem: errData.error || 'Erro ao criar usuário.', tom: 'error' })
         return false
       }
 
       // Recarrega a lista do banco após salvar
       await carregarUsuarios()
+      setFeedbackOperador({ mensagem: 'Operador criado com sucesso.', tom: 'success' })
       return true
     } catch (err) {
       console.error('Erro ao salvar:', err)
-      alert('Erro de conexão ao salvar usuário')
+      setFeedbackOperador({ mensagem: 'Erro de conexão ao salvar usuário.', tom: 'error' })
       return false
     }
   }
 
-  const handleExcluirUsuario = async (id: string) => {
-    if (confirm('Excluir definitivamente esta conta? O acesso e os dados pessoais serão removidos, mas os registros operacionais permanecerão no histórico.')) {
-      const response = await fetch(`/api/empresa/usuarios/${id}`, { method: 'DELETE' })
+  const handleExcluirUsuario = async () => {
+    if (!usuarioParaExcluir || excluindoUsuarioId) return
+    setExcluindoUsuarioId(usuarioParaExcluir.id)
+    try {
+      const response = await fetch(`/api/empresa/usuarios/${usuarioParaExcluir.id}`, { method: 'DELETE' })
       const data = await response.json()
-      if (!response.ok) return alert(data.erro || 'Não foi possível remover o usuário.')
-      setUsuarios((prev) => prev.filter(u => u.id !== id))
+      if (!response.ok) {
+        setFeedbackOperador({ mensagem: data.erro || 'Não foi possível remover o usuário.', tom: 'error' })
+        return
+      }
+      setUsuarios((prev) => prev.filter(u => u.id !== usuarioParaExcluir.id))
+      setFeedbackOperador({ mensagem: `Conta de ${usuarioParaExcluir.nome} removida.`, tom: 'success' })
+      setUsuarioParaExcluir(null)
+    } catch {
+      setFeedbackOperador({ mensagem: 'Erro de conexão ao remover o usuário.', tom: 'error' })
+    } finally {
+      setExcluindoUsuarioId(null)
     }
   }
 
@@ -299,7 +314,10 @@ export default function UsuariosPage() {
         }),
       })
       const data = await response.json()
-      if (!response.ok) return alert(data.erro || 'Não foi possível alterar as permissões.')
+      if (!response.ok) {
+        setFeedbackOperador({ mensagem: data.erro || 'Não foi possível alterar as permissões.', tom: 'error' })
+        return
+      }
       setUsuarios(prev => prev.map(item => item.id === usuarioEmEdicao.id
         ? {
             ...item,
@@ -309,8 +327,9 @@ export default function UsuariosPage() {
           }
         : item))
       setUsuarioEmEdicao(null)
+      setFeedbackOperador({ mensagem: `Permissões de ${usuarioEmEdicao.nome} atualizadas.`, tom: 'success' })
     } catch {
-      alert('Erro de conexão ao alterar as permissões.')
+      setFeedbackOperador({ mensagem: 'Erro de conexão ao alterar as permissões.', tom: 'error' })
     } finally {
       setSalvandoAcessos(false)
     }
@@ -644,7 +663,7 @@ export default function UsuariosPage() {
                           {u.id !== usuarioLogadoId && u.role !== 'GESTOR_EMPRESA' && (
                             <button
                               title="Remover Operador"
-                              onClick={() => handleExcluirUsuario(u.id)}
+                              onClick={() => { setFeedbackOperador(null); setUsuarioParaExcluir(u) }}
                               className="p-2 text-red-400 hover:text-red-500 transition-colors rounded hover:bg-red-500/10"
                             >
                               <Trash2 size={14} />
@@ -765,6 +784,17 @@ export default function UsuariosPage() {
         )}
       </AnimatePresence>
 
+      <ActionConfirmDialog
+        open={Boolean(usuarioParaExcluir)}
+        title="Excluir conta do operador"
+        description={usuarioParaExcluir ? `O acesso e os dados pessoais de ${usuarioParaExcluir.nome} serão removidos. Os registros operacionais permanecerão no histórico para preservar a auditoria.` : ''}
+        confirmLabel="Excluir conta"
+        loadingLabel="Excluindo..."
+        loading={Boolean(excluindoUsuarioId)}
+        onClose={() => setUsuarioParaExcluir(null)}
+        onConfirm={() => void handleExcluirUsuario()}
+      />
+
       {/* ─── DRAWER LATERAL PARA REGISTAR NOVO OPERADOR ─── */}
       <GenericDrawer
         isOpen={drawerOpen}
@@ -777,7 +807,7 @@ export default function UsuariosPage() {
 
       {usuarioEmEdicao && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="presentation">
-          <div role="dialog" aria-modal="true" aria-labelledby="titulo-acessos-usuario" className="w-full max-w-xl border" style={{ backgroundColor: 'var(--background)', borderColor: primary }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="titulo-acessos-usuario" className="max-h-[90dvh] w-full max-w-xl overflow-y-auto border" style={{ backgroundColor: 'var(--background)', borderColor: primary }}>
             <div className="flex items-start justify-between gap-4 border-b p-5" style={{ borderColor: 'var(--border)' }}>
               <div>
                 <h2 id="titulo-acessos-usuario" className="font-rajdhani text-lg font-black uppercase">Acessos de {usuarioEmEdicao.nome}</h2>
@@ -854,7 +884,7 @@ export default function UsuariosPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="titulo-credencial-temporaria"
-            className="relative w-full max-w-lg overflow-hidden border shadow-2xl"
+            className="relative max-h-[90dvh] w-full max-w-lg overflow-y-auto border shadow-2xl"
             style={{ backgroundColor: 'var(--background)', borderColor: primary }}
             initial={{ opacity: 0, y: 14, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}

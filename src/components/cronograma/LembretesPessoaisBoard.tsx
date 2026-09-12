@@ -2,13 +2,14 @@
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { BellRing, Check, Clock3, Pencil, Plus, RotateCcw, StickyNote, Trash2, X } from 'lucide-react'
+import { BellRing, Check, ChevronLeft, ChevronRight, Clock3, Pencil, Plus, RotateCcw, StickyNote, Trash2, X } from 'lucide-react'
 import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { DominoLoader } from '@/components/motion/OperationalFeedback'
 import { useTheme } from '@/contexts/ThemeContext'
 import { NOTIFICACOES_ATUALIZADAS_EVENT } from '@/hooks/useNotificacoes'
 import { BrazilianDateTimePicker } from '@/components/cronograma/BrazilianDateTimePicker'
+import { anteriorAoMinutoDaReferencia, formatarDataHoraBrasil } from '@/lib/dataHoraOperacional'
 
 export type UrgenciaLembrete = 'LEVE' | 'MEDIA' | 'ALTA'
 type ModoNotificacao = 'AUTOMATICA' | 'PERSONALIZADA'
@@ -44,15 +45,20 @@ const ANTECEDENCIA: Record<UrgenciaLembrete, string> = {
   ALTA: '5 dias antes',
 }
 
-const FORM_VAZIO: FormLembrete = {
-  titulo: '',
-  descricao: '',
-  data: '',
-  hora: '09:00',
-  urgencia: 'MEDIA',
-  modoNotificacao: 'AUTOMATICA',
-  dataNotificacao: '',
-  horaNotificacao: '09:00',
+const ITENS_POR_PAGINA = 24
+
+function formVazio(): FormLembrete {
+  const [data = '', hora = ''] = formatarDataHoraBrasil().split(' ')
+  return {
+    titulo: '',
+    descricao: '',
+    data,
+    hora,
+    urgencia: 'MEDIA',
+    modoNotificacao: 'AUTOMATICA',
+    dataNotificacao: '',
+    horaNotificacao: hora,
+  }
 }
 
 function paraDataBrasil(valor: string) {
@@ -109,7 +115,8 @@ export function LembretesPessoaisBoard({
   const [editorAberto, setEditorAberto] = useState(false)
   const [editando, setEditando] = useState<LembretePessoal | null>(null)
   const [exclusao, setExclusao] = useState<LembretePessoal | null>(null)
-  const [form, setForm] = useState<FormLembrete>(FORM_VAZIO)
+  const [form, setForm] = useState<FormLembrete>(() => formVazio())
+  const [pagina, setPagina] = useState(1)
   const ultimoPedidoCriacao = useRef(createRequest)
 
   const atualizarLista = useCallback((novaLista: LembretePessoal[]) => {
@@ -135,7 +142,7 @@ export function LembretesPessoaisBoard({
 
   const abrirCriacao = useCallback(() => {
     setEditando(null)
-    setForm(FORM_VAZIO)
+    setForm(formVazio())
     setEditorAberto(true)
   }, [])
 
@@ -178,6 +185,9 @@ export function LembretesPessoaisBoard({
           ? paraIsoBrasil(form.dataNotificacao, form.horaNotificacao)
           : null,
       }
+      if (!editando && anteriorAoMinutoDaReferencia(new Date(payload.dataHora))) {
+        throw new Error('O lembrete não pode ser agendado antes do momento do cadastro.')
+      }
       const response = await fetch(editando ? `/api/lembretes-pessoais/${editando.id}` : '/api/lembretes-pessoais', {
         method: editando ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -188,6 +198,10 @@ export function LembretesPessoaisBoard({
       atualizarLista(editando
         ? lembretes.map((item) => item.id === data.id ? data : item)
         : [...lembretes, data])
+      if (!editando) {
+        const totalAtivos = lembretes.filter((item) => !item.concluido).length + 1
+        setPagina(Math.max(1, Math.ceil(totalAtivos / ITENS_POR_PAGINA)))
+      }
       setEditorAberto(false)
       setSucesso(editando ? 'Lembrete atualizado.' : 'Post-it criado no seu quadro pessoal.')
       window.dispatchEvent(new Event(NOTIFICACOES_ATUALIZADAS_EVENT))
@@ -237,7 +251,14 @@ export function LembretesPessoaisBoard({
     }
   }
 
-  const visiveis = lembretes.filter((lembrete) => lembrete.concluido === mostrarConcluidos)
+  const todosVisiveis = lembretes.filter((lembrete) => lembrete.concluido === mostrarConcluidos)
+  const totalPaginas = Math.max(1, Math.ceil(todosVisiveis.length / ITENS_POR_PAGINA))
+  const paginaAtual = Math.min(pagina, totalPaginas)
+  const visiveis = todosVisiveis.slice((paginaAtual - 1) * ITENS_POR_PAGINA, paginaAtual * ITENS_POR_PAGINA)
+
+  useEffect(() => {
+    if (pagina > totalPaginas) queueMicrotask(() => setPagina(totalPaginas))
+  }, [pagina, totalPaginas])
 
   return (
     <>
@@ -246,10 +267,10 @@ export function LembretesPessoaisBoard({
         <div>
           <p className="text-[9px] font-black uppercase tracking-[0.25em]" style={{ color: primary }}>Organização pessoal</p>
           <h2 className="mt-1 font-rajdhani text-xl font-black uppercase">Meu quadro de lembretes</h2>
-          <p className="mt-1 text-[10px] text-foreground-muted">Somente você pode visualizar, editar e excluir estes post-its.</p>
+          <p className="mt-1 text-[10px] text-foreground-muted">Somente você pode visualizar, editar e excluir estes post-its. {todosVisiveis.length} nesta visualização.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setMostrarConcluidos((valor) => !valor)} className="interactive-control flex min-h-10 items-center gap-2 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}>
+          <button type="button" onClick={() => { setMostrarConcluidos((valor) => !valor); setPagina(1) }} className="interactive-control flex min-h-10 items-center gap-2 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}>
             {mostrarConcluidos ? <RotateCcw size={14} /> : <Check size={14} />} {mostrarConcluidos ? 'Ver ativos' : 'Ver concluídos'}
           </button>
           {showCreateAction && (
@@ -302,6 +323,13 @@ export function LembretesPessoaisBoard({
             </AnimatePresence>
           </div>
           {visiveis.length === 0 && <div className="flex min-h-[400px] flex-col items-center justify-center text-center text-foreground-muted"><StickyNote size={32} /><strong className="mt-3 text-xs uppercase">Nenhum lembrete {mostrarConcluidos ? 'concluído' : 'ativo'}</strong><span className="mt-1 text-[10px]">Crie um post-it para organizar seus compromissos.</span></div>}
+          {totalPaginas > 1 && (
+            <nav className="mt-6 flex items-center justify-center gap-3 border-t pt-4" style={{ borderColor: 'var(--border)' }} aria-label="Paginação dos lembretes">
+              <button type="button" disabled={paginaAtual === 1} onClick={() => setPagina((atual) => Math.max(1, atual - 1))} className="interactive-control grid min-h-10 min-w-10 place-items-center border disabled:opacity-35" style={{ borderColor: 'var(--border)' }} aria-label="Página anterior"><ChevronLeft size={16} /></button>
+              <span className="text-[10px] font-bold uppercase text-foreground-muted">Página {paginaAtual} de {totalPaginas}</span>
+              <button type="button" disabled={paginaAtual === totalPaginas} onClick={() => setPagina((atual) => Math.min(totalPaginas, atual + 1))} className="interactive-control grid min-h-10 min-w-10 place-items-center border disabled:opacity-35" style={{ borderColor: 'var(--border)' }} aria-label="Próxima página"><ChevronRight size={16} /></button>
+            </nav>
+          )}
         </div>
       )}
 

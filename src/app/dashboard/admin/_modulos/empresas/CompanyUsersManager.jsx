@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { UserPlus, Shield, Edit, Trash2, X, Check, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog';
 
 export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
   const [usuarios, setUsuarios] = useState([]);
@@ -9,6 +10,8 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [usuarioParaExcluir, setUsuarioParaExcluir] = useState(null);
+  const [excluindo, setExcluindo] = useState(false);
   
   // Estado do Formulário
   const [formData, setFormData] = useState({ nome: '', email: '', cargo: 'OPERADOR', status: 'ativo', senha: '' });
@@ -47,11 +50,20 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
     setIsModalOpen(false);
   };
 
-  const handleDelete = async (id) => {
-    if(confirm('Tem certeza que deseja excluir este usuário permanentemente?')) {
-      const response = await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+  const handleDelete = async () => {
+    if (!usuarioParaExcluir || excluindo) return;
+    setExcluindo(true);
+    setFeedback('');
+    try {
+      const response = await fetch(`/api/usuarios/${usuarioParaExcluir.id}`, { method: 'DELETE' });
       const data = await response.json(); if (!response.ok) return setFeedback(data.erro || 'Falha ao excluir usuário.');
-      setUsuarios(usuarios.filter(u => u.id !== id));
+      setUsuarios(usuarios.filter(u => u.id !== usuarioParaExcluir.id));
+      setFeedback(`Usuário ${usuarioParaExcluir.nome} excluído.`);
+      setUsuarioParaExcluir(null);
+    } catch {
+      setFeedback('Falha de conexão ao excluir usuário.');
+    } finally {
+      setExcluindo(false);
     }
   };
 
@@ -125,7 +137,7 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
                     <button onClick={() => handleOpenModal(u)} className="p-1.5 border opacity-60 hover:opacity-100 hover:text-primary transition-all" style={{ borderColor: 'var(--border)' }} title="Editar Perfil">
                       <Edit size={14} />
                     </button>
-                    <button onClick={() => handleDelete(u.id)} className="p-1.5 border opacity-60 hover:opacity-100 hover:text-red-500 transition-all" style={{ borderColor: 'var(--border)' }} title="Revogar Acesso">
+                    <button onClick={() => setUsuarioParaExcluir(u)} className="p-1.5 border opacity-60 hover:opacity-100 hover:text-red-500 transition-all" style={{ borderColor: 'var(--border)' }} title="Revogar Acesso">
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -142,7 +154,7 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md border bg-background flex flex-col shadow-2xl"
+              className="flex max-h-[88dvh] w-full max-w-md flex-col overflow-y-auto border bg-background shadow-2xl"
               style={{ borderColor: primary }}
             >
               {/* Modal Header */}
@@ -210,6 +222,17 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
           </div>
         )}
       </AnimatePresence>
+
+      <ActionConfirmDialog
+        open={Boolean(usuarioParaExcluir)}
+        title="Excluir usuário"
+        description={usuarioParaExcluir ? `O acesso de ${usuarioParaExcluir.nome} será removido permanentemente desta empresa.` : ''}
+        confirmLabel="Excluir usuário"
+        loadingLabel="Excluindo..."
+        loading={excluindo}
+        onClose={() => setUsuarioParaExcluir(null)}
+        onConfirm={() => void handleDelete()}
+      />
 
     </div>
   );

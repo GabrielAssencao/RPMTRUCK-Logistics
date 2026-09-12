@@ -6,6 +6,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { NOTIFICACOES_ATUALIZADAS_EVENT, type Notificacao } from '@/hooks/useNotificacoes'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
+import { apresentarNotificacao } from '@/lib/notificationPresentation'
 
 type FiltroLeitura = 'todas' | 'nao_lidas' | 'lidas'
 type ConfirmacaoNotificacao =
@@ -205,16 +206,17 @@ export default function CentralNotificacoesPage() {
                 const corModulo = notificacao.modulo === 'SEGURANÇA'
                   ? semanticColors.danger
                   : CORES_MODULO[notificacao.modulo] || primary
+                const apresentacao = apresentarNotificacao(notificacao)
                 return (
                   <article key={notificacao.id} className="group grid gap-4 border-t-0 p-4 transition-colors hover:bg-white/[0.03] sm:grid-cols-[auto_1fr_auto]" style={{ backgroundColor: notificacao.lida ? 'transparent' : `${primary}08` }}>
                     <span className="mt-1 h-3 w-3 border" style={{ borderColor: corModulo, backgroundColor: notificacao.lida ? 'transparent' : corModulo }} aria-hidden="true" />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest" style={{ borderColor: `${corModulo}88`, color: corModulo }}>{notificacao.modulo}</span>
+                        <span className="border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest" style={{ borderColor: `${corModulo}88`, color: corModulo }}>{apresentacao.modulo}</span>
                         <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: notificacao.lida ? 'var(--foreground-muted)' : semanticColors.warning }}>{notificacao.lida ? 'Lida' : 'Não lida'}</span>
                       </div>
-                      <h3 className="mt-2 break-words text-sm font-bold">{notificacao.titulo}</h3>
-                      <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-foreground-muted">{notificacao.mensagem}</p>
+                      <h3 className="mt-2 break-words text-sm font-bold">{apresentacao.titulo}</h3>
+                      <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-foreground-muted">{apresentacao.mensagem}</p>
                       {notificacao.veiculo && <p className="mt-2 text-[10px] font-bold uppercase text-foreground-muted">Veículo: {notificacao.veiculo.modelo} • {notificacao.veiculo.placa}</p>}
                       <time dateTime={notificacao.criado_em} className="mt-2 block text-[9px] text-foreground-muted">{new Date(notificacao.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</time>
                     </div>

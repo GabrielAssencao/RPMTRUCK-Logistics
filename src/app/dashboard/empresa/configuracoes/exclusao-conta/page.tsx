@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, ArrowLeft, Download, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 
 const CONFIRMACAO = 'EXCLUIR MINHA EMPRESA'
 
@@ -15,6 +16,7 @@ export default function ExclusaoContaPage() {
   const [senha, setSenha] = useState('')
   const [processando, setProcessando] = useState<'BACKUP' | 'EXCLUSAO' | null>(null)
   const [feedback, setFeedback] = useState('')
+  const [confirmacaoFinalAberta, setConfirmacaoFinalAberta] = useState(false)
 
   const baixarBackup = async () => {
     setProcessando('BACKUP')
@@ -49,7 +51,6 @@ export default function ExclusaoContaPage() {
 
   const excluirConta = async () => {
     if (!backupToken || !backupConfirmado || confirmacao !== CONFIRMACAO || !senha) return
-    if (!window.confirm('Última confirmação: excluir permanentemente a empresa e encerrar todas as sessões?')) return
     setProcessando('EXCLUSAO')
     setFeedback('')
     try {
@@ -92,11 +93,12 @@ export default function ExclusaoContaPage() {
         <div className="mt-5 space-y-4">
           <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-wider">Digite {CONFIRMACAO}</span><input value={confirmacao} onChange={(event) => setConfirmacao(event.target.value)} autoComplete="off" className="input-financeiro" /></label>
           <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-wider">Senha atual do gestor</span><input type="password" value={senha} onChange={(event) => setSenha(event.target.value)} autoComplete="current-password" maxLength={128} className="input-financeiro" /></label>
-          <button type="button" disabled={!liberado || Boolean(processando)} onClick={() => void excluirConta()} className="flex min-h-12 w-full items-center justify-center gap-2 bg-red-600 text-xs font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40">{processando === 'EXCLUSAO' ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} Excluir empresa permanentemente</button>
+          <button type="button" disabled={!liberado || Boolean(processando)} onClick={() => setConfirmacaoFinalAberta(true)} className="flex min-h-12 w-full items-center justify-center gap-2 bg-red-600 text-xs font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40">{processando === 'EXCLUSAO' ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} Excluir empresa permanentemente</button>
         </div>
       </section>
 
       <aside className="flex gap-3 border p-4 text-xs text-foreground-muted" style={{ borderColor: 'var(--border)' }}><ShieldCheck size={18} className="shrink-0" style={{ color: primary }} /><p>A eliminação prevista pela LGPD admite hipóteses legais de conservação. A empresa deve validar obrigações fiscais, trabalhistas, contratuais ou regulatórias antes do expurgo.</p></aside>
+      <ActionConfirmDialog open={confirmacaoFinalAberta} title="Excluir empresa permanentemente" description="Todos os dados operacionais e arquivos privados serão removidos, e todas as sessões serão encerradas. Esta ação não pode ser desfeita pelo painel." confirmLabel="Excluir definitivamente" cancelLabel="Manter empresa" eyebrow="Última confirmação" loading={processando === 'EXCLUSAO'} onClose={() => { if (!processando) setConfirmacaoFinalAberta(false) }} onConfirm={() => void excluirConta()} />
     </div>
   )
 }

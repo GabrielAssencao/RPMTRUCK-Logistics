@@ -5,6 +5,7 @@ import { textoOperacional } from '@/lib/domainValidation'
 import { calcularNotificacaoLembrete, perfilPodeUsarLembretes } from '@/lib/lembretePessoal'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { anteriorAoMinutoDaReferencia } from '@/lib/dataHoraOperacional'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
   const lembretes = await prisma.lembretePessoal.findMany({
     where: { empresaId: auth.session.empresaId, usuarioId: auth.session.userId },
     orderBy: [{ concluido: 'asc' }, { ordem: 'asc' }, { dataHora: 'asc' }],
-    take: 300,
+    take: 500,
   })
   return NextResponse.json(lembretes)
 }
@@ -54,7 +55,9 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ erro: 'Dados do lembrete inválidos.' }, { status: 400 })
 
   const dataHora = new Date(parsed.data.dataHora)
-  if (dataHora <= new Date()) return NextResponse.json({ erro: 'Escolha uma data futura para o lembrete.' }, { status: 400 })
+  if (anteriorAoMinutoDaReferencia(dataHora)) {
+    return NextResponse.json({ erro: 'O lembrete não pode ser agendado antes do momento do cadastro.' }, { status: 400 })
+  }
 
   let notificarEm: Date
   try {

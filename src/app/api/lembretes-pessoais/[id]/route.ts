@@ -5,6 +5,7 @@ import { textoOperacional } from '@/lib/domainValidation'
 import { calcularNotificacaoLembrete, perfilPodeUsarLembretes, type ModoNotificacaoLembrete, type UrgenciaLembrete } from '@/lib/lembretePessoal'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { anteriorAoMinutoDaReferencia, inicioDoMinuto } from '@/lib/dataHoraOperacional'
 
 const atualizarSchema = z.object({
   titulo: textoOperacional(3, 120).optional(),
@@ -46,6 +47,13 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   if (!atual) return NextResponse.json({ erro: 'Lembrete não encontrado.' }, { status: 404 })
 
   const dataHora = parsed.data.dataHora ? new Date(parsed.data.dataHora) : atual.dataHora
+  if (
+    parsed.data.dataHora
+    && inicioDoMinuto(dataHora).getTime() !== inicioDoMinuto(atual.dataHora).getTime()
+    && anteriorAoMinutoDaReferencia(dataHora)
+  ) {
+    return NextResponse.json({ erro: 'O lembrete não pode ser alterado para uma data passada.' }, { status: 400 })
+  }
   const urgencia = (parsed.data.urgencia ?? atual.urgencia) as UrgenciaLembrete
   const modo = (parsed.data.modoNotificacao ?? atual.modoNotificacao) as ModoNotificacaoLembrete
   const configuracaoInformada = parsed.data.dataHora !== undefined

@@ -26,6 +26,7 @@ import {
   Eye,
   EyeOff,
   MessageSquare,
+  BookOpen,
   Palette,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
@@ -108,6 +109,7 @@ const NAV_EMPRESA: NavEmpresaItem[] = EMPRESA_NAVIGATION_ITEMS.map((item) => ({
 const CONFIG_ITEM = { path: '/dashboard/empresa/configuracoes', icon: Settings, label: 'CONFIGURAÇÕES' }
 const NOTIFICACOES_ITEM: NavEmpresaItem = { path: '/dashboard/empresa/notificacoes', icon: Bell, label: 'NOTIFICAÇÕES', modulo: null, notificacaoModulo: 'TODAS' }
 const SUPORTE_ITEM: NavEmpresaItem = { path: '/dashboard/empresa/chat', icon: MessageSquare, label: 'SUPORTE E TICKETS', modulo: null, notificacaoModulo: 'CHAT', somenteGestor: true }
+const TUTORIAIS_ITEM: NavEmpresaItem = { path: '/dashboard/empresa/tutoriais', icon: BookOpen, label: 'TUTORIAIS', modulo: null, notificacaoModulo: 'GERAL' }
 
 // Larguras da sidebar recolhida (só ícones) e expandida (ícones + texto)
 const LARGURA_RECOLHIDA = '72px'
@@ -281,7 +283,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!acessoCarregado || !perfilUsuario) return
-    const pagina = [...NAV_EMPRESA, NOTIFICACOES_ITEM, SUPORTE_ITEM]
+    const pagina = [...NAV_EMPRESA, NOTIFICACOES_ITEM, SUPORTE_ITEM, TUTORIAIS_ITEM]
       .sort((a, b) => b.path.length - a.path.length)
       .find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))
     const configuracaoBloqueada = pathname.startsWith(CONFIG_ITEM.path) && !eGestor
@@ -291,7 +293,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
     }
   }, [acessoCarregado, eGestor, itemPermitido, pathname, perfilUsuario, router])
 
-  const paginaAtual = [...NAV_EMPRESA, NOTIFICACOES_ITEM, SUPORTE_ITEM]
+  const paginaAtual = [...NAV_EMPRESA, NOTIFICACOES_ITEM, SUPORTE_ITEM, TUTORIAIS_ITEM]
     .sort((a, b) => b.path.length - a.path.length)
     .find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))
   const rotaAtualPermitida = Boolean(
@@ -566,8 +568,9 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Área de Ferramentas (Sininho, Theme e Infos) */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             {eGestor && <Link href={SUPORTE_ITEM.path} aria-label="Abrir suporte e tickets" title="Suporte e tickets" className="relative flex min-h-11 min-w-11 items-center justify-center border transition-colors hover:text-foreground" style={{ borderColor: pathname === SUPORTE_ITEM.path ? primary : 'var(--border)', color: pathname === SUPORTE_ITEM.path ? primary : 'var(--foreground-muted)' }}><MessageSquare size={18} />{ticketsNaoLidos > 0 && <span className="absolute -right-1.5 -top-1.5 min-w-5 rounded-full px-1 py-0.5 text-center text-[9px] font-black text-black" style={{ backgroundColor: primary }}>{ticketsNaoLidos > 99 ? '99+' : ticketsNaoLidos}</span>}</Link>}
+            <Link href={TUTORIAIS_ITEM.path} aria-label="Abrir tutoriais" aria-current={pathname === TUTORIAIS_ITEM.path ? 'page' : undefined} title="Tutoriais e ajuda" className="flex min-h-11 min-w-11 items-center justify-center border transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" style={{ borderColor: pathname === TUTORIAIS_ITEM.path ? primary : 'var(--border)', color: pathname === TUTORIAIS_ITEM.path ? primary : 'var(--foreground-muted)' }}><BookOpen size={18} /></Link>
             <NotificacoesPanel onPendenciasChange={setPendenciasPorModulo} />
             <ThemeToggle disabled={!podePersonalizarTema} onToggle={alterarModoTema} />
             <div className="w-px h-6 bg-border hidden sm:block" style={{ backgroundColor: 'var(--border)' }} />

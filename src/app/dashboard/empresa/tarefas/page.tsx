@@ -38,6 +38,7 @@ import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 import { NOTIFICACOES_ATUALIZADAS_EVENT } from '@/hooks/useNotificacoes'
 import { LembretesPessoaisBoard, type LembretePessoal } from '@/components/cronograma/LembretesPessoaisBoard'
 import { BrazilianDateTimePicker } from '@/components/cronograma/BrazilianDateTimePicker'
+import { anteriorAoMinutoDaReferencia, formatarDataHoraBrasil } from '@/lib/dataHoraOperacional'
 
 type StatusTarefa = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA'
 type PrioridadeTarefa = 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE'
@@ -97,7 +98,7 @@ function formVazio(responsavelId = ''): FormTarefa {
   return {
     titulo: '',
     descricao: '',
-    inicio: '',
+    inicio: formatarDataHoraBrasil(),
     prazo: '',
     duracaoMinutos: '',
     lembreteEm: '',
@@ -318,6 +319,9 @@ export default function TarefasPage() {
         prioridade: form.prioridade,
         responsavelId: form.responsavelId,
         exibirCalendario: form.exibirCalendario,
+      }
+      if (!tarefaEditando && payload.inicio && anteriorAoMinutoDaReferencia(new Date(payload.inicio))) {
+        throw new Error('O início da tarefa não pode ser anterior ao momento do cadastro.')
       }
       const response = await fetch(tarefaEditando ? `/api/tarefas/${tarefaEditando.id}` : '/api/tarefas', {
         method: tarefaEditando ? 'PATCH' : 'POST',

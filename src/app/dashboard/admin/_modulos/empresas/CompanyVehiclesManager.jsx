@@ -3,12 +3,15 @@
 import { useEffect, useState } from 'react';
 import { Truck, Plus, Trash2, AlertCircle, X, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog';
 
 export default function CompanyVehiclesManager({ empresa, limiteTotal, primary }) {
   const [veiculos, setVeiculos] = useState([]);
   const [feedback, setFeedback] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [veiculoParaExcluir, setVeiculoParaExcluir] = useState(null);
+  const [excluindo, setExcluindo] = useState(false);
   const [formData, setFormData] = useState({ modelo: '', placa: '', tipo: 'Cavalo Mecânico' });
 
   useEffect(() => {
@@ -34,11 +37,20 @@ export default function CompanyVehiclesManager({ empresa, limiteTotal, primary }
     setIsModalOpen(false);
   };
 
-  const handleDelete = async (id, modelo) => {
-    if (confirm(`Remover o veículo ${modelo} permanentemente da frota desta empresa?`)) {
-      const response = await fetch(`/api/empresas/${empresa.id}/veiculos/${id}`, { method: 'DELETE' });
+  const handleDelete = async () => {
+    if (!veiculoParaExcluir || excluindo) return;
+    setExcluindo(true);
+    setFeedback('');
+    try {
+      const response = await fetch(`/api/empresas/${empresa.id}/veiculos/${veiculoParaExcluir.id}`, { method: 'DELETE' });
       const data = await response.json(); if (!response.ok) return setFeedback(data.erro || 'Falha ao excluir veículo.');
-      setVeiculos(veiculos.filter(v => v.id !== id));
+      setVeiculos(veiculos.filter(v => v.id !== veiculoParaExcluir.id));
+      setFeedback(`Veículo ${veiculoParaExcluir.modelo} removido da frota.`);
+      setVeiculoParaExcluir(null);
+    } catch {
+      setFeedback('Falha de conexão ao excluir veículo.');
+    } finally {
+      setExcluindo(false);
     }
   };
 
@@ -102,7 +114,7 @@ export default function CompanyVehiclesManager({ empresa, limiteTotal, primary }
                   <td className="px-5 py-4 text-xs opacity-70 uppercase font-mono">{v.tipo}</td>
                   <td className="px-5 py-4">
                     <button 
-                      onClick={() => handleDelete(v.id, v.modelo)}
+                      onClick={() => setVeiculoParaExcluir(v)}
                       className="p-2 border opacity-50 hover:opacity-100 hover:text-red-500 transition-all bg-background-secondary" 
                       style={{ borderColor: 'var(--border)' }}
                     >
@@ -130,7 +142,7 @@ export default function CompanyVehiclesManager({ empresa, limiteTotal, primary }
               initial={{ opacity: 0, scale: 0.95 }} 
               animate={{ opacity: 1, scale: 1 }} 
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md border bg-background flex flex-col shadow-2xl"
+              className="flex max-h-[88dvh] w-full max-w-md flex-col overflow-y-auto border bg-background shadow-2xl"
               style={{ borderColor: primary }}
             >
               {/* Header */}
@@ -180,6 +192,17 @@ export default function CompanyVehiclesManager({ empresa, limiteTotal, primary }
           </div>
         )}
       </AnimatePresence>
+
+      <ActionConfirmDialog
+        open={Boolean(veiculoParaExcluir)}
+        title="Remover veículo"
+        description={veiculoParaExcluir ? `O veículo ${veiculoParaExcluir.modelo} será removido permanentemente da frota desta empresa.` : ''}
+        confirmLabel="Remover veículo"
+        loadingLabel="Removendo..."
+        loading={excluindo}
+        onClose={() => setVeiculoParaExcluir(null)}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

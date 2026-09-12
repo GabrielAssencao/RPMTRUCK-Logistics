@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, KeyRound, UserPlus, Copy } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { ActionFeedback } from '@/components/motion/DashboardMotion';
 
 export default function AdminRequestsAndResets() {
   const { primary } = useTheme();
@@ -17,6 +18,7 @@ export default function AdminRequestsAndResets() {
   const [resets, setResets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generatedKey, setGeneratedKey] = useState({ id: null, key: '' });
+  const [feedback, setFeedback] = useState(null);
 
   // ─── BUSCANDO DADOS REAIS DO BANCO ─────────────────────────────────────────
   useEffect(() => {
@@ -54,11 +56,14 @@ export default function AdminRequestsAndResets() {
 
       if (response.ok) {
         setContas(contas.map(c => c.id === id ? { ...c, status: 'APROVADO' } : c));
-        alert("Instância criada na base de dados com sucesso!");
+        setFeedback({ message: 'Instância criada na base de dados com sucesso.', tone: 'success' });
+      } else {
+        const data = await response.json();
+        setFeedback({ message: data.erro || 'Não foi possível aprovar a solicitação.', tone: 'error' });
       }
     } catch (error) {
       console.error("Erro ao aprovar conta:", error);
-      alert("Falha ao se comunicar com o servidor.");
+      setFeedback({ message: 'Falha ao se comunicar com o servidor.', tone: 'error' });
     }
   };
 
@@ -89,13 +94,17 @@ export default function AdminRequestsAndResets() {
       } : r));
     } catch (error) {
       console.error("Erro ao liberar reset:", error);
-      alert(error instanceof Error ? error.message : 'Erro ao liberar o código de uso único.');
+      setFeedback({ message: error instanceof Error ? error.message : 'Erro ao liberar o código de uso único.', tone: 'error' });
     }
   };
 
-  const handleCopyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    alert(`Chave copiada com sucesso: ${text}`);
+  const handleCopyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setFeedback({ message: 'Chave de uso único copiada. Envie-a por um canal seguro.', tone: 'success' });
+    } catch {
+      setFeedback({ message: 'Não foi possível copiar a chave. Selecione e copie manualmente.', tone: 'error' });
+    }
   };
 
   // Lógica de filtragem baseada nas seleções superiores
@@ -104,6 +113,13 @@ export default function AdminRequestsAndResets() {
 
   return (
     <div className="space-y-6 max-w-full overflow-hidden">
+      <AnimatePresence initial={false}>
+        {feedback && (
+          <motion.div key={feedback.message} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
+            <ActionFeedback message={feedback.message} tone={feedback.tone} />
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* MENU SUPERIOR DE ABAS SECUNDÁRIAS */}
       <div className="flex border-b gap-2 overflow-x-auto custom-scrollbar" style={{ borderColor: 'var(--border)' }}>

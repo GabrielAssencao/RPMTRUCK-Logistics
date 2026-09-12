@@ -7,7 +7,6 @@ import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { calcularCoberturaTicket, gerarProtocoloTicket, inicioCompetencia, montarRespostaAutomatica } from '@/lib/suporte'
 import { prioridadeInicialTicket } from '@/lib/suporteConfig'
-import { notificarAdmins } from '@/lib/notificacoes'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,12 +82,6 @@ export async function POST(request: NextRequest) {
             atualizado_em: true,
           },
         })
-        await notificarAdmins({
-          modulo: 'CHAT',
-          titulo: `Novo ticket ${criado.protocolo}`,
-          mensagem: `${auth.empresa!.nome}: ${criado.assunto}`,
-          ticketSuporteId: criado.id,
-        }, tx)
         return criado
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 

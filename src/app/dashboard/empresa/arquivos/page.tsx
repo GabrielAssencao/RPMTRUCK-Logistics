@@ -5,6 +5,7 @@ import { Archive, CheckCircle2, Download, FileSpreadsheet, ShieldCheck, Trash2 }
 import { useTheme } from '@/contexts/ThemeContext'
 import ArquivosContasPagar from '@/components/dashboard/ArquivosContasPagar'
 import { DominoLoader, PrinterProgress, type PrinterStage } from '@/components/motion/OperationalFeedback'
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 
 type StatusArquivo = 'PRONTO_DOWNLOAD' | 'DOWNLOAD_REGISTRADO' | 'CONFIRMADO_GESTOR' | 'DADOS_PURGADOS' | 'ARQUIVO_REMOVIDO'
 
@@ -59,6 +60,7 @@ export default function ArquivosOperacionaisPage() {
   const [mensagem, setMensagem] = useState('')
   const [printerStage, setPrinterStage] = useState<PrinterStage | null>(null)
   const [printerError, setPrinterError] = useState('')
+  const [arquivoParaPurgar, setArquivoParaPurgar] = useState<ArquivoOperacional | null>(null)
 
   const carregar = useCallback(async () => {
     const response = await fetch('/api/relatorios/arquivos', { cache: 'no-store' })
@@ -134,7 +136,6 @@ export default function ArquivosOperacionaisPage() {
   })
 
   const purgar = (arquivo: ArquivoOperacional) => {
-    if (!window.confirm('Excluir os detalhes operacionais deste período e remover o Excel temporário? Código, origem, destino e data dos containers serão preservados.')) return
     executar(async () => {
       const response = await fetch(`/api/relatorios/arquivos/${arquivo.id}/purgar`, {
         method: 'POST',
@@ -144,6 +145,7 @@ export default function ArquivosOperacionaisPage() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.erro || 'Não foi possível limpar os detalhes.')
       setMensagem(data.aviso || 'Limpeza concluída; histórico permanente preservado.')
+      setArquivoParaPurgar(null)
     })
   }
 
@@ -206,7 +208,7 @@ export default function ArquivosOperacionaisPage() {
                 <div className="flex flex-wrap gap-2">
                   {!arquivo.arquivo_removido_em && <button type="button" disabled={processando} onClick={() => baixar(arquivo.id)} className="flex items-center gap-1 border px-3 py-2 text-[10px] font-bold uppercase disabled:opacity-40" style={{ borderColor: 'var(--border)' }}><Download size={12} /> Baixar</button>}
                   {podeGerenciar && arquivo.status === 'DOWNLOAD_REGISTRADO' && <button type="button" disabled={processando} onClick={() => confirmar(arquivo.id)} className="flex items-center gap-1 border px-3 py-2 text-[10px] font-bold uppercase disabled:opacity-40" style={{ borderColor: primary, color: primary }}><CheckCircle2 size={12} /> Confirmar guarda</button>}
-                  {podeGerenciar && arquivo.pode_purgar && <button type="button" disabled={processando} onClick={() => purgar(arquivo)} className="flex items-center gap-1 border border-red-500/50 px-3 py-2 text-[10px] font-bold uppercase text-red-500 disabled:opacity-40"><Trash2 size={12} /> Limpar detalhes</button>}
+                  {podeGerenciar && arquivo.pode_purgar && <button type="button" disabled={processando} onClick={() => setArquivoParaPurgar(arquivo)} className="flex items-center gap-1 border border-red-500/50 px-3 py-2 text-[10px] font-bold uppercase text-red-500 disabled:opacity-40"><Trash2 size={12} /> Limpar detalhes</button>}
                 </div>
               </article>
             ))}
@@ -214,6 +216,7 @@ export default function ArquivosOperacionaisPage() {
         )}
       </section>
       <ArquivosContasPagar />
+      <ActionConfirmDialog open={Boolean(arquivoParaPurgar)} title="Limpar detalhes operacionais" description="Os detalhes deste período e o Excel temporário serão excluídos. Código, origem, destino e data dos containers permanecerão preservados." confirmLabel="Limpar detalhes" cancelLabel="Manter arquivo" loading={processando} onClose={() => { if (!processando) setArquivoParaPurgar(null) }} onConfirm={() => { if (arquivoParaPurgar) purgar(arquivoParaPurgar) }} />
     </div>
   )
 }

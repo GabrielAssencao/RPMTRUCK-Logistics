@@ -122,8 +122,10 @@ export default function FrotaPage() {
       name: 'localizacao', 
       label: 'Base / Pátio de Origem', 
       type: 'select', 
-      required: true,
-      options: listaLocalizacoes.map(loc => ({ label: loc.nome, value: loc.id }))
+      options: [
+        { label: 'Sem base / pátio definido', value: 'SEM_BASE' },
+        ...listaLocalizacoes.map(loc => ({ label: loc.nome, value: loc.id })),
+      ]
     },
     { 
       name: 'status', 
@@ -239,7 +241,11 @@ export default function FrotaPage() {
       ano: Number(formData.ano),
       tipo: formData.tipo,
       quilometragem: Number(formData.quilometragem),
-      localizacaoId: typeof formData.localizacao === 'string' && formData.localizacao ? formData.localizacao : null,
+      localizacaoId: typeof formData.localizacao === 'string'
+        && formData.localizacao
+        && formData.localizacao !== 'SEM_BASE'
+        ? formData.localizacao
+        : null,
       status: formData.status,
     }
     const response = await fetch(veiculoParaEditar ? `/api/veiculos/${veiculoParaEditar.id}` : '/api/veiculos', {
@@ -712,7 +718,7 @@ export default function FrotaPage() {
           ano: veiculoParaEditar.ano,
           tipo: veiculoParaEditar.tipo,
           quilometragem: veiculoParaEditar.quilometragem,
-          localizacao: veiculoParaEditar.localizacaoId || listaLocalizacoes[0]?.id || '',
+          localizacao: veiculoParaEditar.localizacaoId || 'SEM_BASE',
           status: veiculoParaEditar.status
         } : undefined}
         onSubmit={handleSalvarVeiculo}

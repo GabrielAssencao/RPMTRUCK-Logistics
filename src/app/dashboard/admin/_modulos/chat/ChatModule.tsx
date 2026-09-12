@@ -9,6 +9,7 @@ import type { SupportAdminSummary, SupportTicket } from '@/components/dashboard/
 import { useTheme } from '@/contexts/ThemeContext'
 import { CATEGORIA_TICKET_LABEL, PRIORIDADE_TICKET_LABEL, STATUS_TICKET_LABEL } from '@/lib/suporteConfig'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 
 const STATUS = ['ABERTO', 'EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE', 'RESOLVIDO', 'FECHADO'] as const
 const PRIORIDADES = ['BAIXA', 'NORMAL', 'ALTA', 'URGENTE'] as const
@@ -38,6 +39,7 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
   const [feedback, setFeedback] = useState('')
   const [confirmarExclusao, setConfirmarExclusao] = useState(false)
   const [excluindo, setExcluindo] = useState(false)
+  const [classificacaoPendente, setClassificacaoPendente] = useState<ClassificacaoCobrancaTicket | null>(null)
   const ticketInicial = useRef<string | null>(initialTicketId)
 
   const carregar = useCallback(async (silencioso = false) => {
@@ -89,6 +91,11 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
       const body = await response.json()
       if (!response.ok) throw new Error(body.erro || 'Não foi possível atualizar o ticket.')
       await carregar(true)
+      setFeedback(alteracao.classificacaoCobranca === 'BUG_SISTEMA_CONFIRMADO'
+        ? 'Chamado confirmado como bug do sistema e removido da franquia mensal.'
+        : alteracao.classificacaoCobranca === 'ATENDIMENTO'
+          ? 'Chamado restaurado como atendimento contabilizado.'
+          : 'Chamado atualizado com sucesso.')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível atualizar o ticket.')
     } finally {
@@ -98,10 +105,7 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
 
   const atualizarClassificacao = (classificacaoCobranca: ClassificacaoCobrancaTicket) => {
     if (!selecionado || classificacaoCobranca === selecionado.classificacaoCobranca) return
-    const confirmacao = classificacaoCobranca === 'BUG_SISTEMA_CONFIRMADO'
-      ? 'Confirma que a equipe reproduziu e validou este chamado como bug do sistema? Ele deixará de consumir a franquia mensal da empresa.'
-      : 'Este chamado voltará a consumir a franquia mensal e poderá alterar a cobrança de outros tickets. Deseja continuar?'
-    if (window.confirm(confirmacao)) void atualizar({ classificacaoCobranca })
+    setClassificacaoPendente(classificacaoCobranca)
   }
 
   const excluirTicket = async () => {
@@ -234,6 +238,26 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
           </div>
         )}
       </div>
+
+      <ActionConfirmDialog
+        open={Boolean(classificacaoPendente)}
+        tone="warning"
+        eyebrow="Impacto na franquia"
+        title={classificacaoPendente === 'BUG_SISTEMA_CONFIRMADO' ? 'Confirmar bug do sistema' : 'Contabilizar como atendimento'}
+        description={classificacaoPendente === 'BUG_SISTEMA_CONFIRMADO'
+          ? 'Confirme somente se a equipe reproduziu e validou a falha. Este chamado deixará de consumir a franquia mensal da empresa.'
+          : 'Este chamado voltará a consumir a franquia mensal e poderá alterar a cobrança dos tickets seguintes.'}
+        confirmLabel={classificacaoPendente === 'BUG_SISTEMA_CONFIRMADO' ? 'Confirmar como bug' : 'Contabilizar chamado'}
+        cancelLabel="Manter classificação"
+        loading={saving}
+        onClose={() => { if (!saving) setClassificacaoPendente(null) }}
+        onConfirm={() => {
+          if (!classificacaoPendente) return
+          const classificacao = classificacaoPendente
+          setClassificacaoPendente(null)
+          void atualizar({ classificacaoCobranca: classificacao })
+        }}
+      />
 
       <AnimatePresence>
         {confirmarExclusao && selecionado && (

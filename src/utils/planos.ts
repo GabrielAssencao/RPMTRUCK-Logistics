@@ -138,8 +138,10 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
       'Liberação e remoção de módulos pelo SuperAdmin',
       '50 tickets de suporte por mês para homologação',
     ],
-    usuariosBase: 999,
-    veiculosBase: 999,
+    // Preview tem capacidade explícita: um gestor e nenhuma vaga de frota
+    // automática. O admin define os totais pelos adicionais da empresa.
+    usuariosBase: 1,
+    veiculosBase: 0,
     historicoAnos: 3,
     notificacoes: 'CENTRAL_HEADER',
     delegacaoTarefas: true,

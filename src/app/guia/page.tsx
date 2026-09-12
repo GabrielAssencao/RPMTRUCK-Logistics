@@ -22,7 +22,7 @@ export default function GuidePage() {
       eyebrow="Central de ajuda"
       title="Guia de Uso da RPMTruck"
       description="Um roteiro prático para configurar a empresa, organizar a frota e manter a operação diária atualizada. Os menus exibidos dependem do papel do usuário e dos módulos do plano contratado."
-      updatedAt="27 de agosto de 2026"
+      updatedAt="12 de setembro de 2026"
       sections={sections}
     >
       <section>
@@ -32,7 +32,7 @@ export default function GuidePage() {
           <li>Depois da aprovação, use o e-mail corporativo e a senha temporária recebida em <strong className="text-foreground">Login</strong>. Ela vale por 72 horas e deve ser mantida em sigilo.</li>
           <li>No primeiro acesso, crie uma senha pessoal e definitiva com 12 ou mais caracteres, maiúscula, minúscula, número e símbolo. Só então a sessão será iniciada.</li>
           <li>Confirme o nome da empresa, os módulos ativos e seu papel. Se algo estiver incorreto, fale com o gestor antes de cadastrar dados.</li>
-          <li>Use o seletor no topo para ajustar cor e modo claro/escuro; a preferência fica somente no navegador.</li>
+          <li>Use o atalho de livro depois do chat para abrir os tutoriais por módulo. Tema e fundo seguem a identidade definida pelo gestor; a personalização individual depende da autorização dele.</li>
         </ol>
       </section>
 
@@ -41,7 +41,7 @@ export default function GuidePage() {
         <ol className="mt-4 list-decimal space-y-3 [&_li]:ml-5 [&_li]:pl-1">
           <li>Em <strong className="text-foreground">Configurações</strong>, revise razão social, e-mail, CNPJ e telefone da empresa.</li>
           <li>Em <strong className="text-foreground">Operadores</strong>, crie uma conta individual para cada pessoa. Escolha o menor nível de acesso necessário e evite contas compartilhadas.</li>
-          <li>Em <strong className="text-foreground">Frota → Localizações</strong>, cadastre pátios, garagens e bases antes dos veículos.</li>
+          <li>Em <strong className="text-foreground">Frota → Localizações</strong>, cadastre pátios, garagens e bases quando a empresa tiver esse controle. Caso contrário, use a opção sem base/pátio no cadastro do veículo.</li>
           <li>Em <strong className="text-foreground">Frota / Veículos</strong>, cadastre placa, modelo, tipo, ano, quilometragem, estado e base.</li>
           <li>Em <strong className="text-foreground">Motoristas</strong>, registre somente os dados necessários e associe veículo quando aplicável.</li>
           <li>Revise plano, módulos e limites em <strong className="text-foreground">Configurações</strong>. Alterações comerciais passam por solicitação e aprovação.</li>

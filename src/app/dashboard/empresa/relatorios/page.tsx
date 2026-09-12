@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { exportarPdf } from '@/utils/exportPdf'
 import { PLANOS_CONFIG, type PlanoTipo } from '@/utils/planos'
+import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 
 const RelatorioCustoVeiculoChart = dynamic(
   () => import('@/components/dashboard/empresa/RelatoriosCharts').then(modulo => modulo.RelatorioCustoVeiculoChart),
@@ -89,6 +90,7 @@ export default function RelatoriosPage() {
   const [arquivando, setArquivando] = useState(false)
   const [printerStage, setPrinterStage] = useState<PrinterStage | null>(null)
   const [printerError, setPrinterError] = useState('')
+  const [arquivoParaPurgar, setArquivoParaPurgar] = useState<RelatorioArquivado | null>(null)
   const [eficienciaMes, setEficienciaMes] = useState<Array<{ mes: string; custoKm: number; kmTotal: number }>>([])
   const [custoVeiculo, setCustoVeiculo] = useState<Array<{ veiculo: string; combustivel: number; manutencao: number }>>([])
   const [metricas, setMetricas] = useState<MetricasRelatorio>({
@@ -271,7 +273,7 @@ export default function RelatoriosPage() {
   }
 
   const handlePurgar = async (arquivo: RelatorioArquivado) => {
-    if (!window.confirm('Esta ação excluirá os detalhes operacionais presentes no Excel e removerá o arquivo temporário. O histórico mínimo dos containers será preservado. Deseja continuar?')) return
+    setArquivando(true)
     try {
       const response = await fetch(`/api/relatorios/arquivos/${arquivo.id}/purgar`, {
         method: 'POST',
@@ -282,8 +284,11 @@ export default function RelatoriosPage() {
       if (!response.ok) throw new Error(data.erro || 'Não foi possível concluir a limpeza.')
       await carregarArquivosPrivados()
       registrarExportacao(data.aviso || 'Limpeza concluída e histórico permanente preservado.')
+      setArquivoParaPurgar(null)
     } catch (error) {
       registrarExportacao(error instanceof Error ? error.message : 'Não foi possível concluir a limpeza.')
+    } finally {
+      setArquivando(false)
     }
   }
 
@@ -451,7 +456,7 @@ export default function RelatoriosPage() {
                     </button>
                   )}
                   {arquivo.pode_purgar && (
-                    <button type="button" onClick={() => handlePurgar(arquivo)} className="flex items-center gap-1 border border-red-500/50 px-3 py-2 text-[10px] font-bold uppercase text-red-500">
+                    <button type="button" onClick={() => setArquivoParaPurgar(arquivo)} className="flex items-center gap-1 border border-red-500/50 px-3 py-2 text-[10px] font-bold uppercase text-red-500">
                       <Trash2 size={12} /> Limpar detalhes
                     </button>
                   )}
@@ -465,6 +470,7 @@ export default function RelatoriosPage() {
       </section>
 
       <ArquivosContasPagar limite={20} />
+      <ActionConfirmDialog open={Boolean(arquivoParaPurgar)} title="Limpar dados arquivados" description="Os detalhes operacionais do Excel e o arquivo temporário serão removidos. O histórico mínimo dos containers permanecerá preservado." confirmLabel="Confirmar limpeza" cancelLabel="Manter arquivo" loading={arquivando} onClose={() => { if (!arquivando) setArquivoParaPurgar(null) }} onConfirm={() => { if (arquivoParaPurgar) void handlePurgar(arquivoParaPurgar) }} />
 
       {/* ─── BARRA DE FILTRO DE TEMPO INTELIGENTE ─── */}
       <div className="flex flex-col md:flex-row gap-4 mb-8">
@@ -586,10 +592,12 @@ export default function RelatoriosPage() {
       {/* ─── MODAL DE PERSONALIZAÇÃO DE DATAS COM TRAVA DE PLANO ─── */}
       <AnimatePresence>
         {modalPersonalizarOpen && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="adaptive-form-overlay fixed inset-0 z-50 flex bg-black/70 backdrop-blur-xs">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-md border p-6 font-mono space-y-4"
+              role="dialog"
+              aria-modal="true"
+              className="adaptive-form-panel w-full max-w-md space-y-4 overflow-y-auto border p-4 font-mono sm:p-5"
               style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}
             >
               <div className="flex justify-between items-center border-b pb-3" style={{ borderColor: 'var(--border)' }}>
