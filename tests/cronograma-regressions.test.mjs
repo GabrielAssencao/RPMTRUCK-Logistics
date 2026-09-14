@@ -91,8 +91,8 @@ test('lembretes pessoais são isolados, notificáveis e integrados ao calendári
   const page = read('src/app/dashboard/empresa/tarefas/page.tsx')
 
   assert.match(schema, /model LembretePessoal \{[\s\S]*empresaId String[\s\S]*usuarioId String[\s\S]*notificacoes Notificacao\[\]/)
-  assert.match(collection, /where: \{ empresaId: auth\.session\.empresaId, usuarioId: auth\.session\.userId \}/)
-  assert.match(item, /where: \{ id, empresaId: auth\.session\.empresaId, usuarioId: auth\.session\.userId \}/)
+  assert.match(collection, /where: \{ empresaId: auth\.session\.empresaId \?\? null, usuarioId: auth\.session\.userId \}/)
+  assert.match(item, /where: \{ id, empresaId: auth\.session\.empresaId \?\? null, usuarioId: auth\.session\.userId \}/)
   assert.match(rules, /LEVE: 3[\s\S]*MEDIA: 3[\s\S]*ALTA: 5/)
   assert.match(reminders, /lembretePessoal\.updateMany\([\s\S]*notificacaoEm: null[\s\S]*lembretePessoalId: lembrete\.id/)
   assert.match(board, /Meu quadro de lembretes[\s\S]*Somente você pode visualizar/)

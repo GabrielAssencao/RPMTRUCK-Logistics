@@ -191,6 +191,7 @@ model SolicitacaoAcesso {
   whatsapp      String?
   veiculos      Int // Frota base definida e travada pelo plano
   plano         PlanoTipo
+  diaVencimento Int @default(28) @map("dia_vencimento")
   mensagem      String?
   contatoPref   String            @default("email") // "email" ou "whatsapp"
   status        StatusSolicitacao @default(PENDENTE)
@@ -230,6 +231,10 @@ model Empresa {
   total_pago_historico String        @default("0,00")
   status_motivo        String?
   status_alterado_em   DateTime?
+  pagamentoInicialVenceEm DateTime? @map("pagamento_inicial_vence_em")
+  primeiraMensalidadePagaEm DateTime? @map("primeira_mensalidade_paga_em")
+  cobrancaIniciadaEm DateTime? @map("cobranca_iniciada_em")
+  diaVencimento Int @default(28) @map("dia_vencimento")
 
   status_alterado_por_id String?
   status_alterado_por    Usuario? @relation("EmpresaStatusAlteradoPor", fields: [status_alterado_por_id], references: [id], onDelete: SetNull)
@@ -289,6 +294,7 @@ model Usuario {
   senhaAlteradaEm         DateTime  @default(now()) @map("senha_alterada_em")
   corTema                 String?   @map("cor_tema") @db.VarChar(16)
   temaClaro               Boolean?  @map("tema_claro")
+  lembretesRetencaoDias    Int?      @map("lembretes_retencao_dias")
   rotuloEquipe            String?   @map("rotulo_equipe") @db.VarChar(48)
   podePersonalizarTema    Boolean   @default(false) @map("pode_personalizar_tema")
   estiloFundo             String?   @map("estilo_fundo") @db.VarChar(24)
@@ -686,10 +692,11 @@ model LembretePessoal {
   notificarEm     DateTime  @map("notificar_em")
   notificacaoEm   DateTime? @map("notificacao_enviada_em")
   concluido       Boolean   @default(false)
+  concluidoEm     DateTime? @map("concluido_em")
   ordem           Int       @default(0)
 
-  empresaId String
-  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresaId String?
+  empresa   Empresa? @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
   usuarioId String
   usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -701,6 +708,7 @@ model LembretePessoal {
 
   @@index([empresaId, usuarioId, concluido, ordem])
   @@index([usuarioId, notificarEm, notificacaoEm])
+  @@index([concluido, concluidoEm])
   @@map("lembretes_pessoais")
 }
 
@@ -780,6 +788,8 @@ model Fatura {
   status         StatusFatura @default(PENDENTE)
   comprovanteUrl String? // Bucket Privado Supabase Storage
   pago_em        DateTime?
+  vencimento     DateTime?
+  chaveCobranca  String? @unique @map("chave_cobranca")
   pago_por_id    String?
   pago_por       Usuario?     @relation("FaturasBaixadasPor", fields: [pago_por_id], references: [id], onDelete: SetNull)
 
@@ -791,6 +801,7 @@ model Fatura {
   atualizado_em DateTime @updatedAt
 
   @@index([empresaId, criado_em])
+  @@index([empresaId, status, vencimento])
   @@index([status, criado_em])
   @@index([pago_por_id])
   @@map("faturas")

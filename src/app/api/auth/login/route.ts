@@ -8,6 +8,8 @@ import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
 import { obterModulosEfetivosUsuario, PLANOS_CONFIG } from '@/utils/planos';
 import { verifyBotToken } from '@/lib/botProtection';
 import { pseudonymize, recordSecurityEvent, safeUserAgent } from '@/lib/securityEvents';
+import { verificarAcessoFinanceiro } from '@/lib/financeiro/acessoFinanceiro';
+import { podeRegularizarFinanceiro } from '@/lib/financeiro/situacaoFinanceira';
 
 export async function POST(request: NextRequest) {
   try {
@@ -82,7 +84,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (usuario.empresaId && usuario.empresa?.status !== 'ATIVO') {
+    if (usuario.empresaId && usuario.empresa?.status !== 'ATIVO'
+      && !(usuario.role === 'GESTOR_EMPRESA' && usuario.empresa?.status === 'INADIMPLENTE')) {
       return NextResponse.json(
         { erro: 'O acesso desta empresa está temporariamente suspenso.' },
         { status: 403 }
@@ -90,6 +93,12 @@ export async function POST(request: NextRequest) {
     }
 
     let sessionVersion = usuario.sessaoVersao;
+    let acessoSomentePlano = false;
+    if (usuario.empresaId) {
+      const financeiro = await verificarAcessoFinanceiro(usuario.empresaId);
+      acessoSomentePlano = financeiro.bloqueado && podeRegularizarFinanceiro(usuario.role, 'situacao' in financeiro ? financeiro.situacao : undefined);
+      if (financeiro.bloqueado && !acessoSomentePlano) return NextResponse.json({ erro: financeiro.mensagem }, { status: 403 });
+    }
     if (usuario.exigeTrocaSenha) {
       const agora = new Date();
       if (!usuario.senhaTemporariaExpiraEm || usuario.senhaTemporariaExpiraEm <= agora) {
@@ -201,6 +210,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         sucesso: true,
+        acessoSomentePlano,
         usuario: {
           id: usuario.id,
           nome: usuario.nome,

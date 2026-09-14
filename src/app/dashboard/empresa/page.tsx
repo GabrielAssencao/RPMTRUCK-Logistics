@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import type { PlanoTipo } from '@/utils/planos'
 import { DASHBOARD_EMPRESA_ATUALIZADA_EVENT, sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
+import PaymentAccessNotice from '@/components/dashboard/empresa/PaymentAccessNotice'
 
 const DashboardCostAreaChart = dynamic(
   () => import('@/components/dashboard/empresa/EmpresaDashboardCharts').then(modulo => modulo.DashboardCostAreaChart),
@@ -97,7 +98,7 @@ export default function PainelEmpresa() {
       setNomeUsuario(data.usuario.nome)
       setNomeEmpresa(data.empresa.nome)
       setPlanoEmpresa(data.empresa.plano)
-      setTarefasHabilitadas(data.empresa.modulos.includes('TAREFAS'))
+      setTarefasHabilitadas(data.empresa.delegacaoTarefas === true)
       setPodeDelegarTarefas(Boolean(data.usuario.podeDelegar))
       setMetricas(data.metricas)
       setDadosGraficos(data.graficos)
@@ -197,6 +198,7 @@ export default function PainelEmpresa() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
+      {podeDelegarTarefas && <PaymentAccessNotice />}
       {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
       
       {/* ─── CABEÇALHO ─── */}

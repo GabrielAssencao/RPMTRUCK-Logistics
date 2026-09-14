@@ -10,6 +10,7 @@ const schema = z.object({
   ano: z.coerce.number().int().min(2020).max(2100),
   tipo: z.string().trim().min(2).max(50),
   valor: z.coerce.number().min(0).max(9_999_999_999.99),
+  vencimento: z.string().datetime().transform(value => new Date(value)).optional(),
 }).strict()
 
 export async function GET(request: NextRequest, context: RouteContext<'/api/empresas/[id]/faturas'>) {
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest, context: RouteContext<'/api/emp
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
   const limited = await applyRateLimit(request, `admin-faturas-create:${auth.session.userId}`, RATE_LIMITS.ADMIN_MUTATION.limit, RATE_LIMITS.ADMIN_MUTATION.windowMs)
   if (limited) return limited
-  const parsed = schema.safeParse(await request.json())
+  const parsed = schema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ erro: 'Dados da fatura inválidos.' }, { status: 400 })
   const { id } = await context.params
   const empresa = await prisma.empresa.findUnique({ where: { id }, select: { id: true } })

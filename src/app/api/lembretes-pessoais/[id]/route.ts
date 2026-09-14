@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireEmpresaAuth } from '@/lib/empresaAuth'
+import { requireLembreteAuth } from '@/lib/lembreteAuth'
 import { textoOperacional } from '@/lib/domainValidation'
 import { calcularNotificacaoLembrete, perfilPodeUsarLembretes, type ModoNotificacaoLembrete, type UrgenciaLembrete } from '@/lib/lembretePessoal'
 import { prisma } from '@/lib/prisma'
@@ -19,14 +19,14 @@ const atualizarSchema = z.object({
 }).strict().refine((dados) => Object.keys(dados).length > 0, { message: 'Informe uma alteração.' })
 
 async function autenticar(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS', acao: 'ESCRITA' })
-  if (auth.error || !auth.session?.empresaId) return { auth, response: NextResponse.json({ erro: auth.error }, { status: auth.status }) }
+  const auth = await requireLembreteAuth(request, true)
+  if (auth.error || !auth.session) return { auth, response: NextResponse.json({ erro: auth.error }, { status: auth.status }) }
   if (!perfilPodeUsarLembretes(auth.session.role)) {
     return { auth, response: NextResponse.json({ erro: 'Lembretes pessoais estão disponíveis para gestores e operadores.' }, { status: 403 }) }
   }
   const limited = await applyRateLimit(
     request,
-    `personal-reminder:${auth.session.empresaId}:${auth.session.userId}`,
+    `personal-reminder:${auth.session.empresaId ?? null}:${auth.session.userId}`,
     RATE_LIMITS.TASK_MUTATION.limit,
     RATE_LIMITS.TASK_MUTATION.windowMs,
   )
@@ -37,12 +37,12 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   const { id } = await props.params
   const { auth, response } = await autenticar(request)
   if (response) return response
-  if (!auth.session?.empresaId) return NextResponse.json({ erro: 'Sessão empresarial inválida.' }, { status: 403 })
+  if (!auth.session) return NextResponse.json({ erro: 'Sessão empresarial inválida.' }, { status: 403 })
   const parsed = atualizarSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ erro: 'Alteração do lembrete inválida.' }, { status: 400 })
 
   const atual = await prisma.lembretePessoal.findFirst({
-    where: { id, empresaId: auth.session.empresaId, usuarioId: auth.session.userId },
+    where: { id, empresaId: auth.session.empresaId ?? null, usuarioId: auth.session.userId },
   })
   if (!atual) return NextResponse.json({ erro: 'Lembrete não encontrado.' }, { status: 404 })
 
@@ -85,6 +85,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     where: { id: atual.id },
     data: {
       ...parsed.data,
+      concluidoEm: parsed.data.concluido === undefined ? undefined : parsed.data.concluido ? (atual.concluidoEm ?? new Date()) : null,
       dataHora: parsed.data.dataHora ? dataHora : undefined,
       notificarEm: configuracaoInformada ? notificarEm : undefined,
       notificacaoEm: deveReagendar ? null : undefined,
@@ -97,10 +98,10 @@ export async function DELETE(request: NextRequest, props: { params: Promise<{ id
   const { id } = await props.params
   const { auth, response } = await autenticar(request)
   if (response) return response
-  if (!auth.session?.empresaId) return NextResponse.json({ erro: 'Sessão empresarial inválida.' }, { status: 403 })
+  if (!auth.session) return NextResponse.json({ erro: 'Sessão empresarial inválida.' }, { status: 403 })
 
   const removido = await prisma.lembretePessoal.deleteMany({
-    where: { id, empresaId: auth.session.empresaId, usuarioId: auth.session.userId },
+    where: { id, empresaId: auth.session.empresaId ?? null, usuarioId: auth.session.userId },
   })
   if (removido.count !== 1) return NextResponse.json({ erro: 'Lembrete não encontrado.' }, { status: 404 })
   return NextResponse.json({ sucesso: true })

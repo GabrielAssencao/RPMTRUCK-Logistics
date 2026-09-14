@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Megaphone,
   Bell,
+  CalendarDays,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
@@ -31,6 +32,7 @@ import { estiloFundoEmpresaValido, type EstiloFundoEmpresa } from '@/lib/empresa
 // ─── Marcadores Operacionais do Super Admin ─────────────────────────────────
 const NAV_ADMIN = [
   { id: 'dashboard', icon: LayoutDashboard, label: 'PAINEL MASTER' },
+  { id: 'cronograma', icon: CalendarDays, label: 'CRONOGRAMA' },
   { id: 'companies', icon: Building2, label: 'EMPRESAS / CLIENTES' },
   { id: 'requests', icon: ShieldAlert, label: 'SOLICITAÇÕES DE ACESSO' },
   { id: 'subscriptions', icon: CreditCard, label: 'PLANOS / ASSINATURAS' },
@@ -44,10 +46,11 @@ const NOTIFICATIONS_ITEM = { id: 'notifications', icon: Bell, label: 'CENTRAL DE
 
 const LARGURA_RECOLHIDA = '72px'
 const LARGURA_EXPANDIDA = '16rem'
-export type AdminTab = 'dashboard' | 'companies' | 'requests' | 'subscriptions' | 'resets' | 'security' | 'chat' | 'alerts' | 'notifications' | 'settings'
+export type AdminTab = 'cronograma' | 'dashboard' | 'companies' | 'requests' | 'subscriptions' | 'resets' | 'security' | 'chat' | 'alerts' | 'notifications' | 'settings'
 
 // Dicionário para traduzir o activeTab no Header
 const TAB_LABELS: Record<AdminTab, string> = {
+  'cronograma': 'CRONOGRAMA',
   'chat': 'CHAT',
   'alerts': 'ALERTAS',
   'dashboard': 'PAINEL',
@@ -145,7 +148,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
             {NAV_ADMIN.map((item) => {
               const active = activeTab === item.id
               const Icon = item.icon
-              const moduloNotificacao = item.id === 'requests' ? 'ACESSO' : item.id === 'subscriptions' ? 'ASSINATURA' : item.id === 'resets' ? 'SENHAS' : item.id === 'companies' ? 'EMPRESAS' : 'SISTEMA'
+              const moduloNotificacao = item.id === 'cronograma' ? 'TAREFAS' : item.id === 'requests' ? 'ACESSO' : item.id === 'subscriptions' ? 'ASSINATURA' : item.id === 'resets' ? 'SENHAS' : item.id === 'companies' ? 'EMPRESAS' : 'SISTEMA'
               const totalPendencias = pendenciasPorModulo[moduloNotificacao] ?? 0
 
               return (

@@ -26,5 +26,5 @@ export function calcularNotificacaoLembrete(
 }
 
 export function perfilPodeUsarLembretes(role: string) {
-  return ['GESTOR_EMPRESA', 'GESTOR', 'OPERADOR'].includes(role)
+  return ['ADMIN_RPM', 'ADMIN', 'GESTOR_EMPRESA', 'GESTOR', 'OPERADOR'].includes(role)
 }

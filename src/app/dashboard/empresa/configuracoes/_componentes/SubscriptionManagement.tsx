@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, CreditCard, Loader2, Plus, Send, Users, Truck } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import PaymentAccessCountdown, { type ResumoPagamento } from '@/components/dashboard/empresa/PaymentAccessCountdown'
 
 type PlanoId = 'ESSENCIAL' | 'AVANCADO' | 'ENTERPRISE'
 
@@ -46,9 +47,11 @@ interface FaturaPendente {
   ano: number
   tipo: string
   valor: number
+  vencimento: string | null
 }
 
 interface AssinaturaResponse {
+  pagamento: ResumoPagamento
   empresa: {
     nome: string
     plano: PlanoId | 'PREVIEW'
@@ -179,12 +182,23 @@ export default function SubscriptionManagement() {
 
   return (
     <div className="space-y-8">
+      <PaymentAccessCountdown pagamento={dados.pagamento} />
+      <section aria-label="Pagamentos e pendências" className="border p-4" style={{ backgroundColor: 'var(--background-secondary)' }}>
+        <h2 className="font-bold">Pagamentos e pendências do plano</h2>
+        <p className="mt-2 text-sm text-foreground-muted">O pagamento online e o cadastro de formas de pagamento ainda não estão disponíveis. Use a negociação abaixo para combinar a regularização com o suporte. Enviar uma proposta não quita a fatura nem prorroga o acesso.</p>
+        {dados.faturasPendentes.length === 0 ? <p className="mt-3 text-sm">Nenhuma cobrança pendente.</p> : <ul className="mt-3 space-y-2 text-sm">{dados.faturasPendentes.map(fatura => (
+          <li key={fatura.id} className="flex flex-wrap justify-between gap-2 border-t pt-2">
+            <span>{fatura.tipo === 'IMPLEMENTACAO' ? 'Implantação' : 'Mensalidade'} · {fatura.mes}/{fatura.ano} · {moeda.format(fatura.valor)}</span>
+            <span className="text-foreground-muted">{fatura.vencimento ? `Bloqueio a partir de ${new Date(fatura.vencimento).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })} (Brasília)` : 'Prazo a confirmar com o suporte'}</span>
+          </li>
+        ))}</ul>}
+      </section>
       {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
 
       <section className="border p-6" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
         <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.28em]" style={{ color: primary }}>Assinatura ativa</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.28em]" style={{ color: primary }}>{dados.pagamento.bloqueado ? 'Acesso operacional bloqueado' : 'Seu plano'}</div>
             <h3 className="mt-2 text-3xl font-black uppercase font-rajdhani">Plano {dados.empresa.plano}</h3>
           </div>
           <div className="text-left md:text-right">
@@ -214,7 +228,7 @@ export default function SubscriptionManagement() {
               <button
                 type="button"
                 key={plano.id}
-                disabled={atual || processando}
+                disabled={atual || processando || dados.pagamento.bloqueado}
                 onClick={() => setPlanoSelecionado(planoId)}
                 className="border p-5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 style={{ borderColor: planoSelecionado === plano.id ? primary : 'var(--border)', backgroundColor: 'var(--background-secondary)' }}
@@ -240,7 +254,7 @@ export default function SubscriptionManagement() {
                 {previaPlano.bloqueios.map((bloqueio) => <p key={bloqueio} className="mt-2 text-sm text-red-500">• {bloqueio}</p>)}
                 <button
                   type="button"
-                  disabled={processando}
+                  disabled={processando || dados.pagamento.bloqueado}
                   onClick={() => void enviar({ tipo: 'ALTERAR_PLANO', plano: planoSelecionado }, 'Solicitação de alteração de plano enviada.')}
                   className="mt-5 px-5 py-3 text-xs font-black uppercase tracking-widest disabled:opacity-50"
                   style={{ backgroundColor: primary, color: '#000' }}
@@ -264,7 +278,7 @@ export default function SubscriptionManagement() {
           <div><span className="text-sm text-foreground-muted">Nova mensalidade estimada: </span><strong>{moeda.format(mensalidadeComCotas)}</strong></div>
           <button
             type="button"
-            disabled={processando || (adicionarUsuarios === 0 && adicionarVeiculos === 0)}
+            disabled={processando || dados.pagamento.bloqueado || (adicionarUsuarios === 0 && adicionarVeiculos === 0)}
             onClick={() => void enviar({ tipo: 'ALTERAR_COTAS', adicionarUsuarios, adicionarVeiculos }, 'Solicitação de capacidade enviada.')}
             className="px-5 py-3 text-xs font-black uppercase tracking-widest disabled:opacity-40"
             style={{ backgroundColor: primary, color: '#000' }}

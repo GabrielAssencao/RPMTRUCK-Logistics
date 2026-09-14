@@ -3,6 +3,8 @@ import { cookies } from 'next/headers'
 import type { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { verificarAcessoFinanceiro } from '@/lib/financeiro/acessoFinanceiro'
+import { podeRegularizarFinanceiro } from '@/lib/financeiro/situacaoFinanceira'
 import {
   getJwtSecret,
   isAdminRole,
@@ -129,6 +131,13 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
     usuario.sessaoVersao !== tokenSession.sessionVersion
   ) {
     return { error: 'Sessão expirada ou revogada', status: 401, session: null }
+  }
+
+  if (usuario.empresaId && !isAdminRole(usuario.role)) {
+    const financeiro = await verificarAcessoFinanceiro(usuario.empresaId)
+    const regularizacao = request.nextUrl.pathname === '/api/empresa/assinatura'
+      && podeRegularizarFinanceiro(usuario.role, 'situacao' in financeiro ? financeiro.situacao : undefined)
+    if (financeiro.bloqueado && !regularizacao) return { error: financeiro.mensagem, status: 403, session: null }
   }
 
   if (tokenSession.sessionId) {

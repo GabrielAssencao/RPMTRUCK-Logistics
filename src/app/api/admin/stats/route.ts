@@ -2,6 +2,8 @@ import { requireAdminAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { avaliarSituacaoFinanceira } from '@/lib/financeiro/situacaoFinanceira'
+import { faturasPendentesFinanceiras } from '@/lib/financeiro/acessoFinanceiro'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +25,7 @@ export async function GET(request: NextRequest) {
       receitaAgregada,
       planosDistribuicao,
       ultimasSolicitacoes,
+      empresasFinanceiras,
     ] = await Promise.all([
       prisma.empresa.groupBy({ by: ['status'], _count: { id: true } }),
       prisma.usuario.count(),
@@ -41,11 +44,13 @@ export async function GET(request: NextRequest) {
           criado_em: true,
         },
       }),
+      prisma.empresa.findMany({ where: { excluidoEm: null }, select: { plano: true, status: true, pagamentoInicialVenceEm: true, primeiraMensalidadePagaEm: true, faturas: faturasPendentesFinanceiras } }),
     ])
 
     const totalEmpresas = statusDistribuicao.reduce((total, item) => total + item._count.id, 0)
-    const empresasAtivas = statusDistribuicao.find(item => item.status === 'ATIVO')?._count.id ?? 0
-    const empresasBloqueadas = statusDistribuicao.find(item => item.status === 'INADIMPLENTE')?._count.id ?? 0
+    const financeiro = empresasFinanceiras.map(empresa => avaliarSituacaoFinanceira(empresa))
+    const empresasAtivas = financeiro.filter(empresa => !empresa.bloqueado).length
+    const empresasBloqueadas = financeiro.filter(empresa => empresa.bloqueado).length
     const receitaTotal = receitaAgregada._sum.valor ?? 0
 
     return NextResponse.json(
@@ -54,6 +59,9 @@ export async function GET(request: NextRequest) {
           totalEmpresas,
           empresasAtivas,
           empresasBloqueadas,
+          empresasInadimplentes: financeiro.filter(empresa => empresa.situacao === 'INADIMPLENTE').length,
+          primeiroPagamentoVencido: financeiro.filter(empresa => empresa.situacao === 'PAGAMENTO_INICIAL_VENCIDO').length,
+          aguardandoPrimeiroPagamento: financeiro.filter(empresa => empresa.situacao === 'AGUARDANDO_PAGAMENTO_INICIAL').length,
           usuariosTotal,
           solicitacoesPendentes,
           resetsPendentes,

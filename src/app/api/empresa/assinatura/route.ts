@@ -13,6 +13,9 @@ import {
 } from '@/lib/financeiro/planosComerciais'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { adicionaisPadraoNaTrocaDePlano } from '@/utils/planos'
+import { avaliarSituacaoFinanceira } from '@/lib/financeiro/situacaoFinanceira'
+import { faturasPendentesFinanceiras } from '@/lib/financeiro/acessoFinanceiro'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,7 +77,7 @@ export async function GET(request: NextRequest) {
   const [empresa, planos, solicitacoes, faturasPendentes] = await Promise.all([
     prisma.empresa.findUnique({
       where: { id: auth.session.empresaId },
-      include: { _count: { select: { usuarios: true, veiculos_frota: true } } },
+      include: { _count: { select: { usuarios: true, veiculos_frota: true } }, faturas: faturasPendentesFinanceiras },
     }),
     listarPlanosComerciais(),
     prisma.solicitacaoAssinatura.findMany({
@@ -103,15 +106,24 @@ export async function GET(request: NextRequest) {
       where: { empresaId: auth.session.empresaId, status: 'PENDENTE' },
       orderBy: { criado_em: 'desc' },
       take: 24,
-      select: { id: true, mes: true, ano: true, tipo: true, valor: true, criado_em: true },
+      select: { id: true, mes: true, ano: true, tipo: true, valor: true, criado_em: true, vencimento: true },
     }),
   ])
 
   if (!empresa) return NextResponse.json({ erro: 'Empresa não encontrada.' }, { status: 404 })
+  const pendencias = await prisma.fatura.aggregate({ where: { empresaId: empresa.id, status: 'PENDENTE', valor: { gt: 0 } }, _min: { vencimento: true }, _sum: { valor: true } })
+  const financeiro = avaliarSituacaoFinanceira(empresa)
   const catalogoAtual = await obterPlanoComercial(empresa.plano)
   if (!catalogoAtual) return NextResponse.json({ erro: 'Plano comercial não configurado.' }, { status: 503 })
 
   return NextResponse.json({
+    pagamento: {
+      vencimento: pendencias._min.vencimento ?? (!empresa.primeiraMensalidadePagaEm && pendencias._sum.valor ? empresa.pagamentoInicialVenceEm : null),
+      valorPendente: Number(pendencias._sum.valor ?? 0),
+      situacao: financeiro.situacao,
+      bloqueado: financeiro.bloqueado,
+      servidorAgora: new Date().toISOString(),
+    },
     empresa: {
       nome: empresa.nome,
       plano: empresa.plano,
@@ -148,8 +160,12 @@ export async function POST(request: NextRequest) {
   )
   if (limited) return limited
 
-  const parsed = criarSolicitacaoSchema.safeParse(await request.json())
+  const parsed = criarSolicitacaoSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ erro: 'Solicitação de assinatura inválida.' }, { status: 400 })
+  const financeiro = await prisma.empresa.findUniqueOrThrow({ where: { id: auth.session.empresaId }, include: { faturas: faturasPendentesFinanceiras } })
+  if (avaliarSituacaoFinanceira(financeiro).bloqueado && parsed.data.tipo !== 'NEGOCIAR_PAGAMENTO') {
+    return NextResponse.json({ erro: 'Regularize o pagamento antes de solicitar alterações de plano ou capacidade.' }, { status: 403 })
+  }
   if (
     parsed.data.tipo === 'ALTERAR_COTAS'
     && parsed.data.adicionarUsuarios === 0
@@ -177,12 +193,13 @@ export async function POST(request: NextRequest) {
           throw new Error('PLANO_INDISPONIVEL')
         }
 
+        const adicionais = adicionaisPadraoNaTrocaDePlano(empresa.plano, planoDestino, empresa.usuarios_adicionais, empresa.veiculos_adicionais)
         const usuariosDestino = parsed.data.tipo === 'ALTERAR_COTAS'
           ? empresa.usuarios_adicionais + parsed.data.adicionarUsuarios
-          : empresa.usuarios_adicionais
+          : adicionais.usuariosAdicionais
         const veiculosDestino = parsed.data.tipo === 'ALTERAR_COTAS'
           ? empresa.veiculos_adicionais + parsed.data.adicionarVeiculos
-          : empresa.veiculos_adicionais
+          : adicionais.veiculosAdicionais
 
         if (usuariosDestino > 10_000 || veiculosDestino > 100_000) {
           throw new Error('COTAS_FORA_DO_LIMITE')

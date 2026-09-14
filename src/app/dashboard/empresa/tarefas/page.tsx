@@ -40,6 +40,8 @@ import { LembretesPessoaisBoard, type LembretePessoal } from '@/components/crono
 import { BrazilianDateTimePicker } from '@/components/cronograma/BrazilianDateTimePicker'
 import { anteriorAoMinutoDaReferencia, formatarDataHoraBrasil } from '@/lib/dataHoraOperacional'
 
+import CronogramaPessoal from '@/components/cronograma/CronogramaPessoal'
+
 type StatusTarefa = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA'
 type PrioridadeTarefa = 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE'
 type PerfilUsuario = 'GESTOR_EMPRESA' | 'GESTOR' | 'OPERADOR' | 'VISUALIZADOR'
@@ -149,6 +151,7 @@ function ordemEntre(anterior: number | undefined, proxima: number | undefined) {
 export default function TarefasPage() {
   const { primary, semanticColors } = useTheme()
   const reduzirMovimento = useReducedMotion()
+  const [somenteLembretes, setSomenteLembretes] = useState(false)
   const [tarefas, setTarefas] = useState<Tarefa[]>([])
   const [lembretesPessoais, setLembretesPessoais] = useState<LembretePessoal[]>([])
   const [usuarios, setUsuarios] = useState<UsuarioOption[]>([])
@@ -177,18 +180,22 @@ export default function TarefasPage() {
     setLoading(true)
     setErro('')
     try {
-      const [tarefasResponse, perfilResponse] = await Promise.all([
-        fetch('/api/tarefas', { cache: 'no-store' }),
-        fetch('/api/empresa/perfil', { cache: 'no-store' }),
-      ])
-      const tarefasData = await tarefasResponse.json()
-      if (!tarefasResponse.ok) throw new Error(tarefasData.erro || 'Não foi possível carregar o cronograma.')
-      setTarefas(Array.isArray(tarefasData) ? tarefasData : [])
-
+      const perfilResponse = await fetch('/api/empresa/perfil', { cache: 'no-store' })
       const perfilData = await perfilResponse.json()
       if (!perfilResponse.ok) throw new Error(perfilData.erro || 'Não foi possível identificar seu perfil.')
       const role = perfilData.usuario.role as PerfilUsuario
       setPerfil(role)
+      const pessoal = perfilData.empresa.permissoes.telaTarefas === false
+      setSomenteLembretes(pessoal)
+      if (pessoal) {
+        setTarefas([])
+        setUsuarios([])
+        return
+      }
+      const tarefasResponse = await fetch('/api/tarefas', { cache: 'no-store' })
+      const tarefasData = await tarefasResponse.json()
+      if (!tarefasResponse.ok) throw new Error(tarefasData.erro || 'Não foi possível carregar o cronograma.')
+      setTarefas(Array.isArray(tarefasData) ? tarefasData : [])
 
       if (role === 'GESTOR_EMPRESA' || role === 'GESTOR') {
         const usuariosResponse = await fetch('/api/empresa/usuarios', { cache: 'no-store' })
@@ -429,6 +436,9 @@ export default function TarefasPage() {
     setMesAtual((atual) => new Date(atual.getFullYear(), atual.getMonth() + incremento, 1))
   }
 
+  if (loading && !perfil) return <DominoLoader label="Carregando cronograma" />
+  if (somenteLembretes) return <CronogramaPessoal permitirLembretes={perfil !== 'VISUALIZADOR'} />
+
   return (
     <div className="mx-auto max-w-[1750px] space-y-5 font-mono">
       <header className="flex flex-col gap-4 border-b pb-5 xl:flex-row xl:items-end xl:justify-between" style={{ borderColor: 'var(--border)' }}>
@@ -650,11 +660,6 @@ export default function TarefasPage() {
 
       <ActionConfirmDialog open={Boolean(exclusao)} title="Excluir tarefa" description={`A tarefa “${exclusao?.titulo ?? ''}” e suas notificações vinculadas serão removidas permanentemente.`} confirmLabel="Excluir tarefa" cancelLabel="Manter tarefa" loading={Boolean(processandoId)} onClose={() => { if (!processandoId) setExclusao(null) }} onConfirm={() => void confirmarExclusao()} />
 
-      <style jsx global>{`
-        .input-cronograma { min-height: 2.75rem; width: 100%; border: 1px solid var(--border); background: var(--background); padding: 0.7rem 0.8rem; color: var(--foreground); font-size: 0.75rem; outline: none; }
-        .modal-cronograma .input-cronograma { min-height: 2.5rem; padding: 0.55rem 0.65rem; }
-        .input-cronograma:focus-visible { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent); }
-      `}</style>
     </div>
   )
 }

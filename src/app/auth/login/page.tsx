@@ -97,6 +97,8 @@ export default function LoginPage() {
         
         if (data.usuario.role === 'ADMIN_RPM' || data.usuario.role === 'ADMIN') {
           router.replace('/dashboard/admin')
+        } else if (data.acessoSomentePlano) {
+          router.replace('/dashboard/plano')
         } else {
           router.replace('/dashboard/empresa')
         }

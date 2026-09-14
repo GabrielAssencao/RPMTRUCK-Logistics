@@ -31,7 +31,8 @@ export default function DashboardModule() {
 
   const listaEmpresas = Array.isArray(empresas) ? empresas : [];
 
-  const inadimplentes = listaEmpresas.filter(c => c.status === 'INADIMPLENTE');
+  const inadimplentes = listaEmpresas.filter(c => c.financeiro?.situacao === 'INADIMPLENTE');
+  const primeiroPagamentoVencido = listaEmpresas.filter(c => c.financeiro?.situacao === 'PAGAMENTO_INICIAL_VENCIDO');
   const solicitacoesPendentes = Number(stats?.resumo?.solicitacoesPendentes || 0);
   const receitaTotal = Number(stats?.resumo?.receitaTotal || 0);
 
@@ -75,6 +76,7 @@ export default function DashboardModule() {
 
       {erro && <div role="alert" className="border p-4 text-sm text-red-500 border-red-500/30 bg-red-500/10">{erro}</div>}
       <DashboardStats empresas={listaEmpresas} solicitacoesPendentes={solicitacoesPendentes} receita={receitaTotal} />
+      {primeiroPagamentoVencido.length > 0 && <div role="status" className="border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-bold text-amber-500">{primeiroPagamentoVencido.length} empresa(s) com primeiro pagamento vencido — ainda não ingressaram no plano. Não são clientes inadimplentes recorrentes.</div>}
 
       {inadimplentes.length > 0 && (
         <div className="border p-4 flex items-center gap-3 bg-red-500/10 border-red-500/30">

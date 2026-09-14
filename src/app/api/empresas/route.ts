@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { normalizarModulos } from '@/utils/planos'
+import { normalizarModulos, PLANOS_CONFIG } from '@/utils/planos'
+import { avaliarSituacaoFinanceira } from '@/lib/financeiro/situacaoFinanceira'
+import { faturasPendentesFinanceiras } from '@/lib/financeiro/acessoFinanceiro'
+import { atualizarCobrancasMensais } from '@/lib/financeiro/cicloCobranca'
 import { calcularMensalidadePorCatalogo, listarPlanosComerciais } from '@/lib/financeiro/planosComerciais'
 import { exposeEmpresa } from '@/lib/fieldEncryption'
 
@@ -14,10 +17,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    await atualizarCobrancasMensais()
     const [empresas, catalogo] = await Promise.all([
       prisma.empresa.findMany({
         where: { excluidoEm: null },
         include: {
+          faturas: faturasPendentesFinanceiras,
           _count: {
             select: {
               usuarios: { where: { excluidoEm: null } },
@@ -37,6 +42,8 @@ export async function GET(request: NextRequest) {
         const planoComercial = catalogoPorPlano.get(empresa.plano)
         return {
           ...exposeEmpresa(empresa),
+          financeiro: avaliarSituacaoFinanceira(empresa),
+          limiteUsuarios: PLANOS_CONFIG[empresa.plano].usuariosBase + empresa.usuarios_adicionais,
           modulos: normalizarModulos(empresa.modulos),
           mensalidade: planoComercial
             ? calcularMensalidadePorCatalogo(

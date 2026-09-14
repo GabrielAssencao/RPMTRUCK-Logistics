@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   const limiteContasProximas = new Date(hoje.getTime() + 4 * 86_400_000)
   const frotaHabilitada = auth.empresa.modulos.includes('FROTA')
   const gestaoHabilitada = auth.empresa.modulos.includes('GESTAO')
-  const tarefasHabilitadas = auth.empresa.modulos.includes('TAREFAS')
+  const tarefasHabilitadas = auth.empresa.modulos.includes('TAREFAS') && auth.empresa.permissoes.delegacaoTarefas
 
   const operadoresPromise = gestor && tarefasHabilitadas
     ? prisma.usuario.findMany({
@@ -253,6 +253,7 @@ export async function GET(request: NextRequest) {
       nome: auth.empresa.nome,
       plano: auth.empresa.plano,
       modulos: auth.empresa.modulos,
+      delegacaoTarefas: tarefasHabilitadas,
     },
     metricas: {
       totalVeiculos,

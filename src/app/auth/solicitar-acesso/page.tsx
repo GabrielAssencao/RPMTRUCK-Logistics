@@ -41,6 +41,7 @@ type FormData = {
   plano: string
   mensagem: string
   contatoPref: 'email' | 'whatsapp'
+  diaVencimento: number
 }
 
 export default function SolicitarAcesso() {
@@ -49,7 +50,7 @@ export default function SolicitarAcesso() {
   const [selectedPlan, setSelectedPlan] = useState<string>('')
   const [form, setForm] = useState<FormData>({
     empresa: '', responsavel: '', email: '', whatsapp: '',
-    veiculos: '', plano: '', mensagem: '', contatoPref: 'email',
+    veiculos: '', plano: '', mensagem: '', contatoPref: 'email', diaVencimento: 28,
   })
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -259,6 +260,15 @@ export default function SolicitarAcesso() {
             {/* 04 — MENSAGEM */}
             <FormSection label="04 — Mensagem Adicional (opcional)" primary={primary}>
               <textarea name="mensagem" maxLength={1500} placeholder="Precisa de mais veículos ou usuários do que o plano oferece? Descreva suas necessidades aqui..." value={form.mensagem} onChange={handleChange} rows={4} className="w-full resize-none text-sm outline-none transition-all duration-200 p-4 border font-sans" style={{ backgroundColor: 'var(--background-secondary)', border: `1px solid var(--border)`, color: 'var(--foreground)', borderRadius: '0' }} onFocus={e => e.target.style.borderColor = primary} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+            </FormSection>
+
+            <FormSection label="Vencimento da mensalidade" primary={primary}>
+              <label className="block text-xs font-bold" htmlFor="dia-vencimento">Dia de pagamento após a primeira mensalidade</label>
+              <select id="dia-vencimento" value={form.diaVencimento} onChange={event => setForm(current => ({ ...current, diaVencimento: Number(event.target.value) }))} className="mt-2 w-full border border-border bg-background-secondary p-3 text-foreground">
+                <option value={28}>Todo dia 28 (padrão)</option>
+                <option value={5}>Todo dia 5</option>
+              </select>
+              <p className="mt-2 text-xs text-foreground-muted">Após a aprovação, você terá três dias para pagar a primeira mensalidade e a implantação. As próximas mensalidades vencem no dia escolhido.</p>
             </FormSection>
 
             {(errorMessage || erroPlanos) && (

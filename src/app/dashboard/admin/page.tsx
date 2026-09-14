@@ -17,6 +17,8 @@ import ChatModule from './_modulos/chat/ChatModule'
 import AlertasModule from './_modulos/alertas/AlertasModule'
 import NotificationsModule from './_modulos/notificacoes/NotificationsModule'
 
+import CronogramaModule from './_modulos/cronograma/CronogramaModule'
+
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard')
   const [ticketSuporteId, setTicketSuporteId] = useState<string | null>(null)
@@ -41,6 +43,8 @@ export default function AdminPage() {
   // O "Cérebro" decide qual componente renderizar com base na aba ativa
   const renderModule = () => {
     switch (activeTab) {
+      case 'cronograma':
+        return <CronogramaModule key="cronograma" />
       case 'dashboard':
         return <DashboardModule key="dashboard" />
       case 'companies':

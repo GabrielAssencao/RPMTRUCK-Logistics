@@ -111,6 +111,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const rotasSomenteGestor = [
+    '/dashboard/plano',
     '/dashboard/empresa/motoristas',
     '/dashboard/empresa/arquivos',
     '/dashboard/empresa/relatorios',

@@ -4,9 +4,10 @@ import { UserPlus, Shield, Edit, Trash2, X, Check, AlertTriangle } from 'lucide-
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog';
 
-export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
+export default function CompanyUsersManager({ empresa, limiteTotal, primary, onUsageChange }) {
   const [usuarios, setUsuarios] = useState([]);
   const [feedback, setFeedback] = useState('');
+  const [carregado, setCarregado] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -17,10 +18,11 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary }) {
   const [formData, setFormData] = useState({ nome: '', email: '', cargo: 'OPERADOR', status: 'ativo', senha: '' });
 
   useEffect(() => {
-    fetch(`/api/empresas/${empresa.id}/usuarios`, { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setUsuarios(data.map(usuario => ({ ...usuario, cargo: usuario.role, status: 'ativo' }))); }).catch(error => setFeedback(error.message || 'Falha ao carregar usuários.'));
+    fetch(`/api/empresas/${empresa.id}/usuarios`, { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.erro); setUsuarios(data.map(usuario => ({ ...usuario, cargo: usuario.role, status: usuario.ativo ? 'ativo' : 'inativo' }))); setCarregado(true); }).catch(error => setFeedback(error.message || 'Falha ao carregar usuários.'));
   }, [empresa.id]);
 
-  const vagasDisponiveis = limiteTotal - usuarios.length;
+  useEffect(() => { if (carregado) onUsageChange?.(usuarios.length); }, [usuarios.length, carregado, onUsageChange]);
+  const vagasDisponiveis = Math.max(0, limiteTotal - usuarios.length);
   const limiteExcedido = vagasDisponiveis <= 0;
 
   const handleOpenModal = (user = null) => {

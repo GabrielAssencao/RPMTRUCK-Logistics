@@ -10,7 +10,7 @@ import { motion } from 'framer-motion';
 import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog';
 import CompanyUsersManager from './CompanyUsersManager'; 
 import CompanyVehiclesManager from './CompanyVehiclesManager'; 
-import { MODULOS, MODULOS_CONFIG, obterModulosPadrao, PLANOS, PLANOS_CONFIG } from '@/utils/planos';
+import { MODULOS, MODULOS_CONFIG, obterModulosPadrao, PLANOS, PLANOS_CONFIG, adicionaisPadraoNaTrocaDePlano } from '@/utils/planos';
 
 // ─── CONSTANTES DE PRECIFICAÇÃO E LIMITES ────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────
@@ -24,6 +24,9 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
   const [motivoStatus, setMotivoStatus] = useState(empresa.status_motivo || '');
   const [uExtra, setUExtra] = useState(empresa.usuarios_adicionais || 0);
   const [vExtra, setVExtra] = useState(empresa.veiculos_adicionais || 0);
+  const [diaVencimento, setDiaVencimento] = useState(empresa.diaVencimento ?? 28);
+  const [totalUsuarios, setTotalUsuarios] = useState(empresa._count?.usuarios ?? 0);
+  const [financeiro, setFinanceiro] = useState(empresa.financeiro);
   const [modulosAtivos, setModulosAtivos] = useState(empresa.modulos || []);
   const [salvando, setSalvando] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -48,6 +51,10 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
 
   // 1. Sincroniza módulos quando o plano muda
   const selecionarPlano = (novoPlano) => {
+    const adicionais = adicionaisPadraoNaTrocaDePlano(plano, novoPlano, uExtra, vExtra);
+    setUExtra(adicionais.usuariosAdicionais);
+    setVExtra(adicionais.veiculosAdicionais);
+    if (plano === 'PREVIEW' && novoPlano !== 'PREVIEW') setFeedback('As vagas gratuitas do Preview não são extras pagos. Confira a franquia e contrate adicionais somente se desejar. Nenhum usuário ou veículo será removido.');
     setPlano(novoPlano);
     setModulosAtivos(obterModulosPadrao(novoPlano));
   };
@@ -71,6 +78,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plano,
+          diaVencimento,
           status: statusEmpresa,
           status_motivo: statusEmpresa === 'ATIVO' ? null : motivoStatus,
           modulos: modulosAtivos,
@@ -81,6 +89,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.erro || 'Não foi possível salvar as alterações.');
       setFaturas((data.faturas || []).map(fatura => ({ ...fatura, status: fatura.status.toLowerCase() })));
+      setFinanceiro(data.empresa.financeiro);
       await onUpdate?.(data.empresa);
       setFeedback(`Configuração e cobrança sincronizadas. Mensalidade atual: R$ ${Number(data.mensalidade).toFixed(2)}.`);
     } catch (error) {
@@ -99,6 +108,8 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
       if (!response.ok) throw new Error(data.erro || 'Não foi possível dar baixa na fatura.');
       setFaturas(prev => prev.map(item => item.id === fatura.id ? { ...item, ...data, status: 'pago' } : item));
       setFeedback('Pagamento confirmado e registrado no histórico.');
+      setFinanceiro(data.financeiro);
+      await onUpdate?.();
       setFaturaParaLiquidar(null);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Não foi possível dar baixa na fatura.');
@@ -154,6 +165,11 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
       </div>
 
       {/* NAVEGAÇÃO ENTRE ABAS */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard label="USUÁRIOS / LIMITE" val={`${totalUsuarios} / ${config.usuariosBase + uExtra}`} sub="Inclui gestor e contas não excluídas" />
+        <StatCard label="VAGAS DISPONÍVEIS" val={Math.max(0, config.usuariosBase + uExtra - totalUsuarios)} sub={totalUsuarios > config.usuariosBase + uExtra ? 'Uso acima da franquia; novos cadastros bloqueados' : 'Capacidade com o plano selecionado'} />
+        <StatCard label="SITUAÇÃO FINANCEIRA" val={financeiro?.descricao ?? 'Carregando'} sub={financeiro?.bloqueado ? 'Acesso bloqueado' : financeiro?.situacao === 'AGUARDANDO_PAGAMENTO_INICIAL' && empresa.pagamentoInicialVenceEm ? `Prazo inicial: ${new Date(empresa.pagamentoInicialVenceEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : 'Cobrança independente da suspensão manual'} />
+      </div>
       <div className="flex gap-1 border-b overflow-x-auto custom-scrollbar" style={{borderColor: 'var(--border)'}}>
         {Abas.map(aba => (
           <button key={aba.id} onClick={() => setTabAtiva(aba.id)} className="px-4 py-3 text-[10px] font-black tracking-widest flex items-center gap-2 transition-all relative whitespace-nowrap" style={{ color: tabAtiva === aba.id ? primary : 'var(--foreground-muted)' }}>
@@ -205,6 +221,13 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
                   <div className="border p-3" style={{borderColor: 'var(--border)'}}><p className="text-[9px] font-black uppercase tracking-widest opacity-50">Implantação do catálogo</p><p className="mt-1 font-rajdhani text-xl font-black">R$ {Number(taxaImplantacaoCatalogo).toFixed(2)}</p></div>
                 </div>
                 <p className="mt-3 text-[10px] text-foreground-muted">Ao salvar, a mensalidade pendente da competência atual será sincronizada. A implantação só é criada no onboarding e nunca altera uma cobrança já paga.</p>
+                <p className="mt-3 text-xs text-foreground-muted">Composição: base {Number(comercial?.precoBase ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} + {uExtra} usuários × R$ {precoUsuarioAdicional} + {vExtra} veículos × R$ {precoVeiculoAdicional}. Implantação cobrada separadamente.</p>
+                <label className="mt-4 block text-xs font-bold">Vencimento escolhido pela empresa
+                  <select value={diaVencimento} onChange={event => setDiaVencimento(Number(event.target.value))} className="mt-2 w-full border border-border bg-background p-3 text-foreground">
+                    <option value={28}>Todo dia 28 (padrão)</option><option value={5}>Todo dia 5</option>
+                  </select>
+                </label>
+                <p className="mt-2 text-xs text-foreground-muted">Três dias para o primeiro pagamento. A alteração do dia vale para novas cobranças; não muda vencimentos de faturas já emitidas.</p>
              </section>
              <section>
                 <label className="text-[10px] font-black opacity-50 block mb-4 tracking-[0.3em]">MÓDULOS ATIVOS</label>
@@ -227,7 +250,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
                 <CounterCard label="VEÍCULOS EXTRAS" desc={`Custo: R$ ${Number(precoVeiculoAdicional).toFixed(2)}/cada`} val={vExtra} setVal={setVExtra} />
              </div>}
              {plano === 'PREVIEW' && <p className="text-xs text-foreground-muted">Ajuste os totais de usuários e veículos na aba Módulos &amp; Plano.</p>}
-             <CompanyUsersManager empresa={empresa} limiteTotal={config.usuariosBase + uExtra} primary={primary} />
+             <CompanyUsersManager empresa={empresa} limiteTotal={config.usuariosBase + uExtra} primary={primary} onUsageChange={setTotalUsuarios} />
           </div>
         )}
 
@@ -244,6 +267,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
                  <article key={f.id} className="border p-4" style={{borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)'}}>
                    <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-xs font-bold">{f.mes} / {f.ano}</p><p className="mt-1 text-[10px] font-black uppercase opacity-60">{f.tipo === 'IMPLEMENTACAO' ? 'TAXA DE CONFIGURAÇÃO' : f.tipo}</p></div><span className={`border px-2 py-1 text-[9px] font-black uppercase ${f.status === 'pago' ? 'border-green-500/20 text-green-500' : 'border-red-500/20 text-red-500'}`}>{f.status}</span></div>
                    <p className="my-4 font-rajdhani text-2xl font-black">R$ {Number(f.valor).toFixed(2)}</p>
+                   <p className="mb-3 text-xs text-foreground-muted">{f.vencimento ? `Pagar até ${new Date(new Date(f.vencimento).getTime() - 1).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}` : 'Vencimento não definido (legado)'}</p>
                    {f.status === 'pendente' ? <button type="button" disabled={salvando} onClick={() => { setFeedback(''); setFaturaParaLiquidar(f) }} className="min-h-11 w-full border text-[10px] font-black uppercase hover:border-green-500 hover:text-green-500 disabled:opacity-50" style={{borderColor: 'var(--border)'}}>Confirmar pagamento</button> : <p className="text-[10px] font-bold text-green-500">✓ RECEBIMENTO CONFERIDO</p>}
                  </article>
                ))}
@@ -257,7 +281,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
                       {faturas.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-xs opacity-50">Nenhuma fatura registrada para esta empresa.</td></tr>}
                       {faturas.map((f) => (
                          <tr key={f.id} className="border-b last:border-0 hover:bg-black/5 text-sm" style={{borderColor: 'var(--border)'}}>
-                            <td className="px-5 py-4 font-mono font-bold">{f.mes} / {f.ano}</td>
+                            <td className="px-5 py-4 font-mono font-bold">{f.mes} / {f.ano}<p className="mt-1 text-[10px] font-normal text-foreground-muted">{f.vencimento ? `Pagar até ${new Date(new Date(f.vencimento).getTime() - 1).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}` : 'Vencimento não definido (legado)'}</p></td>
                             <td className="px-5 py-4 text-[10px] font-black uppercase opacity-70">
                                {f.tipo === 'IMPLEMENTACAO' ? 'TAXA DE CONFIGURAÇÃO' : f.tipo}
                             </td>

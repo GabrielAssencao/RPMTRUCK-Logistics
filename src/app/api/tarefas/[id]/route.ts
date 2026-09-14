@@ -36,7 +36,7 @@ async function limitarMutacao(request: NextRequest, empresaId: string, usuarioId
 
 export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params
-  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS', acao: 'ESCRITA' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS', acao: 'ESCRITA', exigirDelegacaoTarefas: true })
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
 
   const limited = await limitarMutacao(request, auth.session.empresaId, auth.session.userId)
@@ -162,7 +162,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
 
 export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params
-  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS', acao: 'GESTAO' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS', acao: 'GESTAO', exigirDelegacaoTarefas: true })
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
 
   const limited = await limitarMutacao(request, auth.session.empresaId, auth.session.userId)

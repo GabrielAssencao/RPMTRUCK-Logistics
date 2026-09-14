@@ -12,11 +12,14 @@ import {
   obterModulosPadrao,
   PLANOS,
   STATUS_EMPRESA,
+  adicionaisPadraoNaTrocaDePlano,
 } from '@/utils/planos'
 import { sincronizarCobrancaEmpresa } from '@/lib/financeiro/faturamentoAdmin'
+import { avaliarSituacaoFinanceira } from '@/lib/financeiro/situacaoFinanceira'
 
 const atualizarEmpresaSchema = z.object({
   plano: z.enum(PLANOS).optional(),
+  diaVencimento: z.number().refine(value => value === 5 || value === 28).optional(),
   status: z.enum(STATUS_EMPRESA).optional(),
   status_motivo: z.string().trim().max(500).nullable().optional(),
   modulos: z.array(z.enum(MODULOS)).max(MODULOS.length).optional(),
@@ -55,14 +58,16 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
       : parsed.data.plano && parsed.data.plano !== empresaAtual.plano
         ? obterModulosPadrao(plano)
         : normalizarModulos(empresaAtual.modulos)
-    const usuariosAdicionais = parsed.data.usuarios_adicionais ?? empresaAtual.usuarios_adicionais
-    const veiculosAdicionais = parsed.data.veiculos_adicionais ?? empresaAtual.veiculos_adicionais
+    const adicionais = adicionaisPadraoNaTrocaDePlano(empresaAtual.plano, plano, empresaAtual.usuarios_adicionais, empresaAtual.veiculos_adicionais)
+    const usuariosAdicionais = parsed.data.usuarios_adicionais ?? adicionais.usuariosAdicionais
+    const veiculosAdicionais = parsed.data.veiculos_adicionais ?? adicionais.veiculosAdicionais
 
     const resultado = await executarComAuditoria({ usuarioId: auth.session!.userId, origem: 'SUPERADMIN' }, async (tx) => {
       const empresa = await tx.empresa.update({
         where: { id: params.id },
         data: {
           plano,
+          diaVencimento: parsed.data.diaVencimento,
           status,
           modulos,
           usuarios_adicionais: usuariosAdicionais,
@@ -80,7 +85,9 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
         veiculosAdicionais,
       })
       const faturas = await tx.fatura.findMany({ where: { empresaId: empresa.id }, orderBy: [{ ano: 'desc' }, { criado_em: 'desc' }] })
-      return { empresa, cobranca, faturas }
+      const atualizada = await tx.empresa.findUniqueOrThrow({ where: { id: empresa.id } })
+      const financeiro = avaliarSituacaoFinanceira({ ...atualizada, faturas: faturas.filter(fatura => fatura.status === 'PENDENTE' && fatura.valor > 0) })
+      return { empresa: { ...atualizada, financeiro }, cobranca, faturas }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
     const { empresa } = resultado
 

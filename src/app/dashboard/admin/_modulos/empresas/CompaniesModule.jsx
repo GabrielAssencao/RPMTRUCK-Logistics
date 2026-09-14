@@ -5,18 +5,21 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAdminData } from '../../_hooks/useAdminData';
 import { useTheme } from '@/contexts/ThemeContext';
 import CompanyFinancialControl from './CompanyFinancialControl';
+import { SITUACOES_FINANCEIRAS } from '@/lib/financeiro/situacaoFinanceira';
 
 export default function CompaniesModule() {
   const { primary } = useTheme();
   const { empresas, loading, refresh } = useAdminData();
   const [filtroBusca, setFiltroBusca] = useState('');
   const [empresaSelecionada, setEmpresaSelecionada] = useState(null);
+  const [filtroFinanceiro, setFiltroFinanceiro] = useState('TODAS');
 
   if (loading) return <div className="h-64 flex items-center justify-center font-bold animate-pulse tracking-widest">SINCRONIZANDO OPERAÇÕES...</div>;
 
   const listaEmpresas = Array.isArray(empresas) ? empresas : [];
-  const empresasFiltradas = listaEmpresas.filter(e => 
-    e.nome?.toLowerCase().includes(filtroBusca.toLowerCase()) || e.cnpj?.includes(filtroBusca)
+  const empresasFiltradas = listaEmpresas.filter(e =>
+    (filtroFinanceiro === 'TODAS' || e.financeiro?.situacao === filtroFinanceiro) &&
+    (e.nome?.toLowerCase().includes(filtroBusca.toLowerCase()) || e.cnpj?.includes(filtroBusca))
   );
 
   return (
@@ -29,6 +32,12 @@ export default function CompaniesModule() {
               <h1 className="text-2xl font-black sm:text-3xl" style={{ fontFamily: 'Rajdhani, sans-serif' }}>GESTÃO DE <span className="text-primary">EMPRESAS</span></h1>
             </div>
 
+            <div className="grid gap-3 sm:grid-cols-3">
+              {['AGUARDANDO_PAGAMENTO_INICIAL', 'PAGAMENTO_INICIAL_VENCIDO', 'INADIMPLENTE'].map(situacao => <button key={situacao} type="button" onClick={() => setFiltroFinanceiro(situacao)} className="border border-border bg-background-secondary p-3 text-left"><p className="text-xs text-foreground-muted">{SITUACOES_FINANCEIRAS[situacao]}</p><p className="mt-2 text-xl font-bold">{listaEmpresas.filter(empresa => empresa.financeiro?.situacao === situacao).length}</p></button>)}
+            </div>
+            <label className="block text-xs font-bold">Situação financeira
+              <select value={filtroFinanceiro} onChange={event => setFiltroFinanceiro(event.target.value)} className="mt-2 w-full border border-border bg-background-secondary p-3 text-foreground"><option value="TODAS">Todas as empresas</option>{Object.entries(SITUACOES_FINANCEIRAS).map(([codigo, label]) => <option key={codigo} value={codigo}>{label}</option>)}</select>
+            </label>
             <div className="flex gap-3 w-full">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 opacity-40" size={16} />
@@ -45,8 +54,9 @@ export default function CompaniesModule() {
               {empresasFiltradas.length === 0 && <p className="border border-dashed p-8 text-center text-xs text-foreground-muted" style={{borderColor: 'var(--border)'}}>Nenhuma empresa encontrada.</p>}
               {empresasFiltradas.map(empresa => (
                 <article key={empresa.id} className="border p-4" style={{borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)'}}>
-                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="break-words font-black uppercase">{empresa.nome}</h2><span className="mt-2 inline-block border px-2 py-0.5 text-[9px] font-mono" style={{color: primary, borderColor: `${primary}40`}}>{empresa.plano}</span></div><span className={`shrink-0 border px-2 py-1 text-[9px] font-black uppercase ${empresa.status === 'ATIVO' ? 'border-green-500/20 text-green-500' : 'border-red-500/20 text-red-500'}`}>{empresa.plano === 'PREVIEW' ? 'PREVIEW' : empresa.status}</span></div>
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="break-words font-black uppercase">{empresa.nome}</h2><span className="mt-2 inline-block border px-2 py-0.5 text-[9px] font-mono" style={{color: primary, borderColor: `${primary}40`}}>{empresa.plano}</span></div><span className={`shrink-0 border px-2 py-1 text-[9px] font-black uppercase ${empresa.financeiro?.bloqueado ? 'border-red-500/20 text-red-500' : 'border-green-500/20 text-green-500'}`}>{empresa.financeiro?.bloqueado ? 'ACESSO BLOQUEADO' : 'ACESSO LIBERADO'}</span></div>
                   <div className="my-4"><p className="text-[9px] font-black uppercase tracking-widest text-foreground-muted">Mensalidade</p><p className="mt-1 font-rajdhani text-xl font-black">{empresa.plano === 'PREVIEW' ? 'GRÁTIS' : `R$ ${Number(empresa.mensalidade).toFixed(2)}`}</p></div>
+                  <p className="mb-3 text-xs font-bold">{empresa.financeiro?.descricao ?? empresa.status} · Usuários: {empresa._count?.usuarios ?? 0} / {empresa.limiteUsuarios}</p>
                   <button type="button" onClick={() => setEmpresaSelecionada(empresa)} className="min-h-11 w-full text-xs font-black text-black" style={{backgroundColor: primary}}>GERENCIAR</button>
                 </article>
               ))}
@@ -79,8 +89,8 @@ export default function CompaniesModule() {
                         {empresa.plano === 'PREVIEW' ? (
                           <span className="text-[10px] px-2 py-1 uppercase font-mono border bg-blue-500/10 text-blue-400 border-blue-500/20">✦ PREVIEW</span>
                         ) : (
-                          <span className={`text-[10px] px-2 py-1 uppercase font-mono border ${empresa.status === 'ATIVO' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
-                            {empresa.status}
+                          <span className={`text-[10px] px-2 py-1 uppercase font-mono border ${empresa.financeiro?.bloqueado ? 'bg-red-500/10 text-red-500 border-red-500/20' : empresa.financeiro?.situacao === 'AGUARDANDO_PAGAMENTO_INICIAL' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-green-500/10 text-green-500 border-green-500/20'}`}>
+                            {empresa.financeiro?.descricao ?? empresa.status}
                           </span>
                         )}
                       </td>
@@ -99,7 +109,7 @@ export default function CompaniesModule() {
             <CompanyFinancialControl
               empresa={empresaSelecionada}
               onUpdate={(empresaAtualizada) => {
-                setEmpresaSelecionada(atual => ({ ...atual, ...empresaAtualizada }));
+                if (empresaAtualizada) setEmpresaSelecionada(atual => ({ ...atual, ...empresaAtualizada }));
                 void refresh();
               }}
             />

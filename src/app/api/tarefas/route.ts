@@ -45,7 +45,7 @@ function podeDelegar(role: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS', exigirDelegacaoTarefas: true })
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
 
   const limited = await applyRateLimit(
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS', acao: 'GESTAO' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS', acao: 'GESTAO', exigirDelegacaoTarefas: true })
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
 
   const limited = await applyRateLimit(

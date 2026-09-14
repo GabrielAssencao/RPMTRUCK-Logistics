@@ -20,7 +20,11 @@ export function LandingStatsProvider({ children }: { children: React.ReactNode }
     async function carregarEstatisticas() {
       try {
         const response = await fetch('/api/stats', { signal: controller.signal })
-        if (!response.ok) throw new Error('Falha ao carregar estatísticas públicas.')
+        if (!response.ok) {
+          // Métricas são opcionais; o erro HTTP não deve interromper a landing.
+          console.warn(`Estatísticas públicas indisponíveis (HTTP ${response.status}).`)
+          return
+        }
         const dados = await response.json() as Partial<LandingStats>
         setStats({
           empresas: Number(dados.empresas ?? 0),
@@ -30,7 +34,7 @@ export function LandingStatsProvider({ children }: { children: React.ReactNode }
         })
       } catch (error) {
         if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Não foi possível carregar as estatísticas da landing:', error)
+          console.warn('Não foi possível carregar as estatísticas públicas. A página continuará disponível.')
         }
       }
     }

@@ -23,6 +23,7 @@ export interface LembretePessoal {
   modoNotificacao: ModoNotificacao
   notificarEm: string
   notificacaoEm?: string | null
+  concluidoEm?: string | null
   concluido: boolean
   ordem: number
   criado_em: string
@@ -98,15 +99,20 @@ export function LembretesPessoaisBoard({
   onChange,
   createRequest = 0,
   showCreateAction = true,
+  onLoadState,
 }: {
   active: boolean
   onChange: (lembretes: LembretePessoal[]) => void
   createRequest?: number
   showCreateAction?: boolean
+  onLoadState?: (state: 'loading' | 'ready' | 'error') => void
 }) {
   const { primary, semanticColors } = useTheme()
   const reduzirMovimento = useReducedMotion()
   const [lembretes, setLembretes] = useState<LembretePessoal[]>([])
+  const [retencaoDias, setRetencaoDias] = useState('manter')
+  const [retencaoSalva, setRetencaoSalva] = useState('manter')
+  const [confirmarRetencao, setConfirmarRetencao] = useState(false)
   const [loading, setLoading] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -126,17 +132,24 @@ export function LembretesPessoaisBoard({
 
   const carregar = useCallback(async () => {
     setLoading(true)
+    setErro('')
+    onLoadState?.('loading')
     try {
       const response = await fetch('/api/lembretes-pessoais', { cache: 'no-store' })
       const data = await response.json()
       if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar seus lembretes.')
+      const prazo = response.headers.get('X-Lembretes-Retencao-Dias') ?? 'manter'
+      setRetencaoDias(prazo)
+      setRetencaoSalva(prazo)
       atualizarLista(Array.isArray(data) ? data : [])
+      onLoadState?.('ready')
     } catch (cause) {
+      onLoadState?.('error')
       setErro(cause instanceof Error ? cause.message : 'Falha ao carregar lembretes.')
     } finally {
       setLoading(false)
     }
-  }, [atualizarLista])
+  }, [atualizarLista, onLoadState])
 
   useEffect(() => { queueMicrotask(() => void carregar()) }, [carregar])
 
@@ -233,6 +246,27 @@ export function LembretesPessoaisBoard({
     }
   }
 
+  const salvarRetencao = async () => {
+    if (salvando) return
+    setSalvando(true)
+    setErro('')
+    try {
+      const response = await fetch('/api/lembretes-pessoais', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dias: retencaoDias === 'manter' ? null : Number(retencaoDias) }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro || 'Falha ao salvar a preferência.')
+      setRetencaoSalva(retencaoDias)
+      setConfirmarRetencao(false)
+      setSucesso('Preferência de limpeza salva.')
+      await carregar()
+      window.dispatchEvent(new Event(NOTIFICACOES_ATUALIZADAS_EVENT))
+    } catch (cause) {
+      setErro(cause instanceof Error ? cause.message : 'Falha ao salvar a preferência.')
+    } finally { setSalvando(false) }
+  }
+
   const excluir = async () => {
     if (!exclusao || salvando) return
     setSalvando(true)
@@ -281,6 +315,18 @@ export function LembretesPessoaisBoard({
         </div>
       </div>
 
+      <div className="mb-4 flex flex-wrap items-end gap-3 border p-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+        <label className="flex flex-col gap-2 text-xs" htmlFor="retencao-lembretes">
+          Apagar post-its concluídos
+          <select id="retencao-lembretes" value={retencaoDias} disabled={loading || salvando} onChange={(event) => setRetencaoDias(event.target.value)} className="interactive-control min-h-10 border px-3" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
+            <option value="manter">Manter até eu excluir</option>
+            {[1, 7, 30, 90].map((dias) => <option key={dias} value={dias}>Após {dias} {dias === 1 ? 'dia' : 'dias'}</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={loading || salvando || retencaoDias === retencaoSalva} onClick={() => retencaoDias === 'manter' ? void salvarRetencao() : setConfirmarRetencao(true)} className="interactive-control min-h-10 border px-3 text-xs disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>{salvando ? 'Salvando...' : 'Salvar preferência'}</button>
+        <p className="w-full text-[10px] text-foreground-muted">Prazo contado a partir da conclusão. A limpeza diária remove o post-it e suas notificações. Reabrir cancela a exclusão. Vale também para os já concluídos.</p>
+      </div>
+
       {(erro || sucesso) && <div className="mb-4"><ActionFeedback message={erro || sucesso} tone={erro ? 'error' : 'success'} /></div>}
 
       {loading ? <DominoLoader label="Organizando seus post-its" className="min-h-[420px]" /> : (
@@ -314,8 +360,9 @@ export function LembretesPessoaisBoard({
                       <span className="flex items-center gap-2"><Clock3 size={12} /> {paraDataBrasil(lembrete.dataHora)} às {paraHoraBrasil(lembrete.dataHora)}</span>
                       <span className="flex items-center gap-2 text-foreground-muted"><BellRing size={12} /> {lembrete.modoNotificacao === 'AUTOMATICA' ? ANTECEDENCIA[lembrete.urgencia] : `${paraDataBrasil(lembrete.notificarEm)} às ${paraHoraBrasil(lembrete.notificarEm)}`}</span>
                     </div>
-                    <button type="button" disabled={salvando} onClick={() => void alternarConcluido(lembrete)} className="interactive-control mt-4 min-h-9 border px-3 text-[9px] font-black uppercase disabled:opacity-50" style={{ borderColor: `${cor}77` }}>
-                      {lembrete.concluido ? 'Reabrir lembrete' : 'Marcar como concluído'}
+                    {lembrete.concluido && <span className="mt-3 flex items-center gap-2 text-xs"><Check size={14} /> Concluído</span>}
+                    <button type="button" aria-pressed={lembrete.concluido} disabled={salvando} onClick={() => void alternarConcluido(lembrete)} className="interactive-control mt-4 min-h-9 border px-3 text-[9px] font-black uppercase disabled:opacity-50" style={{ borderColor: `${cor}77` }}>
+                      <Check size={14} className="mr-2 inline" aria-hidden="true" /> {lembrete.concluido ? 'Reabrir lembrete' : 'Marcar como concluído'}
                     </button>
                   </motion.article>
                 )
@@ -354,6 +401,7 @@ export function LembretesPessoaisBoard({
         )}
       </AnimatePresence>
 
+      <ActionConfirmDialog open={confirmarRetencao} title="Ativar limpeza automática" description={"Post-its concluídos há " + retencaoDias + " dia(s) ou mais e suas notificações serão apagados permanentemente, incluindo os já existentes."} confirmLabel="Ativar limpeza" cancelLabel="Cancelar" loading={salvando} onClose={() => { if (!salvando) setConfirmarRetencao(false) }} onConfirm={() => void salvarRetencao()} />
       <ActionConfirmDialog open={Boolean(exclusao)} title="Excluir lembrete" description={`O lembrete “${exclusao?.titulo ?? ''}” e suas notificações vinculadas serão excluídos permanentemente.`} confirmLabel="Excluir lembrete" cancelLabel="Manter lembrete" loading={salvando} onClose={() => { if (!salvando) setExclusao(null) }} onConfirm={() => void excluir()} />
     </>
   )

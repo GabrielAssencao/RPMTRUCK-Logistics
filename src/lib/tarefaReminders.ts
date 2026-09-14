@@ -81,7 +81,7 @@ export async function entregarLembretesTarefas({ empresaId, usuarioId }: Entrega
   return entregues
 }
 
-export async function entregarLembretesPessoais({ empresaId, usuarioId }: EntregarLembretesInput) {
+export async function entregarLembretesPessoais({ empresaId, usuarioId }: { empresaId: string | null; usuarioId: string }) {
   const agora = new Date()
   const pendentes = await prisma.lembretePessoal.findMany({
     where: {

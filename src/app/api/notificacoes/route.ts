@@ -45,10 +45,12 @@ export async function GET(request: NextRequest) {
   const auth = await requireAuth(request)
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
 
+  let tarefasDelegadas = false
   let lembreteScope: { empresaId: string; usuarioId: string } | null = null
   if (!isAdminRole(auth.session.role)) {
     const empresaAuth = await requireEmpresaAuth(request)
     if (empresaAuth.error) return NextResponse.json({ erro: empresaAuth.error }, { status: empresaAuth.status })
+    tarefasDelegadas = empresaAuth.empresa?.permissoes.delegacaoTarefas === true
     if (empresaAuth.session?.empresaId) {
       lembreteScope = {
         empresaId: empresaAuth.session.empresaId,
@@ -63,10 +65,17 @@ export async function GET(request: NextRequest) {
     RATE_LIMITS.NOTIFICATION_READ.windowMs,
   )
   if (limited) return limited
+  if (isAdminRole(auth.session.role)) {
+    try {
+      await entregarLembretesPessoais({ empresaId: auth.session.empresaId ?? null, usuarioId: auth.session.userId })
+    } catch (error) {
+      console.error('Falha ao entregar lembretes pessoais do admin:', error)
+    }
+  }
   if (lembreteScope) {
     try {
       await Promise.all([
-        entregarLembretesTarefas(lembreteScope),
+        ...(tarefasDelegadas ? [entregarLembretesTarefas(lembreteScope)] : []),
         entregarLembretesPessoais(lembreteScope),
       ])
     } catch (error) {
