@@ -55,8 +55,11 @@ export async function removerArquivosContaPagar(caminhos: Array<string | null | 
   if (resultado.error) console.error('Falha ao remover documento financeiro órfão:', resultado.error.message)
 }
 
-export async function criarUrlAssinadaContaPagar(caminho: string) {
-  const resultado = await getSupabaseAdmin().storage.from(CONTAS_PAGAR_BUCKET).createSignedUrl(caminho, 60)
+export async function criarUrlAssinadaContaPagar(caminho: string, nomeDownload?: string) {
+  const bucket = getSupabaseAdmin().storage.from(CONTAS_PAGAR_BUCKET)
+  const resultado = nomeDownload
+    ? await bucket.createSignedUrl(caminho, 60, { download: nomeDownload })
+    : await bucket.createSignedUrl(caminho, 60)
   if (resultado.error || !resultado.data?.signedUrl) throw new ArquivoContaPagarError('Não foi possível liberar o documento.', 502)
   return resultado.data.signedUrl
 }

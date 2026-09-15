@@ -116,6 +116,24 @@ test('bucket financeiro é privado e acessado por URL assinada curta', () => {
   assert.match(storage, /createSignedUrl\(caminho, 60\)/)
 })
 
+test('documentos financeiros possuem visualizacao privada e download renovavel', () => {
+  const route = read('src/app/api/contas-pagar/[id]/arquivo/route.ts')
+  const storage = read('src/lib/financeiro/contasPagarStorage.ts')
+  const viewer = read('src/components/dashboard/DocumentoFinanceiroViewer.tsx')
+  const proxy = read('src/proxy.ts')
+
+  assert.match(route, /where: \{ id, empresaId: auth\.empresaId! \}/)
+  assert.match(route, /modo !== 'visualizar' && modo !== 'baixar'/)
+  assert.match(route, /boleto_nome: true, boleto_mime: true, boleto_tamanho: true/)
+  assert.match(route, /NextResponse\.redirect\(url, 307\)/)
+  assert.match(storage, /createSignedUrl\(caminho, 60, \{ download: nomeDownload \}\)/)
+  assert.match(viewer, /<iframe[\s\S]*documento\.url/)
+  assert.match(viewer, /modo=baixar/)
+  assert.match(viewer, /modo=visualizar/)
+  assert.match(viewer, /event\.key === 'Escape'/)
+  assert.match(proxy, /frame-src https:\/\/\*\.supabase\.co https:\/\/challenges\.cloudflare\.com/)
+})
+
 test('cancelamento substitui exclusão física e preserva a trilha financeira', () => {
   const route = read('src/app/api/contas-pagar/[id]/route.ts')
   const page = read('src/app/dashboard/empresa/contas-pagar/page.tsx')

@@ -9,7 +9,7 @@ function createContentSecurityPolicy(nonce: string) {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "frame-src https://challenges.cloudflare.com",
+    "frame-src https://*.supabase.co https://challenges.cloudflare.com",
     "object-src 'none'",
     `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://va.vercel-scripts.com${isDevelopment ? " 'unsafe-eval'" : ''}`,
     "script-src-attr 'none'",

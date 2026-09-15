@@ -11,6 +11,7 @@ import LeitorCamera, { type ModoLeitorCamera } from './_components/LeitorCamera'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { DominoLoader } from '@/components/motion/OperationalFeedback'
 import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
+import DocumentoFinanceiroViewer, { type DocumentoFinanceiro } from '@/components/dashboard/DocumentoFinanceiroViewer'
 
 interface Conta {
   id: string; descricao: string; fornecedor: string | null; vencimento: string; valor: number
@@ -77,6 +78,7 @@ export default function ContasPagarPage() {
   const [formEdicao, setFormEdicao] = useState<EstadoEdicao>({ descricao: '', fornecedor: '', vencimento: '', valor: '', linhaDigitavel: '' })
   const [comprovante, setComprovante] = useState<File | null>(null)
   const [configurandoPortal, setConfigurandoPortal] = useState(false)
+  const [documentoAberto, setDocumentoAberto] = useState<DocumentoFinanceiro | null>(null)
   const [portalForm, setPortalForm] = useState({ nome: '', url: '' })
   const submitRef = useRef(false)
   const leituraArquivoRef = useRef(0)
@@ -342,10 +344,11 @@ export default function ContasPagarPage() {
   }
 
   const abrirArquivo = async (contaId: string, tipo: 'boleto' | 'comprovante') => {
+    setFeedback('')
     const response = await fetch(`/api/contas-pagar/${contaId}/arquivo?tipo=${tipo}`, { cache: 'no-store' })
     const data = await response.json()
     if (!response.ok) return setFeedback(data.erro || 'Não foi possível abrir o arquivo.')
-    window.open(data.url, '_blank', 'noopener,noreferrer')
+    setDocumentoAberto({ contaId, tipo, url: data.url, nome: data.nome || (tipo === 'boleto' ? 'Boleto' : 'Comprovante') })
   }
 
   const copiarLinha = async (conta: Conta) => {
@@ -454,6 +457,8 @@ export default function ContasPagarPage() {
         </Modal>
       )}
 
+      {documentoAberto && <DocumentoFinanceiroViewer documento={documentoAberto} onClose={() => setDocumentoAberto(null)} />}
+
       {baixando && <Modal titulo="Confirmar pagamento" onClose={fecharConfirmacaoBaixa}><div className="space-y-4"><p className="text-sm"><strong>{baixando.descricao}</strong><br /><span className="text-foreground-muted">{moeda.format(baixando.valor)} · vencimento {new Date(`${baixando.vencimento}T12:00:00`).toLocaleDateString('pt-BR')}</span></p><p className="border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-500">Esta ação não movimenta dinheiro. Confirme somente depois de autorizar a operação no banco.</p><Campo label="Comprovante opcional (até 5 MB)"><input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setComprovante(e.target.files?.[0] ?? null)} className="input-financeiro file:mr-3 file:border-0 file:bg-transparent file:text-xs file:font-bold" /></Campo><p className="text-[11px] text-foreground-muted">O anexo não é obrigatório para confirmar este pagamento.</p><button type="button" disabled={enviando} onClick={() => void confirmarBaixa()} className="min-h-12 w-full text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}><Check size={15} className="mr-2 inline" />{enviando ? 'Confirmando...' : 'Confirmar pagamento'}</button></div></Modal>}
 
       {reabrindo && <Modal titulo="Reverter baixa" onClose={() => !enviando && setReabrindo(null)}><div className="space-y-4"><p className="text-sm"><strong>{reabrindo.descricao}</strong><br /><span className="text-foreground-muted">{moeda.format(reabrindo.valor)} · vencimento {new Date(`${reabrindo.vencimento}T12:00:00`).toLocaleDateString('pt-BR')}</span></p><p role="alert" className="border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-500">A conta e o custo vinculado voltarão para pendente. O comprovante da baixa equivocada será removido, e a reversão ficará registrada na auditoria.</p><div className="grid gap-2 sm:grid-cols-2"><button type="button" disabled={enviando} onClick={() => setReabrindo(null)} className="min-h-12 border px-4 text-xs font-black uppercase disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>Manter como paga</button><button type="button" disabled={enviando} onClick={() => void confirmarReabertura()} className="min-h-12 border border-amber-500 bg-amber-500 px-4 text-xs font-black uppercase text-black disabled:opacity-50">{enviando ? 'Revertendo...' : 'Confirmar reversão'}</button></div></div></Modal>}
@@ -497,8 +502,8 @@ function ContaCard({ conta, capacidades, portal, primary, onCopiar, onArquivo, o
       </div>
       {conta.linhaDigitavelFormatada && <p className="mt-4 break-all border p-2 font-mono text-[10px] text-foreground-muted" style={{ borderColor: 'var(--border)' }}>{conta.linhaDigitavelFormatada}</p>}
       <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-        {conta.possuiBoleto && <button type="button" onClick={() => onArquivo('boleto')} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><FileText size={13} className="mr-1 inline" />Boleto</button>}
-        {conta.possuiComprovante && <button type="button" onClick={() => onArquivo('comprovante')} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><ReceiptText size={13} className="mr-1 inline" />Comprovante</button>}
+        {conta.possuiBoleto && <button type="button" onClick={() => onArquivo('boleto')} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><FileText size={13} className="mr-1 inline" />Visualizar boleto</button>}
+        {conta.possuiComprovante && <button type="button" onClick={() => onArquivo('comprovante')} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><ReceiptText size={13} className="mr-1 inline" />Visualizar comprovante</button>}
         {conta.status !== 'CANCELADO' && <button type="button" onClick={onEditar} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><Pencil size={13} className="mr-1 inline" />Editar</button>}
         {conta.status === 'PENDENTE' && capacidades.copiarEAbrirPortal && conta.linhaDigitavel && <button type="button" onClick={onCopiar} className="min-h-10 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}><Copy size={13} className="mr-1 inline" />Copiar código</button>}
         {conta.status === 'PENDENTE' && capacidades.copiarEAbrirPortal && portal && <a href={portal.url} target="_blank" rel="noopener noreferrer" onClick={onCopiar} className="flex min-h-10 items-center justify-center border px-3 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}><ExternalLink size={13} className="mr-1" />Abrir banco</a>}
