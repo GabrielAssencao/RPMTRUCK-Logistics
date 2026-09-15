@@ -49,6 +49,14 @@ test('conformidade do motorista mantém datas válidas e isolamento empresarial'
   assert.match(item, /RATE_LIMITS\.TASK_MUTATION/)
 })
 
+test('modal de conformidade limita dimensões e mantém rolagem interna', () => {
+  const dialog = read('src/app/dashboard/empresa/motoristas/_components/ConformidadeMotoristaDialog.tsx')
+  assert.match(dialog, /max-h-\[92dvh\]/)
+  assert.match(dialog, /max-w-4xl/)
+  assert.match(dialog, /min-h-0 overflow-y-auto/)
+  assert.doesNotMatch(dialog, /max-w-5xl/)
+})
+
 test('tarefas e lembretes de dia inteiro comparam o dia local e omitem horário', () => {
   const { anteriorAoDiaDaReferencia } = loadTs('src/lib/dataHoraOperacional.ts')
   const referencia = new Date('2026-09-15T20:30:00-03:00')
