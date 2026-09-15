@@ -19,7 +19,28 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { criado_em: 'desc' },
     })
-    return NextResponse.json(resets)
+    const usuarios = resets.length > 0
+      ? await prisma.usuario.findMany({
+          where: { email: { in: [...new Set(resets.map((reset) => reset.email))] }, excluidoEm: null },
+          select: { id: true, nome: true, email: true, role: true, ativo: true, empresa: { select: { id: true, nome: true, excluidoEm: true } } },
+        })
+      : []
+    const usuarioPorEmail = new Map(usuarios.map((usuario) => [usuario.email, usuario]))
+    return NextResponse.json(resets.map((reset) => {
+      const usuario = usuarioPorEmail.get(reset.email)
+      return {
+        ...reset,
+        usuario: usuario ? {
+          id: usuario.id,
+          nome: usuario.nome,
+          role: usuario.role,
+          ativo: usuario.ativo,
+          empresa: usuario.empresa && !usuario.empresa.excluidoEm
+            ? { id: usuario.empresa.id, nome: usuario.empresa.nome }
+            : null,
+        } : null,
+      }
+    }))
   } catch (cause) {
     console.error('Erro ao listar redefinições:', cause)
     return NextResponse.json({ erro: 'Erro ao listar redefinições.' }, { status: 500 })

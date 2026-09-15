@@ -18,6 +18,8 @@ const MESES = [
 
 function extrairPartes(valor: string, horarioPadrao?: string): PartesDataHora {
   const resultado = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/.exec(valor)
+  const somenteData = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(valor)
+  if (somenteData) return { dia: somenteData[1], mes: somenteData[2], ano: somenteData[3], hora: '', minuto: '' }
   if (!resultado) {
     const [hora = '', minuto = ''] = horarioPadrao?.split(':') ?? []
     return { dia: '', mes: '', ano: '', hora, minuto }
@@ -35,13 +37,21 @@ export function BrazilianDateTimePicker({
   onChange,
   required = false,
   horarioPadrao,
+  somenteData = false,
 }: {
   value: string
   onChange: (value: string) => void
   required?: boolean
   horarioPadrao?: string
+  somenteData?: boolean
 }) {
   const [partes, setPartes] = useState<PartesDataHora>(() => extrairPartes(value, horarioPadrao))
+  const chaveExterna = `${value}\u0000${horarioPadrao ?? ''}\u0000${somenteData}`
+  const [ultimaChaveExterna, setUltimaChaveExterna] = useState(chaveExterna)
+  if (chaveExterna !== ultimaChaveExterna) {
+    setUltimaChaveExterna(chaveExterna)
+    setPartes(extrairPartes(value, somenteData ? undefined : horarioPadrao))
+  }
   const anoAtual = new Date().getFullYear()
   const anos = useMemo(() => {
     const lista = Array.from({ length: 26 }, (_, indice) => String(anoAtual - 10 + indice))
@@ -54,8 +64,9 @@ export function BrazilianDateTimePicker({
     const limiteDias = quantidadeDias(proximas.mes, proximas.ano)
     if (Number(proximas.dia) > limiteDias) proximas.dia = String(limiteDias).padStart(2, '0')
     setPartes(proximas)
-    const completo = proximas.dia && proximas.mes && proximas.ano && proximas.hora && proximas.minuto
-    onChange(completo ? `${proximas.dia}/${proximas.mes}/${proximas.ano} ${proximas.hora}:${proximas.minuto}` : '')
+    const dataCompleta = proximas.dia && proximas.mes && proximas.ano
+    const horarioCompleto = proximas.hora && proximas.minuto
+    onChange(dataCompleta && (somenteData || horarioCompleto) ? `${proximas.dia}/${proximas.mes}/${proximas.ano}${somenteData ? '' : ` ${proximas.hora}:${proximas.minuto}`}` : '')
   }
 
   const limpar = () => {
@@ -83,7 +94,7 @@ export function BrazilianDateTimePicker({
           {anos.map((ano) => <option key={ano} value={ano}>{ano}</option>)}
         </select>
       </div>
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2">
+      {!somenteData && <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2">
         <Clock3 size={15} className="text-foreground-muted" aria-hidden="true" />
         <select required={required} aria-label="Hora no formato de 24 horas" value={partes.hora} onChange={(event) => atualizar({ hora: event.target.value })} className={classeSelect}>
           <option value="">Hora</option>
@@ -95,8 +106,8 @@ export function BrazilianDateTimePicker({
           {Array.from({ length: 60 }, (_, indice) => String(indice).padStart(2, '0')).map((minuto) => <option key={minuto} value={minuto}>{minuto}</option>)}
         </select>
         <button type="button" onClick={limpar} disabled={!Object.values(partes).some(Boolean)} className="interactive-control p-2 text-foreground-muted disabled:invisible" aria-label="Limpar data e horário"><X size={14} /></button>
-      </div>
-      <span className="text-[8px] font-normal normal-case tracking-normal text-foreground-muted">Formato brasileiro · horário de 24 horas</span>
+      </div>}
+      <span className="text-[8px] font-normal normal-case tracking-normal text-foreground-muted">Formato brasileiro{somenteData ? ' · compromisso sem horário' : ' · horário de 24 horas'}</span>
     </div>
   )
 }

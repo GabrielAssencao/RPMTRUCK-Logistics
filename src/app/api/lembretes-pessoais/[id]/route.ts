@@ -5,12 +5,13 @@ import { textoOperacional } from '@/lib/domainValidation'
 import { calcularNotificacaoLembrete, perfilPodeUsarLembretes, type ModoNotificacaoLembrete, type UrgenciaLembrete } from '@/lib/lembretePessoal'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
-import { anteriorAoMinutoDaReferencia, inicioDoMinuto } from '@/lib/dataHoraOperacional'
+import { anteriorAoDiaDaReferencia, anteriorAoMinutoDaReferencia, inicioDoMinuto } from '@/lib/dataHoraOperacional'
 
 const atualizarSchema = z.object({
   titulo: textoOperacional(3, 120).optional(),
   descricao: textoOperacional(1, 1000).nullable().optional(),
   dataHora: z.string().datetime().optional(),
+  diaInteiro: z.boolean().optional(),
   urgencia: z.enum(['LEVE', 'MEDIA', 'ALTA']).optional(),
   modoNotificacao: z.enum(['AUTOMATICA', 'PERSONALIZADA']).optional(),
   notificarEm: z.string().datetime().nullable().optional(),
@@ -47,10 +48,11 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   if (!atual) return NextResponse.json({ erro: 'Lembrete não encontrado.' }, { status: 404 })
 
   const dataHora = parsed.data.dataHora ? new Date(parsed.data.dataHora) : atual.dataHora
+  const diaInteiro = parsed.data.diaInteiro ?? atual.diaInteiro
   if (
     parsed.data.dataHora
     && inicioDoMinuto(dataHora).getTime() !== inicioDoMinuto(atual.dataHora).getTime()
-    && anteriorAoMinutoDaReferencia(dataHora)
+    && (diaInteiro ? anteriorAoDiaDaReferencia(dataHora) : anteriorAoMinutoDaReferencia(dataHora))
   ) {
     return NextResponse.json({ erro: 'O lembrete não pode ser alterado para uma data passada.' }, { status: 400 })
   }

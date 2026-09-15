@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
   const [
     empresa, usuarios, veiculos, motoristas, localizacoes, manutencoes, leituras,
     custos, contas, containers, movimentacoes, tarefas, notificacoes, faturas,
-    solicitacoes, relatorios, sessoes, eventos, auditoria,
+    solicitacoes, relatorios, sessoes, eventos, auditoria, ocorrencias, conformidades,
   ] = await Promise.all([
     prisma.empresa.findUnique({ where: { id: empresaId } }),
     prisma.usuario.findMany({ where: { empresaId, excluidoEm: null }, select: { id: true, nome: true, email: true, role: true, acessoDashboardGeral: true, ativo: true, modulosAcesso: true, exigeTrocaSenha: true, criado_em: true, atualizado_em: true } }),
@@ -49,6 +49,8 @@ export async function POST(request: NextRequest) {
     prisma.sessaoUsuario.findMany({ where: { empresaId }, select: { id: true, usuarioId: true, criadoEm: true, ultimaAtividade: true, expiraEm: true, revogadaEm: true } }),
     prisma.eventoSeguranca.findMany({ where: { empresaId } }),
     prisma.auditoriaLog.findMany({ where: { empresaId } }),
+    prisma.ocorrenciaVeiculo.findMany({ where: { empresaId } }),
+    prisma.conformidadeMotorista.findMany({ where: { empresaId } }),
   ])
 
   if (!empresa) return NextResponse.json({ erro: 'Empresa não encontrada.' }, { status: 404 })
@@ -82,6 +84,8 @@ export async function POST(request: NextRequest) {
     { nome: 'Sessoes', linhas: sessoes },
     { nome: 'Eventos seguranca', linhas: eventos },
     { nome: 'Auditoria', linhas: auditoria },
+    { nome: 'Ocorrencias veiculos', linhas: ocorrencias },
+    { nome: 'Conformidade motoristas', linhas: conformidades },
   ]
   const importacao = await prisma.importacaoInicial.findUnique({ where: { empresaId } })
   if (importacao) {

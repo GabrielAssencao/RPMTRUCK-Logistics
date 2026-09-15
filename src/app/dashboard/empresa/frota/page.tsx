@@ -11,6 +11,7 @@ import {
   MoreVertical, 
   Wrench, 
   AlertCircle,
+  FileWarning,
   Pencil,
   Trash2,
   Bell,
@@ -30,6 +31,7 @@ interface VeiculoCompleto {
   id: string
   modelo: string
   placa: string
+  renavam?: string | null
   tipo: string
   ano: number
   localizacao?: string
@@ -77,7 +79,7 @@ export default function FrotaPage() {
   }
 
   const normalizarVeiculo = (veiculo: VeiculoApi): VeiculoCompleto => ({
-    id: veiculo.id, modelo: veiculo.modelo, placa: veiculo.placa, tipo: veiculo.tipo,
+    id: veiculo.id, modelo: veiculo.modelo, placa: veiculo.placa, renavam: veiculo.renavam, tipo: veiculo.tipo,
     ano: veiculo.ano ?? new Date().getFullYear(), quilometragem: veiculo.quilometragem,
     status: veiculo.status, localizacao: veiculo.localizacao?.nome ?? 'Sem localização',
     localizacaoId: veiculo.localizacao?.id, motoristaAtual: veiculo.motoristas?.[0]?.nome ?? 'Sem atribuição',
@@ -103,6 +105,7 @@ export default function FrotaPage() {
   const camposFrotaDinamicos: FieldConfig[] = [
     { name: 'modelo', label: 'Modelo do Caminhão / Veículo', type: 'text', placeholder: 'Ex: VOLVO FH 540', required: true, maxLength: 100 },
     { name: 'placa', label: 'Placa / Matrícula', type: 'text', placeholder: 'Ex: ABC-1234', required: true, maxLength: 8, pattern: '[A-Za-z]{3}-?[0-9][A-Za-z0-9][0-9]{2}', title: 'Informe uma placa brasileira antiga ou Mercosul.' },
+    { name: 'renavam', label: 'RENAVAM (opcional)', type: 'text', placeholder: 'Ex: 12345678901', maxLength: 14, pattern: '[0-9. -]{9,14}', title: 'Informe os 9 ou 11 dígitos do RENAVAM.' },
     { name: 'ano', label: 'Ano do Veículo', type: 'number', placeholder: 'Ex: 2023', required: true, min: 1950, max: new Date().getFullYear() + 1, step: 1 },
     { 
       name: 'tipo', 
@@ -238,6 +241,7 @@ export default function FrotaPage() {
     const payload = {
       modelo: formData.modelo,
       placa: formData.placa,
+      renavam: typeof formData.renavam === 'string' && formData.renavam.trim() ? formData.renavam : null,
       ano: Number(formData.ano),
       tipo: formData.tipo,
       quilometragem: Number(formData.quilometragem),
@@ -297,6 +301,7 @@ export default function FrotaPage() {
         
         <div className="flex flex-wrap items-center gap-3">
           <BotaoSecundarioFrota href="/dashboard/empresa/frota/localizacoes" icone={<MapPin size={16} />} label="Bases & Pátios" primary={primary} />
+          <BotaoSecundarioFrota href="/dashboard/empresa/frota/ocorrencias" icone={<FileWarning size={16} />} label="Ocorrências" primary={primary} />
           <BotaoSecundarioFrota href="/dashboard/empresa/frota/manutencao" icone={<Wrench size={16} />} label="Manutenções" primary={primary} />
 
           <motion.button 
@@ -639,6 +644,7 @@ export default function FrotaPage() {
                         <span className="text-foreground-muted">Quilometragem:</span>
                         <span className="font-bold">{v.quilometragem.toLocaleString('pt-BR')} km</span>
                       </div>
+                      {v.renavam && <div className="flex justify-between items-center"><span className="text-foreground-muted">RENAVAM:</span><span className="font-bold">{v.renavam}</span></div>}
                       {v.localizacao && (
                         <div className="flex justify-between items-center gap-2">
                           <span className="text-foreground-muted">Base:</span>

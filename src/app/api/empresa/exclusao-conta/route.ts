@@ -105,6 +105,8 @@ export async function POST(request: NextRequest) {
       prisma.historicoVeiculo.count({ where: { empresaId } }),
       prisma.tarefa.count({ where: { empresaId } }),
       prisma.contaPagar.count({ where: { empresaId } }),
+      prisma.ocorrenciaVeiculo.count({ where: { empresaId } }),
+      prisma.conformidadeMotorista.count({ where: { empresaId } }),
     ]).then((totais) => totais.reduce((total, quantidade) => total + quantidade, 0)),
     prisma.conversaSuporte.count({ where: { empresaId } }),
   ])
@@ -137,12 +139,15 @@ export async function POST(request: NextRequest) {
       `
       if (!empresa[0]) throw new Error('EMPRESA_JA_EXCLUIDA')
 
+      await tx.solicitacaoAcesso.deleteMany({ where: { empresaId } })
       await tx.solicitacaoAssinatura.deleteMany({ where: { empresaId } })
       await tx.importacaoInicial.deleteMany({ where: { empresaId } })
       await tx.notificacao.deleteMany({ where: { empresaId } })
       await tx.alertaLeitura.deleteMany({ where: { usuario: { empresaId } } })
       await tx.alertaSistema.deleteMany({ where: { destinatario: { empresaId } } })
       await tx.tarefa.deleteMany({ where: { empresaId } })
+      await tx.ocorrenciaVeiculo.deleteMany({ where: { empresaId } })
+      await tx.conformidadeMotorista.deleteMany({ where: { empresaId } })
       await tx.contaPagar.deleteMany({ where: { empresaId } })
       await tx.container.deleteMany({ where: { empresaId } })
       await tx.custo.deleteMany({ where: { empresaId } })

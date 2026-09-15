@@ -14,13 +14,17 @@ import {
   Unlink,
   Trash2,
   User,
-  Percent
+  Percent,
+  Pencil,
+  ShieldCheck,
 } from 'lucide-react'
 import Link from 'next/link'
 import { formatarCPF } from '@/utils/documentos'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { DominoLoader } from '@/components/motion/OperationalFeedback'
 import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
+import { EditMotoristaDialog, MotoristaEditavel } from './_components/EditMotoristaDialog'
+import { ConformidadeMotoristaDialog } from './_components/ConformidadeMotoristaDialog'
 
 interface VeiculoCompleto {
   id: string
@@ -35,9 +39,11 @@ interface MotoristaCard {
   id: string
   nomeAbreviado: string
   cpf: string
+  rg: string
   cnh: string
   categoria: string
   validadeCNH: string
+  status: string
   fotoUrl?: string
   veiculoIdVinculado?: string
 }
@@ -46,9 +52,11 @@ interface MotoristaApi {
   id: string
   nome: string
   cpf: string | null
+  rg: string | null
   cnh: string
   categoria: string
   validade: string
+  status: string
   foto_url: string | null
   veiculoId: string | null
 }
@@ -86,12 +94,14 @@ export default function MotoristasPage() {
 
   // Estado para confirmação de exclusão rápida
   const [excluindoId, setExcluindoId] = useState<string | null>(null)
+  const [motoristaEmEdicao, setMotoristaEmEdicao] = useState<MotoristaEditavel | null>(null)
+  const [motoristaConformidade, setMotoristaConformidade] = useState<MotoristaCard | null>(null)
 
   useEffect(() => {
     queueMicrotask(() => setMontado(true))
     fetch('/api/motoristas', { cache: 'no-store' }).then(async response => {
       const data = await response.json(); if (!response.ok) throw new Error(data.erro)
-      setMotoristas(data.motoristas.map((m: MotoristaApi) => ({ id: m.id, nomeAbreviado: m.nome, cpf: m.cpf ? formatarCPF(m.cpf) : 'Não informado', cnh: m.cnh, categoria: m.categoria, validadeCNH: String(m.validade).slice(0, 10), fotoUrl: m.foto_url || undefined, veiculoIdVinculado: m.veiculoId || undefined })))
+      setMotoristas(data.motoristas.map((m: MotoristaApi) => ({ id: m.id, nomeAbreviado: m.nome, cpf: m.cpf ? formatarCPF(m.cpf) : '', rg: m.rg ?? '', cnh: m.cnh, categoria: m.categoria, validadeCNH: String(m.validade).slice(0, 10), status: m.status, fotoUrl: m.foto_url || undefined, veiculoIdVinculado: m.veiculoId || undefined })))
       setVeiculos(data.veiculos.map((v: VeiculoApi) => ({ id: v.id, modelo: v.modelo, placa: v.placa, tipo: v.tipo, kmAtual: v.quilometragem, motoristaVinculadoId: v.motoristas?.[0]?.id })))
     }).catch(error => {
       setFeedbackTone('error')
@@ -180,9 +190,39 @@ export default function MotoristasPage() {
     mostrarFeedback('Motorista removido.', 'success')
   }
 
+  const abrirEdicao = (motorista: MotoristaCard) => setMotoristaEmEdicao({
+    id: motorista.id,
+    nome: motorista.nomeAbreviado,
+    cpf: motorista.cpf,
+    rg: motorista.rg,
+    cnh: motorista.cnh,
+    categoria: motorista.categoria,
+    validade: motorista.validadeCNH,
+    status: motorista.status,
+  })
+
+  const aplicarEdicao = (atualizado: MotoristaEditavel) => {
+    setMotoristas((atuais) => atuais.map((motorista) => motorista.id === atualizado.id ? {
+      ...motorista,
+      nomeAbreviado: atualizado.nome,
+      cpf: formatarCPF(atualizado.cpf),
+      rg: atualizado.rg,
+      cnh: atualizado.cnh,
+      categoria: atualizado.categoria,
+      validadeCNH: atualizado.validade,
+      status: atualizado.status,
+    } : motorista))
+    sinalizarAtualizacaoDashboardEmpresa()
+    mostrarFeedback('Cadastro do motorista atualizado.', 'success')
+  }
+
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
       {feedback && <ActionFeedback message={feedback} tone={feedbackTone} />}
+      {motoristaEmEdicao && (
+        <EditMotoristaDialog key={motoristaEmEdicao.id} motorista={motoristaEmEdicao} onClose={() => setMotoristaEmEdicao(null)} onSaved={aplicarEdicao} />
+      )}
+      {motoristaConformidade && <ConformidadeMotoristaDialog motorista={motoristaConformidade} onClose={() => setMotoristaConformidade(null)} />}
       
       {/* ─── CABEÇALHO ─── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -460,6 +500,14 @@ export default function MotoristasPage() {
                       ) : (
                         /* Botão Normal com Lixeira */
                         <div className="flex justify-end items-center gap-3">
+                          <button onClick={() => setMotoristaConformidade(m)} className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-foreground-muted transition-colors hover:text-foreground" title={`Cursos e exames de ${m.nomeAbreviado}`}><ShieldCheck size={14} aria-hidden="true" /> Conformidade</button>
+                          <button
+                            onClick={() => abrirEdicao(m)}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-foreground-muted transition-colors hover:text-foreground"
+                            title={`Editar cadastro de ${m.nomeAbreviado}`}
+                          >
+                            <Pencil size={14} aria-hidden="true" /> Editar
+                          </button>
                           {m.veiculoIdVinculado && (
                             <button 
                               onClick={() => handleDesvincular(m.id)}

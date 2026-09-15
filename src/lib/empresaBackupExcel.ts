@@ -79,7 +79,7 @@ export async function gerarBackupEmpresaExcel(secoes: SecaoBackupEmpresa[]) {
       }))
       column.width = Math.min(64, Math.max(16, longest + 3))
       if (/^(valor|custo|frete|comissao|mensalidade|total_pago_historico)$/.test(chave)) column.numFmt = EXCEL_MONEY
-      if (/^(cpf|cnpj|cnh|rg|placa|codigo|linha_digitavel|telefone)$/.test(chave)) column.numFmt = '@'
+      if (/^(cpf|cnpj|cnh|rg|placa|renavam|codigo|linha_digitavel|telefone)$/.test(chave)) column.numFmt = '@'
     }
     formatarTabelaExcel(planilha)
   }

@@ -361,22 +361,24 @@ function ManutencaoContent() {
 
         {/* MÉTRICAS RÁPIDAS */}
         {veiculoAtivo && (
-          <div className="mt-4 grid grid-cols-1 gap-4 border-t pt-4 text-xs sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.7fr]" style={{ borderColor: 'var(--border)' }}>
-            <div>
-              <div className="text-[10px] uppercase text-foreground-muted flex items-center gap-1"><Truck size={12} style={{ color: primary }} /> Veículo</div>
-              <div className="font-bold mt-1 text-sm">{veiculoAtivo.modelo}</div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase text-foreground-muted flex items-center gap-1"><Gauge size={12} style={{ color: primary }} /> Odômetro</div>
-              <div className="font-bold mt-1 text-sm">{veiculoAtivo.kmAtual.toLocaleString('pt-BR')} KM</div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase text-foreground-muted flex items-center gap-1"><DollarSign size={12} style={{ color: primary }} /> Total Gasto</div>
-              <div className={`mt-1 text-sm ${primaryIsRed ? 'text-foreground font-black underline decoration-current' : 'font-bold'}`} style={{ color: primaryIsRed ? undefined : semanticColors.danger }}>
-                - {custoTotalVeiculo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          <div className="mt-4 grid grid-cols-1 items-stretch gap-4 border-t pt-4 text-xs xl:grid-cols-[minmax(0,1fr)_minmax(390px,0.72fr)]" style={{ borderColor: 'var(--border)' }}>
+            <div className="grid min-w-0 grid-cols-1 border sm:grid-cols-3" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+              <div className="min-w-0 p-4">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-foreground-muted"><Truck size={13} style={{ color: primary }} /> Veículo</div>
+                <div className="mt-2 truncate font-rajdhani text-base font-black uppercase" title={veiculoAtivo.modelo}>{veiculoAtivo.modelo}</div>
+              </div>
+              <div className="min-w-0 border-t p-4 sm:border-l sm:border-t-0" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-foreground-muted"><Gauge size={13} style={{ color: primary }} /> Odômetro</div>
+                <div className="mt-2 whitespace-nowrap font-rajdhani text-base font-black uppercase">{veiculoAtivo.kmAtual.toLocaleString('pt-BR')} KM</div>
+              </div>
+              <div className="min-w-0 border-t p-4 sm:border-l sm:border-t-0" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-foreground-muted"><DollarSign size={13} style={{ color: primary }} /> Total gasto</div>
+                <div className={`mt-2 whitespace-nowrap font-rajdhani text-base ${primaryIsRed ? 'text-foreground font-black underline decoration-current' : 'font-black'}`} style={{ color: primaryIsRed ? undefined : semanticColors.danger }}>
+                  {custoTotalVeiculo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </div>
               </div>
             </div>
-            <div className="border p-3" style={{ borderColor: `${primary}55`, backgroundColor: `${primary}08` }}>
+            <div className="flex min-w-0 flex-col justify-between border p-4" style={{ borderColor: `${primary}55`, backgroundColor: `${primary}08` }}>
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center border" style={{ borderColor: `${primary}66`, color: primary, backgroundColor: `${primary}12` }}>
                   <Bell size={16} className={salvandoAntecedencia ? 'animate-pulse' : ''} />
@@ -386,7 +388,7 @@ function ManutencaoContent() {
                   <div className="mt-0.5 font-bold">Avisar {veiculoAtivo.diasAntecedenciaNotificacao} dias antes da ocorrência</div>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-4 gap-1" aria-label="Escolher antecedência do alerta">
+              <div className="mt-4 grid grid-cols-2 gap-1.5 sm:grid-cols-4" aria-label="Escolher antecedência do alerta">
                 {[3, 7, 15, 30].map(dias => {
                   const selecionado = dias === veiculoAtivo.diasAntecedenciaNotificacao
                   return (

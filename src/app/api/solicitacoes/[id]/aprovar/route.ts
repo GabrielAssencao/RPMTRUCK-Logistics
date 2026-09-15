@@ -85,6 +85,11 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         }
       });
 
+      await tx.solicitacaoAcesso.update({
+        where: { id },
+        data: { empresaId: novaEmpresa.id },
+      });
+
       // Passo C: Criar o Usuário Dono/Gestor master da transportadora
       const novoGestor = await tx.usuario.create({
         data: {

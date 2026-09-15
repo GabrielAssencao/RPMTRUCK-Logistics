@@ -1,11 +1,8 @@
-const TRUCK_HUE_ROTATIONS: Record<string, number> = { '#22c55e': 0, '#ef4444': -135, '#3b82f6': 80, '#f59e0b': -95, '#5e17eb': 125 }
-
-export function BrandLogo({ variant = "icon", primary, monochrome = false, includeTruck = false, className = "" }: { variant?: "icon" | "wordmark"; primary?: string; monochrome?: boolean; includeTruck?: boolean; className?: string }) {
+export function BrandLogo({ variant = "icon", primary, monochrome = false, className = "" }: { variant?: "icon" | "wordmark"; primary?: string; monochrome?: boolean; className?: string }) {
  const accent = monochrome ? "currentColor" : primary ?? "var(--primary)"
  const foreground = monochrome ? "currentColor" : "var(--foreground)"
  return variant === "icon" ? (
- <svg viewBox={includeTruck ? "150 120 1200 1000" : "380 470 740 590"} className={className} aria-hidden="true" focusable="false">
-{includeTruck && <image href="/logos/rp-truck.webp" x="206" y="150" width="1088" height="967" opacity={0.8} style={{ filter: monochrome ? 'grayscale(1)' : `hue-rotate(${TRUCK_HUE_ROTATIONS[primary ?? '#22c55e'] ?? 0}deg)` }} />}
+ <svg viewBox="380 470 740 590" className={className} aria-hidden="true" focusable="false">
 <path d="M 0.5 0.371094 L 169.769531 0.371094 L 169.769531 271.464844 L 0.5 271.464844 Z M 0.5 0.371094 " transform="matrix(1 0 0 1 473 675)" fill={accent} opacity={0.28} />
 <path d="M 0.367188 0.660156 L 169.632812 0.660156 L 169.632812 368.953125 L 0.367188 368.953125 Z M 0.367188 0.660156 " transform="matrix(1 0 0 1 665 578)" fill={accent} opacity={0.28} />
 <path d="M 0.230469 0.976562 L 169.5 0.976562 L 169.5 442.660156 L 0.230469 442.660156 Z M 0.230469 0.976562 " transform="matrix(1 0 0 1 856.9999999999999 504.0000000000001)" fill={accent} opacity={0.28} />

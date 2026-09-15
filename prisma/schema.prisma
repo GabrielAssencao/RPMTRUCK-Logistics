@@ -67,6 +67,24 @@ enum StatusContaPagar {
   CANCELADO
 }
 
+enum TipoOcorrenciaVeiculo {
+  MULTA
+  COLISAO
+  AVARIA
+  OUTRA
+}
+
+enum StatusOcorrenciaVeiculo {
+  ABERTA
+  EM_ANALISE
+  RESOLVIDA
+}
+
+enum TipoConformidadeMotorista {
+  CURSO
+  EXAME_TOXICOLOGICO
+}
+
 enum CategoriaContaPagar {
   COMBUSTIVEL
   MANUTENCAO
@@ -186,12 +204,14 @@ enum VisibilidadeMensagemSuporte {
 model SolicitacaoAcesso {
   id            String            @id @default(uuid())
   empresa       String
+  empresaId     String?           @unique @map("empresa_id")
+  tenant        Empresa?          @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   responsavel   String
   email         String            @unique
   whatsapp      String?
   veiculos      Int // Frota base definida e travada pelo plano
   plano         PlanoTipo
-  diaVencimento Int @default(28) @map("dia_vencimento")
+  diaVencimento Int               @default(28) @map("dia_vencimento")
   mensagem      String?
   contatoPref   String            @default("email") // "email" ou "whatsapp"
   status        StatusSolicitacao @default(PENDENTE)
@@ -219,22 +239,22 @@ model ResetSenha {
 }
 
 model Empresa {
-  id                   String        @id @default(uuid())
-  nome                 String
-  cnpj                 String?       @unique
-  cnpjHash             String?       @unique @map("cnpj_hash")
-  email                String        @unique
-  nome_contato         String?
-  telefone             String?
-  status               StatusEmpresa @default(ATIVO)
-  plano                PlanoTipo     @default(ESSENCIAL)
-  total_pago_historico String        @default("0,00")
-  status_motivo        String?
-  status_alterado_em   DateTime?
-  pagamentoInicialVenceEm DateTime? @map("pagamento_inicial_vence_em")
-  primeiraMensalidadePagaEm DateTime? @map("primeira_mensalidade_paga_em")
-  cobrancaIniciadaEm DateTime? @map("cobranca_iniciada_em")
-  diaVencimento Int @default(28) @map("dia_vencimento")
+  id                        String        @id @default(uuid())
+  nome                      String
+  cnpj                      String?       @unique
+  cnpjHash                  String?       @unique @map("cnpj_hash")
+  email                     String        @unique
+  nome_contato              String?
+  telefone                  String?
+  status                    StatusEmpresa @default(ATIVO)
+  plano                     PlanoTipo     @default(ESSENCIAL)
+  total_pago_historico      String        @default("0,00")
+  status_motivo             String?
+  status_alterado_em        DateTime?
+  pagamentoInicialVenceEm   DateTime?     @map("pagamento_inicial_vence_em")
+  primeiraMensalidadePagaEm DateTime?     @map("primeira_mensalidade_paga_em")
+  cobrancaIniciadaEm        DateTime?     @map("cobranca_iniciada_em")
+  diaVencimento             Int           @default(28) @map("dia_vencimento")
 
   status_alterado_por_id String?
   status_alterado_por    Usuario? @relation("EmpresaStatusAlteradoPor", fields: [status_alterado_por_id], references: [id], onDelete: SetNull)
@@ -254,45 +274,48 @@ model Empresa {
   atualizado_em DateTime @updatedAt
 
   // Relacionamentos (Isolamento Multitenant)
-  usuarios                Usuario[]
-  veiculos_frota          Veiculo[]
-  motoristas              Motorista[]
-  localizacoes            Localizacao[]
-  historicos_veiculos     HistoricoVeiculo[]
-  custos                  Custo[]
-  notificacoes            Notificacao[]
-  faturas                 Fatura[]
-  relatorios_arquivados   RelatorioArquivo[]
-  movimentacoes_container MovimentacaoContainerPermanente[]
-  containers              Container[]
-  tarefas                 Tarefa[]
-  lembretes_pessoais      LembretePessoal[]
-  leituras_quilometragem  LeituraQuilometragem[]
-  sessoes                 SessaoUsuario[]
-  eventos_seguranca       EventoSeguranca[]
-  solicitacoes_assinatura SolicitacaoAssinatura[]
-  contas_pagar            ContaPagar[]
-  conversas_suporte       ConversaSuporte[]
-  importacao_inicial      ImportacaoInicial?
+  usuarios                 Usuario[]
+  veiculos_frota           Veiculo[]
+  motoristas               Motorista[]
+  localizacoes             Localizacao[]
+  historicos_veiculos      HistoricoVeiculo[]
+  custos                   Custo[]
+  notificacoes             Notificacao[]
+  faturas                  Fatura[]
+  relatorios_arquivados    RelatorioArquivo[]
+  movimentacoes_container  MovimentacaoContainerPermanente[]
+  containers               Container[]
+  tarefas                  Tarefa[]
+  lembretes_pessoais       LembretePessoal[]
+  leituras_quilometragem   LeituraQuilometragem[]
+  sessoes                  SessaoUsuario[]
+  eventos_seguranca        EventoSeguranca[]
+  solicitacoes_assinatura  SolicitacaoAssinatura[]
+  contas_pagar             ContaPagar[]
+  conversas_suporte        ConversaSuporte[]
+  importacao_inicial       ImportacaoInicial?
+  solicitacaoAcesso        SolicitacaoAcesso?
+  ocorrencias_veiculos     OcorrenciaVeiculo[]
+  conformidades_motoristas ConformidadeMotorista[]
 
   @@index([excluidoEm])
   @@map("empresas")
 }
 
 model ImportacaoInicial {
-  id             String   @id @default(uuid())
-  empresaId      String   @unique(map: "importacoes_iniciais_empresa_key")
-  empresa        Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade, map: "importacoes_iniciais_empresa_fkey")
-  status         String   @default("PENDENTE")
-  dados          String?
-  resumo         Json
-  checksum       String
-  enviadoPorId   String
-  revisadoPorId  String?
-  motivo         String?
-  criado_em      DateTime @default(now())
-  atualizado_em  DateTime @updatedAt
-  aprovado_em    DateTime?
+  id            String    @id @default(uuid())
+  empresaId     String    @unique(map: "importacoes_iniciais_empresa_key")
+  empresa       Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade, map: "importacoes_iniciais_empresa_fkey")
+  status        String    @default("PENDENTE")
+  dados         String?
+  resumo        Json
+  checksum      String
+  enviadoPorId  String
+  revisadoPorId String?
+  motivo        String?
+  criado_em     DateTime  @default(now())
+  atualizado_em DateTime  @updatedAt
+  aprovado_em   DateTime?
 
   @@index([status, criado_em], map: "importacoes_iniciais_status_data_idx")
   @@map("importacoes_iniciais")
@@ -314,7 +337,7 @@ model Usuario {
   senhaAlteradaEm         DateTime  @default(now()) @map("senha_alterada_em")
   corTema                 String?   @map("cor_tema") @db.VarChar(16)
   temaClaro               Boolean?  @map("tema_claro")
-  lembretesRetencaoDias    Int?      @map("lembretes_retencao_dias")
+  lembretesRetencaoDias   Int?      @map("lembretes_retencao_dias")
   rotuloEquipe            String?   @map("rotulo_equipe") @db.VarChar(48)
   podePersonalizarTema    Boolean   @default(false) @map("pode_personalizar_tema")
   estiloFundo             String?   @map("estilo_fundo") @db.VarChar(24)
@@ -343,6 +366,8 @@ model Usuario {
   alertas_criados                   AlertaSistema[]         @relation("AlertasCriados")
   alertas_destinados                AlertaSistema[]         @relation("AlertasDestinados")
   alertas_lidos                     AlertaLeitura[]
+  ocorrencias_veiculos_criadas      OcorrenciaVeiculo[]     @relation("OcorrenciasVeiculosCriadas")
+  conformidades_motoristas_criadas  ConformidadeMotorista[] @relation("ConformidadesMotoristasCriadas")
 
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
@@ -371,14 +396,15 @@ model Localizacao {
 }
 
 model Veiculo {
-  id                    String @id @default(uuid())
+  id                    String  @id @default(uuid())
   modelo                String
-  placa                 String @unique
+  placa                 String  @unique
+  renavam               String? @unique
   tipo                  String
   ano                   Int?
-  quilometragem         Float  @default(0.0)
-  status                String @default("OPERACIONAL") // OPERACIONAL, OFICINA, INATIVO
-  diasAntecedenciaNotif Int    @default(7)
+  quilometragem         Float   @default(0.0)
+  status                String  @default("OPERACIONAL") // OPERACIONAL, OFICINA, INATIVO
+  diasAntecedenciaNotif Int     @default(7)
 
   // Localização / Base (Opcional)
   localizacaoId String?
@@ -396,6 +422,7 @@ model Veiculo {
   containers             Container[]
   leituras_quilometragem LeituraQuilometragem[]
   contas_pagar           ContaPagar[]
+  ocorrencias            OcorrenciaVeiculo[]
 
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
@@ -425,8 +452,10 @@ model Motorista {
   veiculoId String?
   veiculo   Veiculo? @relation(fields: [veiculoId], references: [id], onDelete: SetNull)
 
-  custos     Custo[]
-  containers Container[]
+  custos        Custo[]
+  containers    Container[]
+  ocorrencias   OcorrenciaVeiculo[]
+  conformidades ConformidadeMotorista[]
 
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
@@ -520,6 +549,9 @@ model Custo {
   containerId String?    @unique @map("container_id")
   container   Container? @relation(fields: [containerId], references: [id], onDelete: Cascade)
 
+  ocorrenciaVeiculoId String?            @unique @map("ocorrencia_veiculo_id")
+  ocorrenciaVeiculo   OcorrenciaVeiculo? @relation(fields: [ocorrenciaVeiculoId], references: [id], onDelete: SetNull)
+
   criado_em     DateTime @default(now())
   atualizado_em DateTime @updatedAt
 
@@ -528,6 +560,71 @@ model Custo {
   @@index([relatorioArquivoId])
   @@index([empresaId, categoria, data])
   @@map("custos")
+}
+
+model OcorrenciaVeiculo {
+  id            String                  @id @default(uuid())
+  tipo          TipoOcorrenciaVeiculo
+  titulo        String
+  descricao     String?
+  data          DateTime                @db.Date
+  local         String?
+  valor         Decimal?                @db.Decimal(12, 2)
+  pontosCnh     Int?                    @map("pontos_cnh")
+  status        StatusOcorrenciaVeiculo @default(ABERTA)
+  criado_em     DateTime                @default(now())
+  atualizado_em DateTime                @updatedAt
+
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  veiculoId String
+  veiculo   Veiculo @relation(fields: [veiculoId], references: [id], onDelete: Restrict)
+
+  motoristaId String?
+  motorista   Motorista? @relation(fields: [motoristaId], references: [id], onDelete: SetNull)
+
+  contaPagarId String?     @unique @map("conta_pagar_id")
+  contaPagar   ContaPagar? @relation(fields: [contaPagarId], references: [id], onDelete: SetNull)
+
+  custo Custo?
+
+  criadoPorId String?  @map("criado_por_id")
+  criadoPor   Usuario? @relation("OcorrenciasVeiculosCriadas", fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, data])
+  @@index([empresaId, status, data])
+  @@index([veiculoId, data])
+  @@index([motoristaId, data])
+  @@map("ocorrencias_veiculos")
+}
+
+model ConformidadeMotorista {
+  id               String                    @id @default(uuid())
+  tipo             TipoConformidadeMotorista
+  nome             String
+  numero           String?
+  emitidoEm        DateTime?                 @map("emitido_em") @db.Date
+  validade         DateTime?                 @db.Date
+  obrigatorio      Boolean                   @default(true)
+  cargaAplicavel   String?                   @map("carga_aplicavel")
+  veiculoAplicavel String?                   @map("veiculo_aplicavel")
+  observacoes      String?
+  criado_em        DateTime                  @default(now())
+  atualizado_em    DateTime                  @updatedAt
+
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  motoristaId String
+  motorista   Motorista @relation(fields: [motoristaId], references: [id], onDelete: Cascade)
+
+  criadoPorId String?  @map("criado_por_id")
+  criadoPor   Usuario? @relation("ConformidadesMotoristasCriadas", fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, motoristaId, validade])
+  @@index([empresaId, tipo, validade])
+  @@map("conformidades_motoristas")
 }
 
 // 🔔 SISTEMA GLOBAL DE NOTIFICAÇÕES (Multi-módulo)
@@ -673,7 +770,9 @@ model Tarefa {
   duracaoMinutos    Int?      @map("duracao_minutos")
   ordem             Int       @default(0)
   exibirCalendario  Boolean   @default(true) @map("exibir_calendario")
+  diaInteiro        Boolean   @default(false) @map("dia_inteiro")
   lembreteEm        DateTime? @map("lembrete_em")
+  modoNotificacao   String    @default("AUTOMATICA") @map("modo_notificacao")
   lembreteEnviadoEm DateTime? @map("lembrete_enviado_em")
   prioridade        String    @default("MEDIA")
   status            String    @default("PENDENTE")
@@ -707,6 +806,7 @@ model LembretePessoal {
   titulo          String
   descricao       String?
   dataHora        DateTime  @map("data_hora")
+  diaInteiro      Boolean   @default(false) @map("dia_inteiro")
   urgencia        String    @default("MEDIA")
   modoNotificacao String    @default("AUTOMATICA") @map("modo_notificacao")
   notificarEm     DateTime  @map("notificar_em")
@@ -809,7 +909,7 @@ model Fatura {
   comprovanteUrl String? // Bucket Privado Supabase Storage
   pago_em        DateTime?
   vencimento     DateTime?
-  chaveCobranca  String? @unique @map("chave_cobranca")
+  chaveCobranca  String?      @unique @map("chave_cobranca")
   pago_por_id    String?
   pago_por       Usuario?     @relation("FaturasBaixadasPor", fields: [pago_por_id], references: [id], onDelete: SetNull)
 
@@ -864,7 +964,8 @@ model ContaPagar {
   historicoVeiculoId String?           @unique @map("historico_veiculo_id")
   historicoVeiculo   HistoricoVeiculo? @relation(fields: [historicoVeiculoId], references: [id], onDelete: SetNull)
 
-  custo Custo?
+  custo             Custo?
+  ocorrenciaVeiculo OcorrenciaVeiculo?
 
   @@index([empresaId, status, vencimento])
   @@index([empresaId, criado_em])

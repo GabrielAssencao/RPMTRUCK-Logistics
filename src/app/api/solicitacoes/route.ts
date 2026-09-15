@@ -43,8 +43,52 @@ export async function GET(request: NextRequest) {
     const chamados = await prisma.solicitacaoAcesso.findMany({
       orderBy: { criado_em: 'desc' }
     });
-    
-    return NextResponse.json(chamados, { status: 200 });
+    const empresasAprovadas = chamados
+      .filter((chamado) => chamado.status === 'APROVADO' && chamado.empresaId)
+      .map((chamado) => chamado.empresaId as string);
+    const emailsAprovados = chamados
+      .filter((chamado) => chamado.status === 'APROVADO')
+      .map((chamado) => chamado.email);
+    const usuarios = emailsAprovados.length > 0 || empresasAprovadas.length > 0
+      ? await prisma.usuario.findMany({
+          where: {
+            OR: [
+              { email: { in: [...new Set(emailsAprovados)] } },
+              { empresaId: { in: [...new Set(empresasAprovadas)] }, role: 'GESTOR_EMPRESA' },
+            ],
+            excluidoEm: null,
+            empresa: { is: { excluidoEm: null } },
+          },
+          select: {
+            id: true,
+            empresaId: true,
+            email: true,
+            nome: true,
+            ativo: true,
+            exigeTrocaSenha: true,
+            senhaTemporariaExpiraEm: true,
+            senhaAlteradaEm: true,
+          },
+        })
+      : [];
+    const usuarioPorEmail = new Map(usuarios.map((usuario) => [usuario.email, usuario]));
+    const gestorPorEmpresa = new Map(usuarios
+      .filter((usuario) => usuario.empresaId)
+      .map((usuario) => [usuario.empresaId as string, usuario]));
+
+    const agora = new Date();
+    return NextResponse.json(chamados.map((chamado) => {
+      const acesso = chamado.status === 'APROVADO'
+        ? (chamado.empresaId ? gestorPorEmpresa.get(chamado.empresaId) : undefined) ?? usuarioPorEmail.get(chamado.email) ?? null
+        : null;
+      return {
+        ...chamado,
+        acesso: acesso ? {
+          ...acesso,
+          credencialTemporariaExpirada: Boolean(acesso.exigeTrocaSenha && acesso.senhaTemporariaExpiraEm && acesso.senhaTemporariaExpiraEm <= agora),
+        } : null,
+      };
+    }), { status: 200 });
   } catch (error) {
     console.error('Erro ao listar solicitações no Admin:', error);
     return NextResponse.json(

@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { criarNotificacao } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
 import { nomeOperacional, placaSchema, quilometragemSchema } from '@/lib/domainValidation'
 import { executarComAuditoria } from '@/lib/auditoria'
+import { normalizarRenavam, renavamValido } from '@/utils/renavam'
+
+const renavamSchema = z.string().trim().max(14).nullable().optional().transform(normalizarRenavam)
+  .refine((valor) => valor === null || renavamValido(valor), 'RENAVAM inválido.')
 
 const atualizarSchema = z.object({
   modelo: nomeOperacional(2, 100).optional(), tipo: z.enum(['Cavalo Mecânico', 'Bitrem', 'Sider', 'Baú', 'Refrigerado']).optional(),
   placa: placaSchema.optional(),
+  renavam: renavamSchema,
   ano: z.coerce.number().int().min(1950).max(new Date().getFullYear() + 1).nullable().optional(),
   quilometragem: quilometragemSchema.optional(), status: z.enum(['OPERACIONAL', 'OFICINA', 'INATIVO']).optional(),
   diasAntecedenciaNotif: z.coerce.number().int().min(0).max(365).optional(), localizacaoId: z.string().uuid().nullable().optional(),
@@ -29,15 +35,25 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     const localizacao = await prisma.localizacao.findFirst({ where: { id: parsed.data.localizacaoId, empresaId: auth.session.empresaId }, select: { id: true } })
     if (!localizacao) return NextResponse.json({ erro: 'Localização inválida.' }, { status: 400 })
   }
-  const veiculo = await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
-    const atualizado = await tx.veiculo.update({ where: { id: atual.id }, data: parsed.data, include: { localizacao: true, motoristas: { select: { id: true, nome: true } } } })
-    if (parsed.data.quilometragem !== undefined && parsed.data.quilometragem !== atual.quilometragem) {
-      await tx.leituraQuilometragem.create({
-        data: { quilometragem: parsed.data.quilometragem, origem: 'ATUALIZACAO_VEICULO', veiculoId: atual.id, empresaId: auth.session!.empresaId! },
-      })
+  let veiculo
+  try {
+    veiculo = await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
+      const atualizado = await tx.veiculo.update({ where: { id: atual.id }, data: parsed.data, include: { localizacao: true, motoristas: { select: { id: true, nome: true } } } })
+      if (parsed.data.quilometragem !== undefined && parsed.data.quilometragem !== atual.quilometragem) {
+        await tx.leituraQuilometragem.create({
+          data: { quilometragem: parsed.data.quilometragem, origem: 'ATUALIZACAO_VEICULO', veiculoId: atual.id, empresaId: auth.session!.empresaId! },
+        })
+      }
+      return atualizado
+    })
+  } catch (cause) {
+    if (cause instanceof Prisma.PrismaClientKnownRequestError && cause.code === 'P2002') {
+      const campos = Array.isArray(cause.meta?.target) ? cause.meta.target.join(',') : String(cause.meta?.target ?? '')
+      return NextResponse.json({ erro: campos.includes('renavam') ? 'Este RENAVAM já está cadastrado.' : 'Esta placa já está cadastrada.' }, { status: 409 })
     }
-    return atualizado
-  })
+    console.error('Erro ao atualizar veículo:', cause)
+    return NextResponse.json({ erro: 'Não foi possível atualizar o veículo.' }, { status: 500 })
+  }
   if (parsed.data.status && parsed.data.status !== atual.status) {
     await criarNotificacao({ titulo: 'Status da frota alterado', mensagem: `${veiculo.modelo} (${veiculo.placa}): ${parsed.data.status}.`, modulo: 'FROTA', empresaId: auth.session.empresaId, usuarioId: auth.session.userId, veiculoId: veiculo.id })
   }

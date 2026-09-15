@@ -3,7 +3,7 @@ import test from 'node:test'
 import { loadTs } from './helpers/load-ts.mjs'
 
 const empty = () => ({ Localizacoes: [], Veiculos: [], Motoristas: [], Custos: [], Manutencoes: [], Containers: [] })
-const vehicle = () => ({ modelo: 'Volvo FH', placa: 'ABC1D23', tipo: 'Cavalo Mecânico', ano: 2022, quilometragem: 125000, status: 'OPERACIONAL', localizacao: null })
+const vehicle = () => ({ modelo: 'Volvo FH', placa: 'ABC1D23', renavam: '00123456789', tipo: 'Cavalo Mecânico', ano: 2022, quilometragem: 125000, status: 'OPERACIONAL', localizacao: null })
 function setup() {
   const state = { registro: null, vehicles: [], writes: [], externalPlate: false }
   const tx = {
@@ -59,6 +59,8 @@ test('importação não permite ultrapassar cota, duplicar placas ou vincular ou
   await assert.rejects(validarContextoImportacao(tx, 'company-a', lote), /vagas/)
   state.vehicles = []; lote.Veiculos.push(vehicle())
   await assert.rejects(validarContextoImportacao(tx, 'company-a', lote), /duplicados/)
+  lote.Veiculos.pop(); lote.Veiculos.push({ ...vehicle(), placa: 'DEF1D23' })
+  await assert.rejects(validarContextoImportacao(tx, 'company-a', lote), /RENAVAM.*duplicados/)
   lote.Veiculos.pop(); state.externalPlate = true
   await assert.rejects(validarContextoImportacao(tx, 'company-a', lote), /disponível/)
   assert.equal(state.writes.length, 0)

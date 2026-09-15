@@ -5,7 +5,8 @@ import { prisma } from '@/lib/prisma'
 import { textoOperacional } from '@/lib/domainValidation'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
-import { anteriorAoMinutoDaReferencia, inicioDoMinuto } from '@/lib/dataHoraOperacional'
+import { anteriorAoDiaDaReferencia, anteriorAoMinutoDaReferencia, inicioDoMinuto } from '@/lib/dataHoraOperacional'
+import { calcularNotificacaoTarefa, type ModoNotificacaoTarefa } from '@/lib/tarefaNotificacao'
 
 const atualizarSchema = z.object({
   titulo: textoOperacional(3, 160).optional(),
@@ -14,7 +15,9 @@ const atualizarSchema = z.object({
   inicio: z.string().datetime().nullable().optional(),
   duracaoMinutos: z.number().int().min(15).max(10_080).nullable().optional(),
   exibirCalendario: z.boolean().optional(),
-  lembreteEm: z.string().datetime().nullable().optional(),
+  diaInteiro: z.boolean().optional(),
+  modoNotificacao: z.enum(['AUTOMATICA', 'PERSONALIZADA']).optional(),
+  notificarEm: z.string().datetime().nullable().optional(),
   prioridade: z.enum(['BAIXA', 'MEDIA', 'ALTA', 'URGENTE']).optional(),
   status: z.enum(['PENDENTE', 'EM_ANDAMENTO', 'CONCLUIDA', 'CANCELADA']).optional(),
   responsavelId: z.string().uuid().optional(),
@@ -75,15 +78,16 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   const novoPrazo = parsed.data.prazo === undefined
     ? atual.prazo
     : parsed.data.prazo ? new Date(parsed.data.prazo) : null
-  const novoLembrete = parsed.data.lembreteEm === undefined
-    ? atual.lembreteEm
-    : parsed.data.lembreteEm ? new Date(parsed.data.lembreteEm) : null
+  const novoDiaInteiro = parsed.data.diaInteiro ?? atual.diaInteiro
+  const novoModo: ModoNotificacaoTarefa = parsed.data.modoNotificacao
+    ?? (atual.modoNotificacao === 'PERSONALIZADA' ? 'PERSONALIZADA' : 'AUTOMATICA')
+  const novaPrioridade = parsed.data.prioridade ?? atual.prioridade as 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE'
 
   if (
     parsed.data.inicio
     && novoInicio
     && inicioDoMinuto(novoInicio).getTime() !== (atual.inicio ? inicioDoMinuto(atual.inicio).getTime() : undefined)
-    && anteriorAoMinutoDaReferencia(novoInicio)
+    && (novoDiaInteiro ? anteriorAoDiaDaReferencia(novoInicio) : anteriorAoMinutoDaReferencia(novoInicio))
   ) {
     return NextResponse.json({ erro: 'O início da tarefa não pode ser alterado para uma data passada.' }, { status: 400 })
   }
@@ -91,9 +95,27 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   if (novoInicio && novoPrazo && novoPrazo < novoInicio) {
     return NextResponse.json({ erro: 'O prazo não pode ser anterior ao início.' }, { status: 400 })
   }
-  const referenciaAgenda = novoInicio ?? novoPrazo
-  if (novoLembrete && referenciaAgenda && novoLembrete > referenciaAgenda) {
-    return NextResponse.json({ erro: 'O lembrete deve ocorrer antes da tarefa.' }, { status: 400 })
+  const reprogramarNotificacao = ['inicio', 'prazo', 'prioridade', 'modoNotificacao', 'notificarEm']
+    .some((campo) => Object.hasOwn(parsed.data, campo))
+  let novoLembrete: Date | null | undefined
+  if (reprogramarNotificacao) {
+    const personalizada = parsed.data.notificarEm === undefined
+      ? atual.lembreteEm
+      : parsed.data.notificarEm ? new Date(parsed.data.notificarEm) : null
+    try {
+      novoLembrete = calcularNotificacaoTarefa({
+        inicio: novoInicio,
+        prazo: novoPrazo,
+        prioridade: novaPrioridade,
+        modo: novoModo,
+        personalizada,
+        agora: personalizada && atual.lembreteEm && personalizada.getTime() === atual.lembreteEm.getTime()
+          ? new Date(0)
+          : new Date(),
+      })
+    } catch (error) {
+      return NextResponse.json({ erro: error instanceof Error ? error.message : 'Notificação inválida.' }, { status: 400 })
+    }
   }
 
   const tarefa = await executarComAuditoria({ usuarioId: auth.session.userId }, async (tx) => {
@@ -109,11 +131,19 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     const atualizada = await tx.tarefa.update({
       where: { id: atual.id },
       data: {
-        ...parsed.data,
+        titulo: parsed.data.titulo,
+        descricao: parsed.data.descricao,
+        duracaoMinutos: parsed.data.duracaoMinutos,
+        exibirCalendario: parsed.data.exibirCalendario,
+        diaInteiro: parsed.data.diaInteiro,
+        prioridade: parsed.data.prioridade,
+        status: parsed.data.status,
+        responsavelId: parsed.data.responsavelId,
         prazo: parsed.data.prazo === undefined ? undefined : novoPrazo,
         inicio: parsed.data.inicio === undefined ? undefined : novoInicio,
-        lembreteEm: parsed.data.lembreteEm === undefined ? undefined : novoLembrete,
-        lembreteEnviadoEm: parsed.data.lembreteEm !== undefined || parsed.data.responsavelId !== undefined ? null : undefined,
+        modoNotificacao: reprogramarNotificacao ? novoModo : undefined,
+        lembreteEm: novoLembrete,
+        lembreteEnviadoEm: reprogramarNotificacao || parsed.data.responsavelId !== undefined ? null : undefined,
         ordem: ordemDestino,
         concluido_em: parsed.data.status === 'CONCLUIDA' ? new Date() : parsed.data.status ? null : undefined,
       },

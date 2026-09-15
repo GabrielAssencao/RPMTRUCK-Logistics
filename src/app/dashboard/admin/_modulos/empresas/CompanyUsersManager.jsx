@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react';
-import { UserPlus, Shield, Edit, Trash2, X, Check, AlertTriangle } from 'lucide-react';
+import { UserPlus, Shield, Edit, Trash2, X, Check, AlertTriangle, Clock3, CircleCheck, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog';
 
@@ -104,10 +104,10 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary, onU
 
       {/* TABELA DE USUÁRIOS */}
       <div className="border overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
-        <table className="min-w-[720px] w-full text-left border-collapse">
+        <table className="min-w-[980px] w-full text-left border-collapse">
           <thead className="bg-background-secondary border-b" style={{ borderColor: 'var(--border)' }}>
             <tr>
-              {['COLABORADOR', 'NÍVEL DE ACESSO', 'STATUS', 'AÇÕES'].map(h => (
+              {['COLABORADOR', 'NÍVEL DE ACESSO', 'CONTA', 'PRIMEIRO ACESSO', 'ÚLTIMO RESET', 'AÇÕES'].map(h => (
                 <th key={h} className="px-5 py-3 text-[10px] font-black tracking-widest opacity-60">{h}</th>
               ))}
             </tr>
@@ -133,6 +133,19 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary, onU
                   }`}>
                     {u.status}
                   </span>
+                </td>
+                <td className="px-5 py-4">
+                  <PrimeiroAcessoBadge usuario={u} />
+                </td>
+                <td className="px-5 py-4">
+                  {u.ultimoReset ? (
+                    <div className="text-[9px] font-mono uppercase">
+                      <span className={u.ultimoReset.status === 'PENDENTE' ? 'text-amber-500' : u.ultimoReset.status === 'CONCLUIDO' ? 'text-green-500' : 'text-foreground-muted'}>
+                        {u.ultimoReset.status}
+                      </span>
+                      <span className="mt-1 block text-foreground-muted">{new Date(u.ultimoReset.criado_em).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                  ) : <span className="text-[9px] uppercase text-foreground-muted">Nenhum pedido</span>}
                 </td>
                 <td className="px-5 py-4">
                   <div className="flex gap-2">
@@ -253,4 +266,13 @@ function InputGroup({ label, val, onChange, primary }) {
       />
     </div>
   );
+}
+
+function PrimeiroAcessoBadge({ usuario }) {
+  if (!usuario.exigeTrocaSenha) {
+    return <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-green-500"><CircleCheck size={12} /> Confirmado</span>;
+  }
+  return usuario.credencialTemporariaExpirada
+    ? <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-red-500"><KeyRound size={12} /> Credencial expirada</span>
+    : <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-amber-500"><Clock3 size={12} /> Aguardando troca</span>;
 }

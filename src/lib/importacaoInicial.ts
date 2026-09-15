@@ -37,13 +37,14 @@ export async function validarContextoImportacao(tx: Prisma.TransactionClient, em
   if ((lote.Localizacoes.length || lote.Veiculos.length || lote.Motoristas.length || lote.Manutencoes.length || lote.Containers.length) && !modulos.includes('FROTA')) throw new ImportacaoError('O módulo Frota precisa estar disponível na empresa.', 403)
   if (lote.Custos.length && !modulos.includes('GESTAO')) throw new ImportacaoError('O módulo Gestão precisa estar disponível na empresa.', 403)
   const [veiculos, motoristasProtegidos, localizacoes] = await Promise.all([
-    tx.veiculo.findMany({ where: { empresaId }, select: { id: true, placa: true } }),
+    tx.veiculo.findMany({ where: { empresaId }, select: { id: true, placa: true, renavam: true } }),
     tx.motorista.findMany({ where: { empresaId }, select: { id: true, empresaId: true, cpf: true, cnh: true } }),
     tx.localizacao.findMany({ where: { empresaId }, select: { id: true, nome: true } }),
   ])
   const config = PLANOS_CONFIG[empresa.plano]
   if (veiculos.length + lote.Veiculos.length > config.veiculosBase + empresa.veiculos_adicionais) throw new ImportacaoError('A planilha ultrapassa as vagas de veículos contratadas. Ajuste o lote ou a capacidade da empresa.')
   semDuplicados(lote.Veiculos.map(v => v.placa), 'Veículos')
+  semDuplicados(lote.Veiculos.flatMap(v => v.renavam ? [v.renavam] : []), 'RENAVAM de veículos')
   semDuplicados(lote.Localizacoes.map(v => chave(v.nome)), 'Localizações')
   semDuplicados(lote.Motoristas.map(v => v.cpf), 'CPF de motoristas')
   semDuplicados(lote.Motoristas.map(v => v.cnh), 'CNH de motoristas')
@@ -51,15 +52,25 @@ export async function validarContextoImportacao(tx: Prisma.TransactionClient, em
   semDuplicados(lote.Custos.map(v => JSON.stringify(v)), 'Custos')
   semDuplicados(lote.Manutencoes.map(v => JSON.stringify(v)), 'Manutenções')
   const placaIds = new Map(veiculos.map(v => [v.placa, v.id]))
+  const renavams = new Set(veiculos.flatMap(v => v.renavam ? [v.renavam] : []))
   const localIds = new Map(localizacoes.map(v => [chave(v.nome), v.id]))
   const motoristas = motoristasProtegidos.map(exposeMotorista)
   const cpfIds = new Map(motoristas.filter(v => v.cpf).map(v => [v.cpf!.replace(/\D/g, ''), v.id]))
   const cnhs = new Set(motoristas.map(v => v.cnh.replace(/\D/g, '')))
-  for (const v of lote.Veiculos) { if (placaIds.has(v.placa)) throw new ImportacaoError('Uma placa da planilha já existe nesta empresa. Remova o cadastro repetido e mantenha apenas as referências.'); placaIds.set(v.placa, randomUUID()) }
+  for (const v of lote.Veiculos) {
+    if (placaIds.has(v.placa)) throw new ImportacaoError('Uma placa da planilha já existe nesta empresa. Remova o cadastro repetido e mantenha apenas as referências.')
+    if (v.renavam && renavams.has(v.renavam)) throw new ImportacaoError('Um RENAVAM da planilha já existe nesta empresa. Remova o cadastro repetido.')
+    placaIds.set(v.placa, randomUUID())
+    if (v.renavam) renavams.add(v.renavam)
+  }
   // The global unique plate invariant is also checked before approval. Do not
   // disclose which other tenant owns a conflicting plate.
-  const conflito = lote.Veiculos.length ? await tx.veiculo.count({ where: { placa: { in: lote.Veiculos.map(v => v.placa) }, empresaId: { not: empresaId } } }) : 0
-  if (conflito) throw new ImportacaoError('Uma placa informada não está disponível para cadastro.')
+  const renavamsLote = lote.Veiculos.flatMap(v => v.renavam ? [v.renavam] : [])
+  const conflito = lote.Veiculos.length ? await tx.veiculo.count({ where: { empresaId: { not: empresaId }, OR: [
+    { placa: { in: lote.Veiculos.map(v => v.placa) } },
+    ...(renavamsLote.length ? [{ renavam: { in: renavamsLote } }] : []),
+  ] } }) : 0
+  if (conflito) throw new ImportacaoError('Uma placa ou RENAVAM informado não está disponível para cadastro.')
   for (const l of lote.Localizacoes) { if (localIds.has(chave(l.nome))) throw new ImportacaoError('Uma localização da planilha já está cadastrada. Use seu nome somente como referência.'); localIds.set(chave(l.nome), randomUUID()) }
   for (const m of lote.Motoristas) { if (cpfIds.has(m.cpf) || cnhs.has(m.cnh)) throw new ImportacaoError('CPF ou CNH já cadastrado na empresa. Remova o cadastro repetido e mantenha apenas as referências.'); cpfIds.set(m.cpf, randomUUID()); cnhs.add(m.cnh) }
   for (const v of lote.Veiculos) if (v.localizacao && !localIds.has(chave(v.localizacao))) throw new ImportacaoError('Veículo referencia uma localização ausente da planilha e da empresa.', 400)

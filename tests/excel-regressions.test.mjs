@@ -12,7 +12,7 @@ async function reopen(bytes) { const book = new ExcelJS.Workbook(); await book.x
 async function fixture(name, bytes) { if (process.env.RPM_EXCEL_FIXTURES === '1') { await mkdir('test-results/excel', { recursive: true }); await writeFile(`test-results/excel/${name}.xlsx`, bytes) } }
 
 test('backup XLSX conserva documentos, datas, números e alturas ao reabrir', async () => {
-  const bytes = await gerarBackupEmpresaExcel([{ nome: 'Dados', linhas: [{ cpf: '01234567890', linha_digitavel: '00190000000000000000000000000000000000000000000', valor: 1234.56, data: new Date('2026-09-14T12:00:00Z'), descricao: 'Primeira linha\n' + 'Descrição extensa para testar quebra de linha e altura. '.repeat(30), anotacao: '=HYPERLINK("https://example.invalid")' }] }, { nome: 'dados', linhas: [{ nome: 'Teste' }] }])
+  const bytes = await gerarBackupEmpresaExcel([{ nome: 'Dados', linhas: [{ cpf: '01234567890', linha_digitavel: '00190000000000000000000000000000000000000000000', valor: 1234.56, data: new Date('2026-09-14T12:00:00Z'), descricao: 'Primeira linha\n' + 'Descrição extensa para testar quebra de linha e altura. '.repeat(30), anotacao: '=HYPERLINK("https://example.invalid")', renavam: '00123456789' }] }, { nome: 'dados', linhas: [{ nome: 'Teste' }] }])
   const book = await reopen(bytes), sheet = book.worksheets[0]
   assert.equal(book.worksheets[1].name.toLowerCase(), 'dados 2')
   assert.equal(sheet.getCell('A2').value, '01234567890')
@@ -23,6 +23,10 @@ test('backup XLSX conserva documentos, datas, números e alturas ao reabrir', as
   assert.equal(sheet.getCell('D2').numFmt, 'dd/mm/yyyy')
   assert.ok(sheet.getRow(2).height > 60 && sheet.getRow(2).height <= 409)
   assert.equal(sheet.getCell('F2').type, ExcelJS.ValueType.String)
+  const renavamColuna = sheet.getRow(1).values.indexOf('renavam')
+  assert.ok(renavamColuna > 0)
+  assert.equal(sheet.getCell(2, renavamColuna).value, '00123456789')
+  assert.equal(sheet.getColumn(renavamColuna).numFmt, '@')
   assert.equal(sheet.views[0].ySplit, 1)
   assert.ok(sheet.autoFilter)
   assert.ok(verificarPacoteXlsx(bytes).has('xl/styles.xml'))
@@ -46,7 +50,7 @@ test('relatório XLSX preserva texto extenso, células mescladas e valores ao re
 async function filledTemplate() {
   const book = await reopen(await gerarModeloImportacao('Empresa de Demonstração'))
   book.getWorksheet('Localizacoes').getRow(2).values = ['Garagem Central', 'Santos / SP', 20]
-  book.getWorksheet('Veiculos').getRow(2).values = ['Volvo FH', 'ABC1D23', 'Cavalo Mecânico', 2022, 125000, 'OPERACIONAL', 'Garagem Central']
+  book.getWorksheet('Veiculos').getRow(2).values = ['Volvo FH', 'ABC1D23', '00123456789', 'Cavalo Mecânico', 2022, 125000, 'OPERACIONAL', 'Garagem Central']
   book.getWorksheet('Motoristas').getRow(2).values = ['Thiago Lima', '52998224725', '', '01234567890', 'E', '31/12/2027', 'DISPONIVEL', 'ABC1D23']
   return book
 }
@@ -54,10 +58,12 @@ test('modelo de importação reabre e preserva CNH com zero, datas brasileiras e
   const bytes = await gerarModeloImportacao('Empresa de Demonstração')
   const model = await reopen(bytes)
   assert.equal(model.getWorksheet('Motoristas').getCell('D2').numFmt, '@')
-  assert.equal(model.getWorksheet('Veiculos').getCell('C2').dataValidation.type, 'list')
+  assert.equal(model.getWorksheet('Veiculos').getCell('C2').numFmt, '@')
+  assert.equal(model.getWorksheet('Veiculos').getCell('D2').dataValidation.type, 'list')
   const book = await filledTemplate()
   const lote = await lerPlanilhaImportacao(Buffer.from(await book.xlsx.writeBuffer()))
   assert.equal(lote.Veiculos[0].placa, 'ABC1D23')
+  assert.equal(lote.Veiculos[0].renavam, '00123456789')
   assert.equal(lote.Motoristas[0].cnh, '01234567890')
   assert.equal(lote.Motoristas[0].validade, '2027-12-31')
   assert.deepEqual(lote.Custos, [])

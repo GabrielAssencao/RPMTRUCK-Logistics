@@ -5,11 +5,18 @@ import { nomeOperacional, nomePessoa, textoOperacional, placaSchema, dataIsoSche
 import { cpfValido, normalizarDocumentoIdentidade } from '@/utils/documentos'
 import { EXCEL_DATE, EXCEL_MONEY, formatarTabelaExcel } from '@/lib/excelFormatting'
 import { verificarPacoteXlsx } from '@/lib/xlsxPackage'
+import { normalizarRenavam, renavamValido } from '@/utils/renavam'
 
 export const IMPORTACAO_MAX_BYTES = 2 * 1024 * 1024
 export const IMPORTACAO_MAX_LINHAS = 1000
 const opcional = <T extends z.ZodTypeAny>(schema: T) => z.preprocess(v => v === '' || v === undefined ? null : v, schema.nullable())
 const placaOpcional = opcional(placaSchema)
+const renavamOpcional = opcional(
+  z.string({ invalid_type_error: 'Preencha o RENAVAM como texto, preservando os zeros iniciais.' })
+    .trim()
+    .transform(normalizarRenavam)
+    .pipe(z.string().length(11, 'Preencha o RENAVAM com 11 dígitos.').refine(renavamValido, 'RENAVAM inválido.')),
+)
 const documento = z.string({ invalid_type_error: 'Preencha o CPF como texto, preservando os zeros iniciais.' }).trim().transform(v => v.replace(/[.\s-]/g, '')).pipe(z.string().regex(/^\d{11}$/, 'Preencha o CPF como texto, com 11 dígitos.').refine(cpfValido, 'CPF inválido.'))
 const cnh = z.string({ invalid_type_error: 'Preencha a CNH como texto, preservando os zeros iniciais.' }).trim().regex(/^[\d.\s-]+$/).transform(v => v.replace(/\D/g, '')).pipe(z.string().regex(/^\d{9,11}$/, 'Preencha a CNH como texto, com 9 a 11 dígitos.'))
 const data = z.preprocess(v => {
@@ -21,7 +28,7 @@ const categorias = ['COMBUSTIVEL', 'MANUTENCAO', 'PEDAGIO', 'ALIMENTACAO', 'DIAR
 
 export const schemasImportacao = {
   Localizacoes: z.object({ nome: nomeOperacional(2, 160), cidadeUF: nomeOperacional(2, 100), capacidade: z.coerce.number().int().min(0).max(100000) }).strict(),
-  Veiculos: z.object({ modelo: nomeOperacional(2, 100), placa: placaSchema, tipo: z.enum(['Cavalo Mecânico', 'Bitrem', 'Sider', 'Baú', 'Refrigerado']), ano: opcional(z.coerce.number().int().min(1950).max(new Date().getFullYear() + 1)), quilometragem: quilometragemSchema, status: z.enum(['OPERACIONAL', 'OFICINA', 'INATIVO']), localizacao: opcional(nomeOperacional(2, 160)) }).strict(),
+  Veiculos: z.object({ modelo: nomeOperacional(2, 100), placa: placaSchema, renavam: renavamOpcional, tipo: z.enum(['Cavalo Mecânico', 'Bitrem', 'Sider', 'Baú', 'Refrigerado']), ano: opcional(z.coerce.number().int().min(1950).max(new Date().getFullYear() + 1)), quilometragem: quilometragemSchema, status: z.enum(['OPERACIONAL', 'OFICINA', 'INATIVO']), localizacao: opcional(nomeOperacional(2, 160)) }).strict(),
   Motoristas: z.object({ nome: nomePessoa(3, 120), cpf: documento, rg: opcional(z.string().transform(normalizarDocumentoIdentidade).pipe(z.string().regex(/^[A-Z0-9]{7,14}$/))), cnh, categoria: z.enum(['A', 'B', 'C', 'D', 'E', 'AB', 'AC', 'AD', 'AE']), validade: data, status: z.enum(['DISPONIVEL', 'EM_ROTA', 'ALERTA', 'FERIAS']), placa: placaOpcional }).strict(),
   Custos: z.object({ data, categoria: z.enum(categorias), descricao: textoOperacional(3, 500), valor: valorMonetarioSchema.positive(), formaPagamento: nomeOperacional(2, 80), status: z.enum(['PAGO', 'PENDENTE']), placa: placaSchema, cpfMotorista: opcional(documento) }).strict(),
   Manutencoes: z.object({ data: data, conclusao: opcional(data), tipo: z.enum(['PREVENTIVA', 'CORRETIVA', 'PNEUS', 'OLEO']), descricao: textoOperacional(3, 500), pecas: opcional(textoOperacional(1, 2000)), custo: valorMonetarioSchema, quilometragem: quilometragemSchema, status: z.enum(['PENDENTE', 'CONCLUIDA', 'CANCELADA', 'NAO_REALIZADA']), placa: placaSchema }).strict().refine(v => v.status !== 'CONCLUIDA' || Boolean(v.conclusao), { path: ['conclusao'], message: 'Informe a data de conclusão.' }).refine(v => !v.conclusao || v.conclusao >= v.data, { path: ['conclusao'], message: 'A conclusão deve ocorrer a partir da data agendada.' }),
@@ -42,7 +49,7 @@ export class PlanilhaImportacaoError extends Error {
 
 const COLUNAS: Record<AbaImportacao, string[]> = {
   Localizacoes: ['nome', 'cidadeUF', 'capacidade'],
-  Veiculos: ['modelo', 'placa', 'tipo', 'ano', 'quilometragem', 'status', 'localizacao'],
+  Veiculos: ['modelo', 'placa', 'renavam', 'tipo', 'ano', 'quilometragem', 'status', 'localizacao'],
   Motoristas: ['nome', 'cpf', 'rg', 'cnh', 'categoria', 'validade', 'status', 'placa'],
   Custos: ['data', 'categoria', 'descricao', 'valor', 'formaPagamento', 'status', 'placa', 'cpfMotorista'],
   Manutencoes: ['data', 'conclusao', 'tipo', 'descricao', 'pecas', 'custo', 'quilometragem', 'status', 'placa'],
@@ -76,8 +83,8 @@ export async function gerarModeloImportacao(nomeEmpresa: string) {
   formatarTabelaExcel(instructions)
   const guide = book.addWorksheet('Guia de campos')
   guide.columns = [{ header: 'ABA', width: 22 }, { header: 'CAMPO', width: 24 }, { header: 'PREENCHIMENTO', width: 80 }]
-  const optionalFields = ['Veiculos.ano', 'Veiculos.localizacao', 'Motoristas.rg', 'Motoristas.placa', 'Custos.cpfMotorista', 'Manutencoes.conclusao', 'Manutencoes.pecas', 'Containers.observacoes', 'Containers.cpfMotorista']
-  const examples: Record<string, string> = { nome: 'Garagem Central (localização) / Thiago Lima (motorista)', cidadeUF: 'Santos / SP', capacidade: '20', modelo: 'Volvo FH 540', placa: 'ABC1D23', ano: '2022', quilometragem: '125000', localizacao: 'Garagem Central', cpf: 'Somente 11 dígitos, com CPF válido; preserve zeros iniciais.', cpfMotorista: 'CPF do motorista cadastrado ou preenchido na aba Motoristas.', rg: '123456789', cnh: '01234567890', validade: '31/12/2027', data: '14/09/2026', conclusao: '15/09/2026 (obrigatório para manutenção concluída)', descricao: 'Abastecimento / Troca de óleo', valor: '350,50 (digite como número)', custo: '350,50 (digite como número)', frete: '2500,00 (digite como número)', formaPagamento: 'PIX', pecas: 'Filtro e óleo', codigo: 'ABCD 123456-7', origem: 'Terminal Santos', destino: 'Garagem Central', percentualComissao: '10 (equivale a 10%)', observacoes: 'Observações sobre a operação' }
+  const optionalFields = ['Veiculos.renavam', 'Veiculos.ano', 'Veiculos.localizacao', 'Motoristas.rg', 'Motoristas.placa', 'Custos.cpfMotorista', 'Manutencoes.conclusao', 'Manutencoes.pecas', 'Containers.observacoes', 'Containers.cpfMotorista']
+  const examples: Record<string, string> = { nome: 'Garagem Central (localização) / Thiago Lima (motorista)', cidadeUF: 'Santos / SP', capacidade: '20', modelo: 'Volvo FH 540', placa: 'ABC1D23', renavam: '11 dígitos válidos; preserve zeros iniciais.', ano: '2022', quilometragem: '125000', localizacao: 'Garagem Central', cpf: 'Somente 11 dígitos, com CPF válido; preserve zeros iniciais.', cpfMotorista: 'CPF do motorista cadastrado ou preenchido na aba Motoristas.', rg: '123456789', cnh: '01234567890', validade: '31/12/2027', data: '14/09/2026', conclusao: '15/09/2026 (obrigatório para manutenção concluída)', descricao: 'Abastecimento / Troca de óleo', valor: '350,50 (digite como número)', custo: '350,50 (digite como número)', frete: '2500,00 (digite como número)', formaPagamento: 'PIX', pecas: 'Filtro e óleo', codigo: 'ABCD 123456-7', origem: 'Terminal Santos', destino: 'Garagem Central', percentualComissao: '10 (equivale a 10%)', observacoes: 'Observações sobre a operação' }
   for (const name of ABAS_IMPORTACAO) for (const field of COLUNAS[name]) guide.addRow([name, field, `${optionalFields.includes(`${name}.${field}`) ? 'Opcional' : 'Obrigatório'}. ${OPCOES[`${name}.${field}`]?.join(' / ') ?? examples[field] ?? 'Use texto conforme o cadastro.'}`])
   formatarTabelaExcel(guide)
   for (const name of ABAS_IMPORTACAO) {

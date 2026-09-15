@@ -5,7 +5,7 @@ import { textoOperacional } from '@/lib/domainValidation'
 import { calcularNotificacaoLembrete, perfilPodeUsarLembretes } from '@/lib/lembretePessoal'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
-import { anteriorAoMinutoDaReferencia } from '@/lib/dataHoraOperacional'
+import { anteriorAoDiaDaReferencia, anteriorAoMinutoDaReferencia } from '@/lib/dataHoraOperacional'
 
 import { limparLembretesConcluidos } from '@/lib/lembreteRetencao'
 
@@ -15,6 +15,7 @@ const criarSchema = z.object({
   titulo: textoOperacional(3, 120),
   descricao: textoOperacional(1, 1000).nullable().optional(),
   dataHora: z.string().datetime(),
+  diaInteiro: z.boolean().default(false),
   urgencia: z.enum(['LEVE', 'MEDIA', 'ALTA']).default('MEDIA'),
   modoNotificacao: z.enum(['AUTOMATICA', 'PERSONALIZADA']).default('AUTOMATICA'),
   notificarEm: z.string().datetime().nullable().optional(),
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ erro: 'Dados do lembrete inválidos.' }, { status: 400 })
 
   const dataHora = new Date(parsed.data.dataHora)
-  if (anteriorAoMinutoDaReferencia(dataHora)) {
+  if (parsed.data.diaInteiro ? anteriorAoDiaDaReferencia(dataHora) : anteriorAoMinutoDaReferencia(dataHora)) {
     return NextResponse.json({ erro: 'O lembrete não pode ser agendado antes do momento do cadastro.' }, { status: 400 })
   }
 

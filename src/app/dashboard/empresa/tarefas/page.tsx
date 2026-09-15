@@ -39,6 +39,7 @@ import { NOTIFICACOES_ATUALIZADAS_EVENT } from '@/hooks/useNotificacoes'
 import { LembretesPessoaisBoard, type LembretePessoal } from '@/components/cronograma/LembretesPessoaisBoard'
 import { BrazilianDateTimePicker } from '@/components/cronograma/BrazilianDateTimePicker'
 import { anteriorAoMinutoDaReferencia, formatarDataHoraBrasil } from '@/lib/dataHoraOperacional'
+import { calcularNotificacaoTarefa, DIAS_ANTECEDENCIA_TAREFA, type ModoNotificacaoTarefa } from '@/lib/tarefaNotificacao'
 
 import CronogramaPessoal from '@/components/cronograma/CronogramaPessoal'
 
@@ -63,7 +64,9 @@ interface Tarefa {
   inicio?: string | null
   duracaoMinutos?: number | null
   exibirCalendario: boolean
+  diaInteiro: boolean
   lembreteEm?: string | null
+  modoNotificacao: ModoNotificacaoTarefa
   prioridade: PrioridadeTarefa
   status: StatusTarefa
   ordem: number
@@ -78,15 +81,17 @@ interface FormTarefa {
   descricao: string
   inicio: string
   prazo: string
-  duracaoMinutos: string
-  lembreteEm: string
+  modoNotificacao: ModoNotificacaoTarefa
+  notificarEm: string
   prioridade: PrioridadeTarefa
   responsavelId: string
   exibirCalendario: boolean
+  diaInteiro: boolean
 }
 
 const STATUS: StatusTarefa[] = ['PENDENTE', 'EM_ANDAMENTO', 'CONCLUIDA', 'CANCELADA']
 const PRIORIDADES: PrioridadeTarefa[] = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE']
+const PRIORIDADES_NOVAS: PrioridadeTarefa[] = ['BAIXA', 'MEDIA', 'ALTA']
 const DIAS_SEMANA = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB']
 
 const STATUS_INFO: Record<StatusTarefa, { titulo: string; descricao: string }> = {
@@ -102,25 +107,29 @@ function formVazio(responsavelId = ''): FormTarefa {
     descricao: '',
     inicio: formatarDataHoraBrasil(),
     prazo: '',
-    duracaoMinutos: '',
-    lembreteEm: '',
+    modoNotificacao: 'AUTOMATICA',
+    notificarEm: '',
     prioridade: 'MEDIA',
     responsavelId,
     exibirCalendario: true,
+    diaInteiro: false,
   }
 }
 
-function paraInputData(valor?: string | null) {
+function paraInputData(valor?: string | null, somenteData = false) {
   if (!valor) return ''
   const data = new Date(valor)
-  return `${data.toLocaleDateString('pt-BR')} ${data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+  return `${data.toLocaleDateString('pt-BR')}${somenteData ? '' : ` ${data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}`
 }
 
-function paraIsoOuNull(valor: string) {
+function paraIsoOuNull(valor: string, somenteData = false) {
   if (!valor) return null
-  const correspondencia = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/.exec(valor)
+  const correspondencia = /^(\d{2})\/(\d{2})\/(\d{4})(?: (\d{2}):(\d{2}))?$/.exec(valor)
   if (!correspondencia) throw new Error('Informe as datas no formato DD/MM/AAAA e preencha o horário.')
-  const [, dia, mes, ano, hora, minuto] = correspondencia
+  const [, dia, mes, ano, horaInformada, minutoInformado] = correspondencia
+  const hora = somenteData ? '12' : horaInformada
+  const minuto = somenteData ? '00' : minutoInformado
+  if (!hora || !minuto) throw new Error('Preencha o horário ou marque a opção de dia inteiro.')
   const data = new Date(Number(ano), Number(mes) - 1, Number(dia), Number(hora), Number(minuto))
   if (
     data.getFullYear() !== Number(ano)
@@ -132,6 +141,35 @@ function paraIsoOuNull(valor: string) {
   return data.toISOString()
 }
 
+function nomePrioridade(prioridade: PrioridadeTarefa) {
+  if (prioridade === 'BAIXA') return 'Leve'
+  if (prioridade === 'MEDIA') return 'Média'
+  if (prioridade === 'ALTA') return 'Alta'
+  return 'Urgente (legado)'
+}
+
+function resumoNotificacao(form: FormTarefa) {
+  if (form.modoNotificacao === 'PERSONALIZADA') {
+    return form.notificarEm ? `Aviso escolhido para ${form.notificarEm}.` : 'Escolha a data e o horário do aviso.'
+  }
+  const referencia = form.prazo || form.inicio
+  if (!referencia) return 'Informe o prazo ou o início para programar o aviso automático.'
+  try {
+    const data = calcularNotificacaoTarefa({
+      inicio: form.inicio ? new Date(paraIsoOuNull(form.inicio, form.diaInteiro)!) : null,
+      prazo: form.prazo ? new Date(paraIsoOuNull(form.prazo, form.diaInteiro)!) : null,
+      prioridade: form.prioridade,
+      modo: 'AUTOMATICA',
+    })
+    const antecedencia = DIAS_ANTECEDENCIA_TAREFA[form.prioridade]
+    if (!data) return 'Informe o prazo ou o início para programar o aviso automático.'
+    const quando = form.diaInteiro ? data.toLocaleDateString('pt-BR') : data.toLocaleString('pt-BR')
+    return `Aviso ${antecedencia} dias antes, em ${quando}. O prazo é usado primeiro; sem ele, vale o início.`
+  } catch {
+    return 'Complete a data para visualizar quando a notificação será enviada.'
+  }
+}
+
 function chaveDia(data: Date) {
   return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`
 }
@@ -139,6 +177,12 @@ function chaveDia(data: Date) {
 function dataPrincipal(tarefa: Tarefa) {
   const valor = tarefa.inicio ?? tarefa.prazo
   return valor ? new Date(valor) : null
+}
+
+function tarefaAtrasada(tarefa: Tarefa, agora = new Date()) {
+  if (!tarefa.prazo || ['CONCLUIDA', 'CANCELADA'].includes(tarefa.status)) return false
+  const prazo = new Date(tarefa.prazo)
+  return tarefa.diaInteiro ? chaveDia(prazo) < chaveDia(agora) : prazo < agora
 }
 
 function ordemEntre(anterior: number | undefined, proxima: number | undefined) {
@@ -240,10 +284,7 @@ export default function TarefasPage() {
       if (filtroPeriodo === 'HOJE') return Boolean(data && data >= hoje && data < amanha)
       if (filtroPeriodo === '7_DIAS') return Boolean(data && data >= hoje && data < seteDias)
       if (filtroPeriodo === 'ATRASADAS') return Boolean(
-        tarefa.prazo
-        && new Date(tarefa.prazo) < agora
-        && tarefa.status !== 'CONCLUIDA'
-        && tarefa.status !== 'CANCELADA',
+        tarefaAtrasada(tarefa, agora),
       )
       return true
     })
@@ -298,13 +339,14 @@ export default function TarefasPage() {
     setForm({
       titulo: tarefa.titulo,
       descricao: tarefa.descricao ?? '',
-      inicio: paraInputData(tarefa.inicio),
-      prazo: paraInputData(tarefa.prazo),
-      duracaoMinutos: tarefa.duracaoMinutos ? String(tarefa.duracaoMinutos) : '',
-      lembreteEm: paraInputData(tarefa.lembreteEm),
+      inicio: paraInputData(tarefa.inicio, tarefa.diaInteiro),
+      prazo: paraInputData(tarefa.prazo, tarefa.diaInteiro),
+      modoNotificacao: tarefa.modoNotificacao ?? 'AUTOMATICA',
+      notificarEm: tarefa.modoNotificacao === 'PERSONALIZADA' ? paraInputData(tarefa.lembreteEm) : '',
       prioridade: tarefa.prioridade,
       responsavelId: tarefa.responsavel.id,
       exibirCalendario: tarefa.exibirCalendario,
+      diaInteiro: tarefa.diaInteiro,
     })
     setEditorAberto(true)
   }
@@ -319,15 +361,16 @@ export default function TarefasPage() {
       const payload = {
         titulo: form.titulo.trim(),
         descricao: form.descricao.trim() || null,
-        inicio: paraIsoOuNull(form.inicio),
-        prazo: paraIsoOuNull(form.prazo),
-        duracaoMinutos: form.duracaoMinutos ? Number(form.duracaoMinutos) : null,
-        lembreteEm: paraIsoOuNull(form.lembreteEm),
+        inicio: paraIsoOuNull(form.inicio, form.diaInteiro),
+        prazo: paraIsoOuNull(form.prazo, form.diaInteiro),
+        modoNotificacao: form.modoNotificacao,
+        notificarEm: form.modoNotificacao === 'PERSONALIZADA' ? paraIsoOuNull(form.notificarEm) : null,
         prioridade: form.prioridade,
         responsavelId: form.responsavelId,
         exibirCalendario: form.exibirCalendario,
+        diaInteiro: form.diaInteiro,
       }
-      if (!tarefaEditando && payload.inicio && anteriorAoMinutoDaReferencia(new Date(payload.inicio))) {
+      if (!tarefaEditando && !form.diaInteiro && payload.inicio && anteriorAoMinutoDaReferencia(new Date(payload.inicio))) {
         throw new Error('O início da tarefa não pode ser anterior ao momento do cadastro.')
       }
       const response = await fetch(tarefaEditando ? `/api/tarefas/${tarefaEditando.id}` : '/api/tarefas', {
@@ -614,12 +657,12 @@ export default function TarefasPage() {
                   <div className="mt-1 space-y-1">
                     {tarefasDia.slice(0, 3).map((tarefa) => (
                       <button key={tarefa.id} type="button" disabled={!eGestor} onClick={() => abrirEdicao(tarefa)} className="block w-full truncate border-l-2 px-1.5 py-1 text-left text-[8px] font-bold disabled:cursor-default sm:text-[9px]" style={{ borderColor: corPrioridade(tarefa.prioridade, primary, semanticColors.danger), backgroundColor: 'var(--background)' }} title={tarefa.titulo}>
-                        {tarefa.inicio ? new Date(tarefa.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'PRAZO'} · {tarefa.titulo}
+                        {tarefa.diaInteiro ? 'DIA' : tarefa.inicio ? new Date(tarefa.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'PRAZO'} · {tarefa.titulo}
                       </button>
                     ))}
                     {lembretesDia.slice(0, espacoLembretes).map((lembrete) => (
                       <button key={lembrete.id} type="button" onClick={() => setVisualizacao('LEMBRETES')} className="block w-full truncate border-l-2 px-1.5 py-1 text-left text-[8px] font-bold sm:text-[9px]" style={{ borderColor: semanticColors.warning, backgroundColor: `color-mix(in srgb, var(--background) 84%, ${semanticColors.warning} 16%)` }} title={`Lembrete pessoal: ${lembrete.titulo}`}>
-                        <StickyNote size={9} className="mr-1 inline" /> {new Date(lembrete.dataHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · {lembrete.titulo}
+                        <StickyNote size={9} className="mr-1 inline" /> {lembrete.diaInteiro ? 'DIA' : new Date(lembrete.dataHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · {lembrete.titulo}
                       </button>
                     ))}
                     {totalItens > 3 && <span className="block text-[8px] text-foreground-muted">+ {totalItens - 3} item(ns)</span>}
@@ -644,11 +687,13 @@ export default function TarefasPage() {
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <Campo label="Título"><input autoFocus required minLength={3} maxLength={160} value={form.titulo} onChange={(event) => setForm({ ...form, titulo: event.target.value })} className="input-cronograma" /></Campo>
                 <Campo label="Responsável"><select required value={form.responsavelId} onChange={(event) => setForm({ ...form, responsavelId: event.target.value })} className="input-cronograma">{usuarios.map((usuario) => <option key={usuario.id} value={usuario.id}>{usuario.nome} — {usuario.role.replaceAll('_', ' ')}</option>)}</select></Campo>
-                <Campo label="Início"><BrazilianDateTimePicker value={form.inicio} onChange={(valor) => setForm({ ...form, inicio: valor })} /></Campo>
-                <Campo label="Prazo"><BrazilianDateTimePicker value={form.prazo} onChange={(valor) => setForm({ ...form, prazo: valor })} /></Campo>
-                <Campo label="Duração estimada (minutos)"><input type="number" min={15} max={10080} step={15} value={form.duracaoMinutos} onChange={(event) => setForm({ ...form, duracaoMinutos: event.target.value })} className="input-cronograma" placeholder="Ex.: 60" /></Campo>
-                <Campo label="Prioridade"><select value={form.prioridade} onChange={(event) => setForm({ ...form, prioridade: event.target.value as PrioridadeTarefa })} className="input-cronograma">{PRIORIDADES.map((item) => <option key={item}>{item}</option>)}</select></Campo>
-                <Campo label="Lembrete"><BrazilianDateTimePicker value={form.lembreteEm} onChange={(valor) => setForm({ ...form, lembreteEm: valor })} /></Campo>
+                <label className="flex min-h-14 items-center gap-3 border px-4 py-3 text-[10px] md:col-span-2" style={{ borderColor: form.diaInteiro ? primary : 'var(--border)', backgroundColor: form.diaInteiro ? `${primary}0d` : 'transparent' }}><input type="checkbox" checked={form.diaInteiro} onChange={(event) => setForm({ ...form, diaInteiro: event.target.checked, inicio: paraInputData(form.inicio ? paraIsoOuNull(form.inicio, form.diaInteiro) : null, event.target.checked), prazo: paraInputData(form.prazo ? paraIsoOuNull(form.prazo, form.diaInteiro) : null, event.target.checked) })} className="h-5 w-5 shrink-0 accent-current" style={{ color: primary }} /><span><strong className="block uppercase">Não preciso definir um horário; somente o dia</strong><small className="mt-1 block text-[9px] normal-case text-foreground-muted">Início e prazo serão registrados sem um horário específico.</small></span></label>
+                <Campo label={form.diaInteiro ? 'Dia de início' : 'Início'}><BrazilianDateTimePicker somenteData={form.diaInteiro} value={form.inicio} onChange={(valor) => setForm({ ...form, inicio: valor })} /></Campo>
+                <Campo label={form.diaInteiro ? 'Dia do prazo' : 'Prazo'}><BrazilianDateTimePicker somenteData={form.diaInteiro} value={form.prazo} onChange={(valor) => setForm({ ...form, prazo: valor })} /></Campo>
+                <Campo label="Prioridade"><select value={form.prioridade} onChange={(event) => setForm({ ...form, prioridade: event.target.value as PrioridadeTarefa })} className="input-cronograma">{[...PRIORIDADES_NOVAS, ...(form.prioridade === 'URGENTE' ? ['URGENTE' as const] : [])].map((item) => <option key={item} value={item}>{nomePrioridade(item)} — aviso {DIAS_ANTECEDENCIA_TAREFA[item]} dias antes</option>)}</select></Campo>
+                <Campo label="Regra da notificação"><select value={form.modoNotificacao} onChange={(event) => setForm({ ...form, modoNotificacao: event.target.value as ModoNotificacaoTarefa, notificarEm: event.target.value === 'AUTOMATICA' ? '' : form.notificarEm })} className="input-cronograma"><option value="AUTOMATICA">Automática pela prioridade</option><option value="PERSONALIZADA">Escolher data e hora</option></select></Campo>
+                {form.modoNotificacao === 'PERSONALIZADA' && <div className="md:col-span-2"><Campo label="Data e horário da notificação"><BrazilianDateTimePicker required value={form.notificarEm} onChange={(valor) => setForm({ ...form, notificarEm: valor })} /></Campo></div>}
+                <div className="flex min-h-16 items-center gap-3 border px-4 py-3 text-[10px] md:col-span-2" style={{ borderColor: `${primary}55`, backgroundColor: `${primary}0a` }}><BellRing size={16} className="shrink-0" style={{ color: primary }} aria-hidden="true" /><span><strong className="block uppercase">Previsão da notificação</strong><small className="mt-1 block text-[9px] normal-case text-foreground-muted">{resumoNotificacao(form)}</small></span></div>
                 <label className="flex min-h-16 items-center justify-between gap-4 border px-4 py-3" style={{ borderColor: 'var(--border)' }}><span><strong className="block text-[10px] uppercase">Exibir no calendário</strong><small className="mt-1 block text-[9px] text-foreground-muted">O card continuará disponível no quadro.</small></span><input type="checkbox" checked={form.exibirCalendario} onChange={(event) => setForm({ ...form, exibirCalendario: event.target.checked })} className="h-5 w-5 accent-current" style={{ color: primary }} /></label>
                 <div className="md:col-span-2"><Campo label="Descrição"><textarea rows={3} maxLength={2000} value={form.descricao} onChange={(event) => setForm({ ...form, descricao: event.target.value })} className="input-cronograma resize-y" /></Campo></div>
               </div>
@@ -704,7 +749,7 @@ function TarefaCard({
   onDropBefore: (event: DragEvent<HTMLElement>) => void
 }) {
   const cor = corPrioridade(tarefa.prioridade, primary, danger)
-  const atrasada = Boolean(tarefa.prazo && new Date(tarefa.prazo) < new Date() && !['CONCLUIDA', 'CANCELADA'].includes(tarefa.status))
+  const atrasada = tarefaAtrasada(tarefa)
   const indiceStatus = STATUS.indexOf(tarefa.status)
 
   return (
@@ -725,14 +770,14 @@ function TarefaCard({
     >
       <div className="flex items-start gap-2">
         {podeAtualizar && <GripVertical size={15} className="mt-0.5 shrink-0 cursor-grab text-foreground-muted" aria-hidden="true" />}
-        <div className="min-w-0 flex-1"><span className="text-[8px] font-black uppercase tracking-[0.18em]" style={{ color: cor }}>{tarefa.prioridade}</span><h3 className="mt-1 break-words text-xs font-black leading-5">{tarefa.titulo}</h3></div>
+        <div className="min-w-0 flex-1"><span className="text-[8px] font-black uppercase tracking-[0.18em]" style={{ color: cor }}>{nomePrioridade(tarefa.prioridade)}</span><h3 className="mt-1 break-words text-xs font-black leading-5">{tarefa.titulo}</h3></div>
         {eGestor && <div className="flex shrink-0 gap-1"><button type="button" onClick={onEditar} className="interactive-control p-1.5 text-foreground-muted hover:text-foreground" aria-label={`Editar ${tarefa.titulo}`}><Pencil size={13} /></button><button type="button" onClick={onExcluir} className="interactive-control p-1.5" style={{ color: danger }} aria-label={`Excluir ${tarefa.titulo}`}><Trash2 size={13} /></button></div>}
       </div>
       {tarefa.descricao && <p className="mt-2 line-clamp-3 text-[10px] leading-4 text-foreground-muted">{tarefa.descricao}</p>}
       <div className="mt-3 space-y-1.5 border-t pt-3 text-[9px] text-foreground-muted" style={{ borderColor: 'var(--border)' }}>
         {eGestor && <span className="flex items-center gap-1.5"><UserRound size={11} /> {tarefa.responsavel.nome}</span>}
-        <span className="flex items-center gap-1.5" style={atrasada ? { color: danger } : undefined}><Clock3 size={11} /> {tarefa.prazo ? new Date(tarefa.prazo).toLocaleString('pt-BR') : 'Sem prazo'}</span>
-        {tarefa.lembreteEm && <span className="flex items-center gap-1.5"><BellRing size={11} /> {new Date(tarefa.lembreteEm).toLocaleString('pt-BR')}</span>}
+        <span className="flex items-center gap-1.5" style={atrasada ? { color: danger } : undefined}><Clock3 size={11} /> {tarefa.prazo ? tarefa.diaInteiro ? new Date(tarefa.prazo).toLocaleDateString('pt-BR') + ' · dia inteiro' : new Date(tarefa.prazo).toLocaleString('pt-BR') : 'Sem prazo'}</span>
+        {tarefa.lembreteEm && <span className="flex items-center gap-1.5"><BellRing size={11} /> {tarefa.diaInteiro && tarefa.modoNotificacao === 'AUTOMATICA' ? new Date(tarefa.lembreteEm).toLocaleDateString('pt-BR') : new Date(tarefa.lembreteEm).toLocaleString('pt-BR')}</span>}
       </div>
       {podeAtualizar && (
         <div className="mt-3 flex items-center justify-between gap-2 border-t pt-2" style={{ borderColor: 'var(--border)' }}>
@@ -758,7 +803,7 @@ function ViewButton({ active, onClick, icon: Icon, label, primary }: { active: b
 }
 
 function FiltroSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (valor: string) => void; options: readonly string[] }) {
-  return <label className="grid gap-1 text-[9px] font-bold uppercase tracking-wider text-foreground-muted">{label}<select value={value} onChange={(event) => onChange(event.target.value)} className="min-h-9 border bg-background px-2 text-[10px] text-foreground outline-none" style={{ borderColor: 'var(--border)' }}>{options.map((option) => <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>)}</select></label>
+  return <label className="grid gap-1 text-[9px] font-bold uppercase tracking-wider text-foreground-muted">{label}<select value={value} onChange={(event) => onChange(event.target.value)} className="min-h-9 border bg-background px-2 text-[10px] text-foreground outline-none" style={{ borderColor: 'var(--border)' }}>{options.map((option) => <option key={option} value={option}>{option === 'BAIXA' ? 'LEVE' : option.replaceAll('_', ' ')}</option>)}</select></label>
 }
 
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {

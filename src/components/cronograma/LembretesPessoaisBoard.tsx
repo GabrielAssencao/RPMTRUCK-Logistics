@@ -19,6 +19,7 @@ export interface LembretePessoal {
   titulo: string
   descricao?: string | null
   dataHora: string
+  diaInteiro: boolean
   urgencia: UrgenciaLembrete
   modoNotificacao: ModoNotificacao
   notificarEm: string
@@ -34,6 +35,7 @@ interface FormLembrete {
   descricao: string
   data: string
   hora: string
+  diaInteiro: boolean
   urgencia: UrgenciaLembrete
   modoNotificacao: ModoNotificacao
   dataNotificacao: string
@@ -55,6 +57,7 @@ function formVazio(): FormLembrete {
     descricao: '',
     data,
     hora,
+    diaInteiro: false,
     urgencia: 'MEDIA',
     modoNotificacao: 'AUTOMATICA',
     dataNotificacao: '',
@@ -174,6 +177,7 @@ export function LembretesPessoaisBoard({
       descricao: lembrete.descricao ?? '',
       data: evento.data,
       hora: evento.hora,
+      diaInteiro: lembrete.diaInteiro,
       urgencia: lembrete.urgencia,
       modoNotificacao: lembrete.modoNotificacao,
       dataNotificacao: notificacao.data,
@@ -191,14 +195,15 @@ export function LembretesPessoaisBoard({
       const payload = {
         titulo: form.titulo.trim(),
         descricao: form.descricao.trim() || null,
-        dataHora: paraIsoBrasil(form.data, form.hora),
+        dataHora: paraIsoBrasil(form.data, form.diaInteiro ? '12:00' : form.hora),
+        diaInteiro: form.diaInteiro,
         urgencia: form.urgencia,
         modoNotificacao: form.modoNotificacao,
         notificarEm: form.modoNotificacao === 'PERSONALIZADA'
           ? paraIsoBrasil(form.dataNotificacao, form.horaNotificacao)
           : null,
       }
-      if (!editando && anteriorAoMinutoDaReferencia(new Date(payload.dataHora))) {
+      if (!editando && !form.diaInteiro && anteriorAoMinutoDaReferencia(new Date(payload.dataHora))) {
         throw new Error('O lembrete não pode ser agendado antes do momento do cadastro.')
       }
       const response = await fetch(editando ? `/api/lembretes-pessoais/${editando.id}` : '/api/lembretes-pessoais', {
@@ -357,7 +362,7 @@ export function LembretesPessoaisBoard({
                     <h3 className="mt-4 break-words font-rajdhani text-lg font-black leading-5">{lembrete.titulo}</h3>
                     {lembrete.descricao && <p className="mt-2 line-clamp-4 text-[10px] leading-4 text-foreground-muted">{lembrete.descricao}</p>}
                     <div className="mt-auto space-y-2 border-t pt-4 text-[9px]" style={{ borderColor: `${cor}55` }}>
-                      <span className="flex items-center gap-2"><Clock3 size={12} /> {paraDataBrasil(lembrete.dataHora)} às {paraHoraBrasil(lembrete.dataHora)}</span>
+                      <span className="flex items-center gap-2"><Clock3 size={12} /> {paraDataBrasil(lembrete.dataHora)}{lembrete.diaInteiro ? ' · dia inteiro' : ` às ${paraHoraBrasil(lembrete.dataHora)}`}</span>
                       <span className="flex items-center gap-2 text-foreground-muted"><BellRing size={12} /> {lembrete.modoNotificacao === 'AUTOMATICA' ? ANTECEDENCIA[lembrete.urgencia] : `${paraDataBrasil(lembrete.notificarEm)} às ${paraHoraBrasil(lembrete.notificarEm)}`}</span>
                     </div>
                     {lembrete.concluido && <span className="mt-3 flex items-center gap-2 text-xs"><Check size={14} /> Concluído</span>}
@@ -389,7 +394,8 @@ export function LembretesPessoaisBoard({
               <div className="flex items-start justify-between border-b pb-3" style={{ borderColor: 'var(--border)' }}><div><p className="text-[9px] font-black uppercase tracking-[0.25em]" style={{ color: primary }}>Post-it pessoal</p><h2 id="titulo-editor-lembrete" className="mt-1 font-rajdhani text-xl font-black uppercase">{editando ? 'Editar lembrete' : 'Novo lembrete'}</h2></div><button type="button" onClick={() => setEditorAberto(false)} className="interactive-control border p-2" style={{ borderColor: 'var(--border)' }} aria-label="Fechar"><X size={16} /></button></div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <Campo label="Título" className="sm:col-span-2"><input autoFocus required minLength={3} maxLength={120} value={form.titulo} onChange={(event) => setForm({ ...form, titulo: event.target.value })} className="input-cronograma" /></Campo>
-                <Campo label="Data e horário" className="sm:col-span-2"><BrazilianDateTimePicker required horarioPadrao="09:00" value={form.data ? `${form.data} ${form.hora}` : ''} onChange={(valor) => { const [data = '', hora = ''] = valor.split(' '); setForm({ ...form, data, hora }) }} /></Campo>
+                <Campo label={form.diaInteiro ? 'Data' : 'Data e horário'} className="sm:col-span-2"><BrazilianDateTimePicker required somenteData={form.diaInteiro} horarioPadrao="09:00" value={form.data ? `${form.data}${form.diaInteiro ? '' : ` ${form.hora}`}` : ''} onChange={(valor) => { const [data = '', hora = ''] = valor.split(' '); setForm({ ...form, data, hora: hora || form.hora || '09:00' }) }} /></Campo>
+                <label className="sm:col-span-2 flex items-center gap-2 text-[10px] normal-case tracking-normal text-foreground-muted"><input type="checkbox" checked={form.diaInteiro} onChange={(event) => setForm({ ...form, diaInteiro: event.target.checked, hora: form.hora || '09:00' })} /> Não preciso definir um horário; somente o dia</label>
                 <Campo label="Urgência"><select value={form.urgencia} onChange={(event) => setForm({ ...form, urgencia: event.target.value as UrgenciaLembrete })} className="input-cronograma"><option value="LEVE">Leve — aviso 3 dias antes</option><option value="MEDIA">Médio — aviso 3 dias antes</option><option value="ALTA">Alto — aviso 5 dias antes</option></select></Campo>
                 <Campo label="Regra da notificação"><select value={form.modoNotificacao} onChange={(event) => setForm({ ...form, modoNotificacao: event.target.value as ModoNotificacao })} className="input-cronograma"><option value="AUTOMATICA">Automática pela urgência</option><option value="PERSONALIZADA">Escolher data e hora</option></select></Campo>
                 {form.modoNotificacao === 'PERSONALIZADA' && <Campo label="Data e horário da notificação" className="sm:col-span-2"><BrazilianDateTimePicker required horarioPadrao="09:00" value={form.dataNotificacao ? `${form.dataNotificacao} ${form.horaNotificacao}` : ''} onChange={(valor) => { const [dataNotificacao = '', horaNotificacao = ''] = valor.split(' '); setForm({ ...form, dataNotificacao, horaNotificacao }) }} /></Campo>}

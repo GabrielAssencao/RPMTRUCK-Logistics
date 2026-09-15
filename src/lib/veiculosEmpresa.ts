@@ -13,6 +13,7 @@ interface CadastroVeiculo {
   dados: {
     modelo: string
     placa: string
+    renavam?: string | null
     tipo: string
     ano?: number | null
     quilometragem?: number
