@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { motion, useInView, useReducedMotion } from 'framer-motion'
+import { m as motion, useInView, useReducedMotion } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useLandingStats } from '@/contexts/LandingStatsContext'
 

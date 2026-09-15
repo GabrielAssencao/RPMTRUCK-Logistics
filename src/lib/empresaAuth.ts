@@ -13,6 +13,7 @@ import { exposeEmpresa } from '@/lib/fieldEncryption'
 interface EmpresaAuthOptions {
   modulo?: ModuloCodigo
   acao?: 'LEITURA' | 'ESCRITA' | 'GESTAO'
+  exigirDelegacaoTarefas?: boolean
 }
 
 /**
@@ -82,7 +83,10 @@ export async function requireEmpresaAuth(request: NextRequest, options: EmpresaA
     return { error: 'Empresa não encontrada', status: 404, session: null, empresa: null }
   }
 
-  if (empresa.status !== 'ATIVO') {
+  const regularizacao = request.nextUrl.pathname === '/api/empresa/assinatura'
+    && empresa.status === 'INADIMPLENTE'
+    && (auth.session.role === 'GESTOR_EMPRESA' || auth.session.role === 'GESTOR')
+  if (empresa.status !== 'ATIVO' && !regularizacao) {
     return {
       error: empresa.status === 'INADIMPLENTE'
         ? 'Acesso suspenso por inadimplência. Procure o suporte para regularizar o plano.'
@@ -110,6 +114,9 @@ export async function requireEmpresaAuth(request: NextRequest, options: EmpresaA
   }
 
   const plano = empresa.plano as PlanoTipo
+  if (options.exigirDelegacaoTarefas && !PLANOS_CONFIG[plano].delegacaoTarefas) {
+    return { error: 'Seu plano permite lembretes e calendário, mas não inclui tarefas delegadas.', status: 403, session: null, empresa: null }
+  }
   const empresaExposta = exposeEmpresa(empresa)
 
   return {

@@ -29,6 +29,10 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
         nome: true,
         email: true,
         role: true,
+        ativo: true,
+        exigeTrocaSenha: true,
+        senhaTemporariaExpiraEm: true,
+        senhaAlteradaEm: true,
         criado_em: true,
         atualizado_em: true
       },
@@ -37,7 +41,22 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
       }
     });
 
-    return NextResponse.json(usuarios, { status: 200 });
+    const resets = usuarios.length > 0
+      ? await prisma.resetSenha.findMany({
+          where: { email: { in: usuarios.map((usuario) => usuario.email) } },
+          select: { id: true, email: true, status: true, criado_em: true, atualizado_em: true },
+          orderBy: [{ email: 'asc' }, { atualizado_em: 'desc' }],
+          distinct: ['email'],
+        })
+      : [];
+    const resetPorEmail = new Map(resets.map((reset) => [reset.email, reset]));
+
+    const agora = new Date();
+    return NextResponse.json(usuarios.map((usuario) => ({
+      ...usuario,
+      credencialTemporariaExpirada: Boolean(usuario.exigeTrocaSenha && usuario.senhaTemporariaExpiraEm && usuario.senhaTemporariaExpiraEm <= agora),
+      ultimoReset: resetPorEmail.get(usuario.email) ?? null,
+    })), { status: 200 });
   } catch (error) {
     console.error('Erro ao buscar usuários da empresa:', error);
     return NextResponse.json(

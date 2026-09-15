@@ -5,7 +5,8 @@ import { prisma } from '@/lib/prisma'
 import { textoOperacional } from '@/lib/domainValidation'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
-import { anteriorAoMinutoDaReferencia } from '@/lib/dataHoraOperacional'
+import { anteriorAoDiaDaReferencia, anteriorAoMinutoDaReferencia } from '@/lib/dataHoraOperacional'
+import { calcularNotificacaoTarefa } from '@/lib/tarefaNotificacao'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,9 @@ const criarTarefaSchema = z.object({
   inicio: z.string().datetime().optional().nullable(),
   duracaoMinutos: z.number().int().min(15).max(10_080).optional().nullable(),
   exibirCalendario: z.boolean().default(true),
-  lembreteEm: z.string().datetime().optional().nullable(),
+  diaInteiro: z.boolean().default(false),
+  modoNotificacao: z.enum(['AUTOMATICA', 'PERSONALIZADA']).default('AUTOMATICA'),
+  notificarEm: z.string().datetime().optional().nullable(),
   prioridade: z.enum(['BAIXA', 'MEDIA', 'ALTA', 'URGENTE']).default('MEDIA'),
   responsavelId: z.string().uuid(),
   modulo: z.enum(['FROTA', 'GESTAO', 'MOTORISTAS', 'NOTIFICACOES', 'TAREFAS', 'RELATORIOS']).optional().nullable(),
@@ -24,13 +27,8 @@ const criarTarefaSchema = z.object({
 }).strict().superRefine((dados, contexto) => {
   const inicio = dados.inicio ? new Date(dados.inicio) : null
   const prazo = dados.prazo ? new Date(dados.prazo) : null
-  const lembrete = dados.lembreteEm ? new Date(dados.lembreteEm) : null
   if (inicio && prazo && prazo < inicio) {
     contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['prazo'], message: 'O prazo não pode ser anterior ao início.' })
-  }
-  const referencia = inicio ?? prazo
-  if (lembrete && referencia && lembrete > referencia) {
-    contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['lembreteEm'], message: 'O lembrete deve ocorrer antes da tarefa.' })
   }
 })
 
@@ -45,7 +43,7 @@ function podeDelegar(role: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS', exigirDelegacaoTarefas: true })
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
 
   const limited = await applyRateLimit(
@@ -84,7 +82,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS', acao: 'GESTAO' })
+  const auth = await requireEmpresaAuth(request, { modulo: 'TAREFAS', acao: 'GESTAO', exigirDelegacaoTarefas: true })
   if (auth.error || !auth.session?.empresaId) return NextResponse.json({ erro: auth.error }, { status: auth.status })
 
   const limited = await applyRateLimit(
@@ -97,7 +95,7 @@ export async function POST(request: NextRequest) {
 
   const parsed = criarTarefaSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ erro: 'Dados da tarefa inválidos.' }, { status: 400 })
-  if (parsed.data.inicio && anteriorAoMinutoDaReferencia(new Date(parsed.data.inicio))) {
+  if (parsed.data.inicio && (parsed.data.diaInteiro ? anteriorAoDiaDaReferencia(new Date(parsed.data.inicio)) : anteriorAoMinutoDaReferencia(new Date(parsed.data.inicio)))) {
     return NextResponse.json({ erro: 'O início da tarefa não pode ser anterior ao momento do cadastro.' }, { status: 400 })
   }
 
@@ -112,6 +110,19 @@ export async function POST(request: NextRequest) {
     select: { id: true },
   })
   if (!responsavel) return NextResponse.json({ erro: 'Responsável não pertence à empresa.' }, { status: 400 })
+
+  let lembreteEm: Date | null
+  try {
+    lembreteEm = calcularNotificacaoTarefa({
+      inicio: parsed.data.inicio ? new Date(parsed.data.inicio) : null,
+      prazo: parsed.data.prazo ? new Date(parsed.data.prazo) : null,
+      prioridade: parsed.data.prioridade,
+      modo: parsed.data.modoNotificacao,
+      personalizada: parsed.data.notificarEm ? new Date(parsed.data.notificarEm) : null,
+    })
+  } catch (error) {
+    return NextResponse.json({ erro: error instanceof Error ? error.message : 'Notificação inválida.' }, { status: 400 })
+  }
 
   if (parsed.data.origemId) {
     const tarefaAtiva = await prisma.tarefa.findFirst({
@@ -138,7 +149,9 @@ export async function POST(request: NextRequest) {
         inicio: parsed.data.inicio ? new Date(parsed.data.inicio) : null,
         duracaoMinutos: parsed.data.duracaoMinutos ?? null,
         exibirCalendario: parsed.data.exibirCalendario,
-        lembreteEm: parsed.data.lembreteEm ? new Date(parsed.data.lembreteEm) : null,
+        diaInteiro: parsed.data.diaInteiro,
+        lembreteEm,
+        modoNotificacao: parsed.data.modoNotificacao,
         ordem: Math.min((ultimaOrdem._max.ordem ?? 0) + 1000, 1_000_000_000),
         prioridade: parsed.data.prioridade,
         modulo: parsed.data.modulo || null,

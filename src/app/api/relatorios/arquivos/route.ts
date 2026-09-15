@@ -1,3 +1,4 @@
+import { lerFormularioLimitado, RequestBodyError } from '@/lib/requestBody'
 import { createHash, randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { TipoRelatorioArquivo } from '@prisma/client'
@@ -160,7 +161,7 @@ export async function POST(request: NextRequest) {
   if (limited) return limited
 
   try {
-    const formData = await request.formData()
+    const formData = await lerFormularioLimitado(request)
     const arquivo = formData.get('arquivo')
     const periodoInicio = parseDate(formData.get('periodo_inicio'))
     const periodoFim = parseDate(formData.get('periodo_fim'))
@@ -250,6 +251,7 @@ export async function POST(request: NextRequest) {
       throw error
     }
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ erro: error.message }, { status: error.status })
     console.error('Erro ao arquivar relatório:', error)
     const message = error instanceof Error && error.message === 'SUPABASE_STORAGE_NOT_CONFIGURED'
       ? 'Configure NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SECRET_KEY somente no servidor.'

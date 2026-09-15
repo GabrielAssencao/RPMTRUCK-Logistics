@@ -8,6 +8,7 @@ interface ContextoAuditoria {
 
 interface OpcoesTransacao {
   isolationLevel?: Prisma.TransactionIsolationLevel
+  timeout?: number
 }
 
 /**

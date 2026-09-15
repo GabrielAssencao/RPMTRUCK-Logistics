@@ -2,7 +2,7 @@
 'use client'
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Phone, User, Truck, CheckCircle, XCircle, Copy, KeyRound } from 'lucide-react';
+import { Mail, Phone, User, Truck, CheckCircle, XCircle, Copy, KeyRound, Clock3, ShieldCheck } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { criarMensagensPrimeiroAcesso } from '@/lib/accessMessages';
 import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog';
@@ -17,6 +17,8 @@ export default function AdminRequests() {
   const [copiado, setCopiado] = useState('');
   const [erroAcao, setErroAcao] = useState('');
   const [decisao, setDecisao] = useState(null);
+  const [reemissao, setReemissao] = useState(null);
+  const [reemitindo, setReemitindo] = useState(false);
 
   const carregarSolicitacoes = async () => {
     try {
@@ -87,6 +89,41 @@ export default function AdminRequests() {
       setErroAcao(error instanceof Error ? error.message : 'Erro de conexão ao rejeitar a solicitação.');
     } finally {
       setProcessando(null);
+    }
+  };
+
+  const reemitirPrimeiroAcesso = async () => {
+    if (!reemissao?.acesso?.id || reemitindo) return;
+    setReemitindo(true);
+    setErroAcao('');
+    try {
+      const response = await fetch(`/api/admin/usuarios/${reemissao.acesso.id}/reemitir-primeiro-acesso`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.erro || 'Não foi possível reemitir a credencial.');
+      const mensagens = criarMensagensPrimeiroAcesso({
+        empresa: reemissao.empresa,
+        responsavel: reemissao.responsavel,
+        email: data.credencialTemporaria.email,
+        senhaTemporaria: data.credencialTemporaria.senha,
+        expiraEm: data.credencialTemporaria.expiraEm,
+        loginUrl: `${window.location.origin}/auth/login`,
+        reemissao: true,
+      });
+      setSolicitacoes((atuais) => atuais.map((item) => item.id === reemissao.id ? {
+        ...item,
+        acesso: {
+          ...item.acesso,
+          exigeTrocaSenha: true,
+          senhaTemporariaExpiraEm: data.credencialTemporaria.expiraEm,
+          credencialTemporariaExpirada: false,
+        },
+      } : item));
+      setEntrega({ solicitacao: reemissao, credencial: data.credencialTemporaria, mensagens });
+      setReemissao(null);
+    } catch (error) {
+      setErroAcao(error instanceof Error ? error.message : 'Erro de conexão ao reemitir a credencial.');
+    } finally {
+      setReemitindo(false);
     }
   };
 
@@ -210,9 +247,14 @@ export default function AdminRequests() {
                   )}
 
                   {req.status?.toLowerCase() === 'aprovado' && (
-                    <span className="text-[10px] font-mono font-black border border-green-500/30 text-green-500 bg-green-500/5 px-3 py-1 uppercase tracking-widest shrink-0">
-                      ✓ INSTÂNCIA ATIVA
-                    </span>
+                    <div className="flex w-full flex-col items-stretch gap-2 md:w-auto md:items-end">
+                      <EstadoPrimeiroAcesso acesso={req.acesso} />
+                      {req.acesso?.ativo && req.acesso?.exigeTrocaSenha && (
+                        <button type="button" onClick={() => setReemissao(req)} disabled={reemitindo} className="inline-flex min-h-9 items-center justify-center gap-1 border px-3 text-[9px] font-black uppercase tracking-widest transition-colors hover:bg-white/5 disabled:opacity-50" style={{ borderColor: primary, color: primary }}>
+                          <KeyRound size={12} /> Reemitir credencial
+                        </button>
+                      )}
+                    </div>
                   )}
 
                   {req.status?.toLowerCase() === 'rejeitado' && (
@@ -246,13 +288,26 @@ export default function AdminRequests() {
         }}
       />
 
+      <ActionConfirmDialog
+        open={Boolean(reemissao)}
+        tone="warning"
+        eyebrow="Credencial de primeiro acesso"
+        title="Reemitir acesso temporário"
+        description={reemissao ? `Uma nova senha temporária será criada para ${reemissao.responsavel}. A senha anterior deixará de funcionar imediatamente.` : ''}
+        confirmLabel="Invalidar e reemitir"
+        loadingLabel="Reemitindo..."
+        loading={reemitindo}
+        onClose={() => { if (!reemitindo) setReemissao(null) }}
+        onConfirm={() => void reemitirPrimeiroAcesso()}
+      />
+
       <AnimatePresence>
         {entrega && (
           <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <motion.div role="dialog" aria-modal="true" aria-labelledby="credencial-title" className="w-full max-w-3xl max-h-[90vh] overflow-y-auto border p-6 space-y-5" style={{ backgroundColor: 'var(--background)', borderColor: primary }} initial={{ scale: 0.97 }} animate={{ scale: 1 }}>
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: primary }}>Entrega única</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: primary }}>Exibição única</p>
                   <h3 id="credencial-title" className="text-2xl font-black font-rajdhani">CREDENCIAL DE PRIMEIRO ACESSO</h3>
                 </div>
                 <button type="button" onClick={() => setEntrega(null)} aria-label="Fechar" className="p-2 border" style={{ borderColor: 'var(--border)' }}><XCircle size={18} /></button>
@@ -286,4 +341,19 @@ export default function AdminRequests() {
       </AnimatePresence>
     </div>
   );
+}
+
+function EstadoPrimeiroAcesso({ acesso }) {
+  if (!acesso) {
+    return <span className="shrink-0 border border-red-500/30 bg-red-500/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-500">Conta não localizada</span>;
+  }
+  if (!acesso.ativo) {
+    return <span className="shrink-0 border border-red-500/30 bg-red-500/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-500">Acesso inativo</span>;
+  }
+  if (!acesso.exigeTrocaSenha) {
+    return <span className="inline-flex shrink-0 items-center gap-1 border border-green-500/30 bg-green-500/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-green-500"><ShieldCheck size={13} /> Primeiro acesso concluído</span>;
+  }
+  return acesso.credencialTemporariaExpirada
+    ? <span className="inline-flex shrink-0 items-center gap-1 border border-red-500/30 bg-red-500/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-500"><KeyRound size={13} /> Senha temporária expirada</span>
+    : <span className="inline-flex shrink-0 items-center gap-1 border border-amber-500/30 bg-amber-500/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-500"><Clock3 size={13} /> Aguardando troca da senha</span>;
 }

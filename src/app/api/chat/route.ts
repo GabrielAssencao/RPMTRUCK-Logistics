@@ -83,6 +83,13 @@ export async function GET(request: NextRequest) {
   const limited = await applyRateLimit(request, `chat-read:${escopo.auth.session!.userId}`, RATE_LIMITS.CHAT_READ.limit, RATE_LIMITS.CHAT_READ.windowMs)
   if (limited) return limited
 
+  if (request.nextUrl.searchParams.get('resumo') === 'true') {
+    const mensagensNaoLidas = await prisma.mensagemSuporte.count({
+      where: { conversa: { empresaId: escopo.empresaId }, ...filtroNaoLidas(escopo.admin) },
+    })
+    return NextResponse.json({ resumo: { mensagensNaoLidas } }, { headers: { 'Cache-Control': 'private, no-store' } })
+  }
+
   const ticketId = request.nextUrl.searchParams.get('ticketId')
   if (ticketId && !z.string().uuid().safeParse(ticketId).success) {
     return NextResponse.json({ erro: 'Ticket inválido.' }, { status: 400 })

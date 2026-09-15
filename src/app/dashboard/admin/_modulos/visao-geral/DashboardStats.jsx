@@ -3,7 +3,7 @@ import { Building2, Truck, FileText, DollarSign } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function DashboardStats({ empresas, solicitacoesPendentes, receita }) {
-  const ativas = empresas.filter(c => c.status === 'ATIVO').length;
+  const ativas = empresas.filter(c => c.status === 'ATIVO' && !c.financeiro?.bloqueado).length;
 
   const stats = [
     {

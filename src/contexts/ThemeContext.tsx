@@ -113,6 +113,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       primaryIsRed: temaPrimarioEhVermelho(primary),
       semanticColors: obterCoresSemanticas(primary),
     }}>
+      <link rel="icon" type="image/svg+xml" href={`/logos/favicon-${primary.slice(1)}.svg`} />
       {children}
     </ThemeContext.Provider>
   )

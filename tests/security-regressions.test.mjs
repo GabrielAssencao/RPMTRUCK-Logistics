@@ -429,7 +429,8 @@ test('central de seguranca filtra logs no servidor sem confiar no cliente', () =
   assert.match(route, /prisma\.exclusaoEmpresaJob\.findMany/)
   assert.match(route, /Empresa removida · \$\{referencia\}/)
   assert.match(securityModule, /Filtrar logs por empresa/)
-  assert.match(securityModule, /encodeURIComponent\(empresaId\)/)
+  assert.match(securityModule, /new URLSearchParams/)
+  assert.match(securityModule, /query\.set\('empresaId', empresaId\)/)
   assert.match(securityModule, /Histórico de exclusões · comprovante mínimo/)
 })
 

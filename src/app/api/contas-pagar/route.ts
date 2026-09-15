@@ -1,3 +1,4 @@
+import { lerFormularioLimitado, RequestBodyError } from '@/lib/requestBody'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest) {
 
   let arquivoSalvo: string | null = null
   try {
-    const form = await request.formData()
+    const form = await lerFormularioLimitado(request)
     const parsed = schema.safeParse({
       descricao: form.get('descricao'), fornecedor: form.get('fornecedor') || undefined,
       vencimento: form.get('vencimento'), valor: form.get('valor'),
@@ -233,6 +234,7 @@ export async function POST(request: NextRequest) {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
     return NextResponse.json({ conta: serializar(conta, auth.empresaId!), aviso: 'Confirme beneficiário, vencimento e valor no aplicativo do banco antes de pagar.' }, { status: 201 })
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ erro: error.message }, { status: error.status })
     if (arquivoSalvo) await removerArquivosContaPagar([arquivoSalvo])
     if (error instanceof ArquivoContaPagarError) return NextResponse.json({ erro: error.message }, { status: error.status })
     if (error instanceof Error && error.message === 'DATA_INVALIDA') return NextResponse.json({ erro: 'Data de vencimento inválida.' }, { status: 400 })

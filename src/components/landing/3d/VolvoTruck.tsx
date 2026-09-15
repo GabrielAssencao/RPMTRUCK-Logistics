@@ -4,6 +4,7 @@ import { useGLTF } from '@react-three/drei'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { useTheme } from '@/contexts/ThemeContext'
+import { confirmExperience3DLoaded } from '@/lib/experience3d'
 
 interface VolvoTruckProps {
   position?: [number, number, number]
@@ -23,6 +24,8 @@ export function VolvoTruck({
 }: VolvoTruckProps) {
   const { primary } = useTheme()
   const { scene } = useGLTF(MODEL_PATH, DRACO_DECODER_PATH)
+
+  useEffect(() => { confirmExperience3DLoaded() }, [scene])
 
   const { model, ownedMaterials } = useMemo(() => {
     const clonedScene = scene.clone(true)

@@ -1,46 +1,54 @@
-export function SidebarBrandIdentity({
-  primary,
-  subtitle,
-}: {
-  primary: string
-  subtitle: string
-}) {
+import Image from 'next/image'
+import { BrandLogo } from '@/components/brand/BrandLogo'
+
+const ICON_HUE_ROTATIONS: Record<string, number> = {
+  '#22c55e': 0,
+  '#ef4444': -135,
+  '#3b82f6': 80,
+  '#f59e0b': -95,
+  '#5e17eb': 125,
+}
+
+export function SidebarBrandIdentity({ primary }: { primary: string }) {
   return (
-    <div className="flex h-full min-w-0 items-center gap-2 px-2" aria-label={`RPMTRUCK · ${subtitle}`}>
-      <SidebarBrandMark primary={primary} />
-      <div className="min-w-0 leading-none">
-        <div className="whitespace-nowrap text-xl font-black tracking-tight text-foreground">
-          RPM<span style={{ color: primary }}>TRUCK</span>
-        </div>
-        <div className="mt-1.5 truncate text-[9px] font-bold uppercase tracking-[0.2em] text-foreground-muted">
-          {subtitle}
-        </div>
+    <div role="img" className="flex h-full min-w-0 items-center w-full" aria-label="RPMTRUCK">
+      <div
+        className="flex h-[68px] w-full items-center justify-center rounded-md border px-4 py-2"
+        style={{
+          borderColor: 'color-mix(in srgb, var(--primary) 24%, var(--border))',
+          backgroundColor: 'color-mix(in srgb, var(--primary) 8%, var(--background-secondary))',
+        }}
+      >
+        <BrandLogo variant="wordmark" primary={primary} className="h-auto w-28 max-w-full shrink-0" />
       </div>
     </div>
   )
 }
 
 export default function SidebarBrandMark({ primary }: { primary: string }) {
+  const rotation = ICON_HUE_ROTATIONS[primary.toLowerCase()] ?? 0
+
   return (
-    <div
+    <span
       role="img"
       aria-label="RPMTRUCK"
       title="RPMTRUCK"
-      className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden border bg-black/20 font-rajdhani"
+      className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border"
       style={{
-        borderColor: 'var(--border-strong)',
-        clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))',
+        borderColor: 'color-mix(in srgb, var(--primary) 42%, var(--border))',
+        backgroundColor: '#070707',
+        boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--primary) 8%, transparent)',
       }}
     >
-      <span className="relative z-[1] text-[12px] font-black tracking-[-0.08em] text-foreground">
-        RP<span style={{ color: primary }}>M</span>
-      </span>
-      <span className="absolute left-2 right-2 top-1.5 h-px" style={{ backgroundColor: primary }} aria-hidden="true" />
-      <span className="absolute bottom-1.5 left-2 right-2 flex gap-0.5" aria-hidden="true">
-        <i className="h-0.5 flex-[3]" style={{ backgroundColor: primary }} />
-        <i className="h-0.5 flex-1" style={{ backgroundColor: primary }} />
-        <i className="h-0.5 flex-1" style={{ backgroundColor: primary }} />
-      </span>
-    </div>
+      <Image
+        src="/logos/RpmShieldIcon.svg"
+        alt=""
+        aria-hidden="true"
+        width={40}
+        height={40}
+        className="h-full w-full object-contain"
+        style={{ filter: `hue-rotate(${rotation}deg)` }}
+      />
+    </span>
   )
 }

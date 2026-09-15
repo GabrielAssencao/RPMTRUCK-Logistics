@@ -1,6 +1,5 @@
 import { Prisma } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import {
   criarUrlsAssinadasFotos,
@@ -10,24 +9,13 @@ import {
 } from '@/lib/motoristaFotos'
 import { criarNotificacao } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
-import { dataIsoSchema, nomePessoa } from '@/lib/domainValidation'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { encryptionConfigured, exposeMotorista, protectMotorista } from '@/lib/fieldEncryption'
-import { cpfValido, normalizarDocumentoIdentidade, normalizarRegistroCNH, somenteNumeros } from '@/utils/documentos'
+import { cadastroMotoristaSchema } from '@/lib/motoristaValidation'
+import { normalizarDocumentoIdentidade, normalizarRegistroCNH, somenteNumeros } from '@/utils/documentos'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-const schema = z.object({
-  nome: nomePessoa(3, 120),
-  cpf: z.string().trim().regex(/^\d{11}$/, 'O CPF deve ter exatamente 11 números.').refine(cpfValido, 'Os dígitos verificadores do CPF não conferem.'),
-  rg: z.string().trim().regex(/^[A-Z0-9]{7,14}$/, 'O RG/CIN deve ter de 7 a 14 letras ou números.').nullable(),
-  cnh: z.string().trim().regex(/^\d{9,11}$/, 'Informe de 9 a 11 números do registro apresentado.'),
-  categoria: z.enum(['A', 'B', 'C', 'D', 'E', 'AB', 'AC', 'AD', 'AE']),
-  validade: dataIsoSchema,
-  status: z.enum(['DISPONIVEL', 'EM_ROTA', 'ALERTA', 'FERIAS']).default('DISPONIVEL'),
-  veiculoId: z.string().uuid().nullable(),
-}).strict()
 
 function valorTexto(formData: FormData, campo: string) {
   const valor = formData.get(campo)
@@ -98,7 +86,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ erro: 'Formulário inválido.' }, { status: 400 })
   }
 
-  const parsed = schema.safeParse({
+  const parsed = cadastroMotoristaSchema.safeParse({
     nome: valorTexto(formData, 'nome'),
     cpf: valorDocumentoNumericoObrigatorio(formData, 'cpf'),
     rg: valorDocumentoIdentidadeOpcional(formData, 'rg'),

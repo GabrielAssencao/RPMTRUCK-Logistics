@@ -20,6 +20,19 @@ export async function GET(request: NextRequest) {
   )
   if (limited) return limited
 
+  const tamanhoPagina = 20
+  const paginasSchema = z.object({
+    SESSOES: z.coerce.number().int().min(1).max(100000),
+    EVENTOS: z.coerce.number().int().min(1).max(100000),
+    AUDITORIA: z.coerce.number().int().min(1).max(100000),
+    EXCLUSOES: z.coerce.number().int().min(1).max(100000),
+  })
+  const paginas = paginasSchema.safeParse(Object.fromEntries(
+    ['SESSOES', 'EVENTOS', 'AUDITORIA', 'EXCLUSOES'].map(secao => [secao, request.nextUrl.searchParams.get(`pagina${secao}`) ?? '1']),
+  ))
+  if (!paginas.success) return NextResponse.json({ erro: 'Página inválida.' }, { status: 400 })
+  const paginar = (secao: keyof typeof paginas.data) => ({ skip: (paginas.data[secao] - 1) * tamanhoPagina, take: tamanhoPagina + 1 })
+
   const filtroInformado = request.nextUrl.searchParams.get('empresaId')
   const filtroSchema = z.union([z.literal('SISTEMA'), z.string().uuid()]).nullable()
   const filtro = filtroSchema.safeParse(filtroInformado)
@@ -42,8 +55,8 @@ export async function GET(request: NextRequest) {
   const [sessoes, eventos, auditoria, exclusoes, falhasLogin, bloqueiosRateLimit, sessoesAtivas, empresas] = await Promise.all([
     prisma.sessaoUsuario.findMany({
       where: { ...porEmpresa, revogadaEm: null, expiraEm: { gt: agora }, ultimaAtividade: { gte: ativoDesde } },
-      orderBy: { ultimaAtividade: 'desc' },
-      take: 50,
+      orderBy: [{ ultimaAtividade: 'desc' }, { id: 'desc' }],
+      ...paginar('SESSOES'),
       select: {
         id: true,
         criadoEm: true,
@@ -56,8 +69,8 @@ export async function GET(request: NextRequest) {
     }),
     prisma.eventoSeguranca.findMany({
       where: porEmpresa,
-      orderBy: { criadoEm: 'desc' },
-      take: 50,
+      orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }],
+      ...paginar('EVENTOS'),
       select: {
         id: true,
         tipo: true,
@@ -70,8 +83,8 @@ export async function GET(request: NextRequest) {
     }),
     prisma.auditoriaLog.findMany({
       where: porEmpresa,
-      orderBy: { criadoEm: 'desc' },
-      take: 50,
+      orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }],
+      ...paginar('AUDITORIA'),
       select: {
         id: true,
         tabela: true,
@@ -87,8 +100,8 @@ export async function GET(request: NextRequest) {
       ? Promise.resolve([])
       : prisma.exclusaoEmpresaJob.findMany({
           where: filtro.data ? { empresaId: filtro.data } : undefined,
-          orderBy: { criadoEm: 'desc' },
-          take: 50,
+          orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }],
+          ...paginar('EXCLUSOES'),
           select: {
             id: true,
             protocolo: true,
@@ -132,13 +145,19 @@ export async function GET(request: NextRequest) {
     {
       resumo: { sessoesAtivas, falhasLogin24h: falhasLogin, bloqueiosRateLimit24h: bloqueiosRateLimit },
       empresas: empresas.map(identificarEmpresa),
-      sessoes,
-      eventos: eventos.map((evento) => ({
+      paginacao: {
+        SESSOES: { pagina: paginas.data.SESSOES, temProxima: sessoes.length > tamanhoPagina },
+        EVENTOS: { pagina: paginas.data.EVENTOS, temProxima: eventos.length > tamanhoPagina },
+        AUDITORIA: { pagina: paginas.data.AUDITORIA, temProxima: auditoria.length > tamanhoPagina },
+        EXCLUSOES: { pagina: paginas.data.EXCLUSOES, temProxima: exclusoes.length > tamanhoPagina },
+      },
+      sessoes: sessoes.slice(0, tamanhoPagina),
+      eventos: eventos.slice(0, tamanhoPagina).map((evento) => ({
         ...evento,
         ipCorrelacao: evento.ipHash?.slice(0, 12) || null,
         ipHash: undefined,
       })),
-      auditoria: auditoria.map((item) => ({
+      auditoria: auditoria.slice(0, tamanhoPagina).map((item) => ({
         ...item,
         usuario: item.usuarioId ? usuariosPorId.get(item.usuarioId) || null : null,
         empresa: item.empresaId
@@ -147,7 +166,7 @@ export async function GET(request: NextRequest) {
             : null
           : null,
       })),
-      exclusoes: exclusoes.map((exclusao) => ({
+      exclusoes: exclusoes.slice(0, tamanhoPagina).map((exclusao) => ({
         id: exclusao.id,
         protocolo: exclusao.protocolo,
         status: exclusao.status,

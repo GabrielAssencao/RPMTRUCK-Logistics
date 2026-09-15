@@ -154,6 +154,7 @@ test('delegação de alertas de motoristas é aceita pelo contrato de tarefas', 
 test('CPF, RG/CIN e CNH usam contratos compatíveis com os documentos apresentados', () => {
   const page = read('src/app/dashboard/empresa/motoristas/novo/page.tsx')
   const route = read('src/app/api/motoristas/route.ts')
+  const validation = read('src/lib/motoristaValidation.ts')
   const documentos = read('src/utils/documentos.ts')
 
   assert.match(page, /setCpf\(formatarCPF\(valor\)\)/)
@@ -170,9 +171,9 @@ test('CPF, RG/CIN e CNH usam contratos compatíveis com os documentos apresentad
   assert.match(documentos, /normalizarRegistroCNH/)
   assert.match(documentos, /cpfValido/)
   assert.match(documentos, /export function erroCPF/)
-  assert.match(route, /cpf: z\.string\(\)\.trim\(\)\.regex\(\/\^\\d\{11\}\$\//)
-  assert.match(route, /rg: z\.string\(\)\.trim\(\)\.regex\(\/\^\[A-Z0-9\]\{7,14\}\$\//)
-  assert.match(route, /cnh: z\.string\(\)\.trim\(\)\.regex\(\/\^\\d\{9,11\}\$\//)
+  assert.match(validation, /cpf: z\.string\(\)\.trim\(\)\.regex\(\/\^\\d\{11\}\$\//)
+  assert.match(validation, /rg: z\.string\(\)\.trim\(\)\.regex\(\/\^\[A-Z0-9\]\{7,14\}\$\//)
+  assert.match(validation, /cnh: z\.string\(\)\.trim\(\)\.regex\(\/\^\\d\{9,11\}\$\//)
   assert.match(route, /valorDocumentoNumericoObrigatorio\(formData, 'cpf'\)/)
   assert.match(route, /campo: typeof issue\?\.path\[0\]/)
   assert.match(route, /valorDocumentoIdentidadeOpcional\(formData, 'rg'\)/)

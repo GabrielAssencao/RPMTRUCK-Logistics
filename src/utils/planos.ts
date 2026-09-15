@@ -46,8 +46,8 @@ export const MODULOS_CONFIG: Record<ModuloCodigo, { nome: string; descricao: str
     descricao: 'Alertas direcionados aos usuários da empresa.',
   },
   TAREFAS: {
-    nome: 'Tarefas',
-    descricao: 'Delegação, responsáveis, prazos, prioridades e status.',
+    nome: 'Cronograma',
+    descricao: 'Lembretes pessoais e calendário mensal; delegação de tarefas conforme o plano.',
   },
   RELATORIOS: {
     nome: 'Relatórios',
@@ -70,6 +70,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
     descricao: 'Gestão completa e controle operacional para frotas em crescimento.',
     beneficios: [
       'Gestão do catálogo de veículos e motoristas',
+      'Cronograma com lembretes pessoais e calendário mensal',
       '1 ano de histórico e auditoria operacional',
       'Dashboard de custos, combustível e manutenção',
       'Até 4 usuários e 10 veículos na franquia base',
@@ -84,7 +85,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
     relatoriosPersonalizados: false,
     ticketsSuporteMes: 25,
     prazoRespostaSuporteHoras: 48,
-    modulosPadrao: MODULOS_OPERACIONAIS,
+    modulosPadrao: MODULOS_COM_TAREFAS,
   },
   AVANCADO: {
     nome: 'Avançado',
@@ -175,6 +176,21 @@ const MODULOS_LEGADOS: Record<string, ModuloCodigo> = {
 
 export function isPlanoTipo(value: unknown): value is PlanoTipo {
   return typeof value === 'string' && (PLANOS as readonly string[]).includes(value)
+}
+
+/** Vagas gratuitas do sandbox não são adicionais contratados de um plano pago. */
+export function adicionaisPadraoNaTrocaDePlano(
+  origem: PlanoTipo,
+  destino: PlanoTipo,
+  usuariosAdicionais: number,
+  veiculosAdicionais: number,
+) {
+  if (origem === 'PREVIEW' && destino !== 'PREVIEW') return { usuariosAdicionais: 0, veiculosAdicionais: 0 }
+  if (origem !== 'PREVIEW' && destino === 'PREVIEW') return {
+    usuariosAdicionais: Math.max(0, PLANOS_CONFIG[origem].usuariosBase + usuariosAdicionais - 1),
+    veiculosAdicionais: PLANOS_CONFIG[origem].veiculosBase + veiculosAdicionais,
+  }
+  return { usuariosAdicionais, veiculosAdicionais }
 }
 
 export function isStatusEmpresa(value: unknown): value is StatusEmpresa {

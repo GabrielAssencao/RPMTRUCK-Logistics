@@ -1,3 +1,4 @@
+import { lerFormularioLimitado, RequestBodyError } from '@/lib/requestBody'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import {
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
   if (!motorista) return NextResponse.json({ erro: 'Motorista não encontrado.' }, { status: 404 })
 
   try {
-    const formData = await request.formData()
+    const formData = await lerFormularioLimitado(request)
     const foto = formData.get('foto')
     if (!(foto instanceof File) || foto.size === 0) {
       return NextResponse.json({ erro: 'Selecione uma foto.' }, { status: 400 })
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       tamanho: upload.tamanho,
     })
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ erro: error.message }, { status: error.status })
     if (error instanceof FotoMotoristaError) {
       return NextResponse.json({ erro: error.message }, { status: error.status })
     }

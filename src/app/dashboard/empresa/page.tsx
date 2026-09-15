@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import type { PlanoTipo } from '@/utils/planos'
 import { DASHBOARD_EMPRESA_ATUALIZADA_EVENT, sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
+import PaymentAccessNotice from '@/components/dashboard/empresa/PaymentAccessNotice'
 
 const DashboardCostAreaChart = dynamic(
   () => import('@/components/dashboard/empresa/EmpresaDashboardCharts').then(modulo => modulo.DashboardCostAreaChart),
@@ -64,6 +65,7 @@ export default function PainelEmpresa() {
   
   const [nomeUsuario, setNomeUsuario] = useState('Gabriel Souza')
   const [nomeEmpresa, setNomeEmpresa] = useState('Transportes RPM')
+  const [importacaoDisponivel, setImportacaoDisponivel] = useState(false)
   const [planoEmpresa, setPlanoEmpresa] = useState<PlanoTipo>('ESSENCIAL') // Padrão Essencial para teste
   const [tarefasHabilitadas, setTarefasHabilitadas] = useState(false)
   const [podeDelegarTarefas, setPodeDelegarTarefas] = useState(false)
@@ -96,8 +98,9 @@ export default function PainelEmpresa() {
       if (carregamento !== carregamentoAtualRef.current) return
       setNomeUsuario(data.usuario.nome)
       setNomeEmpresa(data.empresa.nome)
+      setImportacaoDisponivel(data.empresa.importacaoInicialDisponivel === true)
       setPlanoEmpresa(data.empresa.plano)
-      setTarefasHabilitadas(data.empresa.modulos.includes('TAREFAS'))
+      setTarefasHabilitadas(data.empresa.delegacaoTarefas === true)
       setPodeDelegarTarefas(Boolean(data.usuario.podeDelegar))
       setMetricas(data.metricas)
       setDadosGraficos(data.graficos)
@@ -197,7 +200,9 @@ export default function PainelEmpresa() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto font-mono">
+      {podeDelegarTarefas && <PaymentAccessNotice />}
       {feedback && <div role="status" className="border p-3 text-sm" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
+      {importacaoDisponivel && <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border border-border bg-background-secondary p-4"><div><p className="text-sm font-semibold">Já tem seus dados em uma planilha?</p><p className="mt-1 text-xs text-foreground-muted">Sua importação inicial está inclusa, com revisão antes da inclusão.</p></div><Link href="/dashboard/empresa/configuracoes?aba=importacao" className="border border-primary px-4 py-3 text-xs font-bold text-primary">Importar dados que já tenho</Link></div>}
       
       {/* ─── CABEÇALHO ─── */}
       <div className="mb-6 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>

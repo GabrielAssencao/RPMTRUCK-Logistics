@@ -1,21 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 
 // Layout do Admin (a "casca" que arrumamos no Passo 1)
 import AdminLayout, { type AdminTab } from './_estrutura/AdminLayout'
 
 // Importação dos módulos com o alias padrão do Next.js @/
-import DashboardModule from './_modulos/visao-geral/DashboardModule'
-import CompaniesModule from './_modulos/empresas/CompaniesModule'
-import PasswordResetsModule from './_modulos/redefinicoes-senha/AdminPasswordResets'
-import AdminRequests from './_modulos/solicitacoes/AdminRequests'
-import SettingsModule from './_modulos/configuracoes/SettingsModule'
-import SecurityModule from './_modulos/seguranca/SecurityModule'
-import SubscriptionsModule from './_modulos/assinaturas/SubscriptionsModule'
-import ChatModule from './_modulos/chat/ChatModule'
-import AlertasModule from './_modulos/alertas/AlertasModule'
-import NotificationsModule from './_modulos/notificacoes/NotificationsModule'
+const DashboardModule = lazy(() => import('./_modulos/visao-geral/DashboardModule'))
+const CompaniesModule = lazy(() => import('./_modulos/empresas/CompaniesModule'))
+const PasswordResetsModule = lazy(() => import('./_modulos/redefinicoes-senha/AdminPasswordResets'))
+const AdminRequests = lazy(() => import('./_modulos/solicitacoes/AdminRequests'))
+const SettingsModule = lazy(() => import('./_modulos/configuracoes/SettingsModule'))
+const SecurityModule = lazy(() => import('./_modulos/seguranca/SecurityModule'))
+const SubscriptionsModule = lazy(() => import('./_modulos/assinaturas/SubscriptionsModule'))
+const ChatModule = lazy(() => import('./_modulos/chat/ChatModule'))
+const AlertasModule = lazy(() => import('./_modulos/alertas/AlertasModule'))
+const NotificationsModule = lazy(() => import('./_modulos/notificacoes/NotificationsModule'))
+
+const CronogramaModule = lazy(() => import('./_modulos/cronograma/CronogramaModule'))
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard')
@@ -41,6 +43,8 @@ export default function AdminPage() {
   // O "Cérebro" decide qual componente renderizar com base na aba ativa
   const renderModule = () => {
     switch (activeTab) {
+      case 'cronograma':
+        return <CronogramaModule key="cronograma" />
       case 'dashboard':
         return <DashboardModule key="dashboard" />
       case 'companies':
@@ -70,7 +74,9 @@ export default function AdminPage() {
     // Passamos o estado e o setState para a casca (para a Sidebar conseguir mudar a aba)
     <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab}>
       {/* O módulo escolhido entra aqui e é repassado como 'children' para o layout */}
-      {renderModule()}
+      <Suspense fallback={<div className="h-64 flex items-center justify-center font-bold animate-pulse tracking-widest" role="status">CARREGANDO MÓDULO...</div>}>
+        {renderModule()}
+      </Suspense>
     </AdminLayout>
   )
 }

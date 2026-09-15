@@ -52,13 +52,13 @@ export const TUTORIAIS_MODULOS: readonly TutorialModulo[] = [
   },
   {
     id: 'tarefas', titulo: 'Quadro de tarefas', objetivo: 'Acompanhe trabalho delegado pelo gestor.',
-    passos: ['No Cronograma, selecione Quadro de tarefas.', 'O gestor cria uma tarefa e escolhe título, responsável, prioridade e prazo.', 'Revise o início preenchido automaticamente; ajuste para um horário atual ou futuro.', 'Defina o lembrete e se a tarefa deve aparecer no calendário.', 'Salve; o responsável acompanha e atualiza o status conforme executar o trabalho.'],
+    passos: ['No Cronograma, selecione Quadro de tarefas.', 'O gestor cria uma tarefa e escolhe título, responsável, prioridade e prazo.', 'Marque “somente o dia” quando não houver horário específico.', 'Use o aviso automático pela prioridade ou escolha uma data e hora para a notificação.', 'Salve; o responsável acompanha e atualiza o status conforme executar o trabalho.'],
     logica: 'Tarefas são trabalho delegado: a criação depende do plano e da permissão do gestor. O início de um novo registro não pode estar no passado.',
-    dica: 'Prefira títulos que descrevam uma ação e um resultado esperado.',
+    dica: 'Prefira títulos que descrevam uma ação e um resultado esperado. O aviso automático usa o prazo e, quando ele não existe, usa o início.',
   },
   {
     id: 'lembretes', titulo: 'Lembretes pessoais e calendário', objetivo: 'Organize suas próprias anotações sem delegá-las à equipe.',
-    passos: ['No Cronograma, selecione Quadro de lembretes e crie um post-it.', 'Informe título, anotação, dia, mês, ano e horário de 24 horas.', 'Escolha a urgência e revise a regra automática de aviso apresentada.', 'Para outra programação, escolha a notificação personalizada e defina o dia e horário desejados.', 'Salve e consulte o calendário para visualizar tarefas e lembretes do mês.'],
+    passos: ['No Cronograma, selecione Quadro de lembretes e crie um post-it.', 'Informe título, anotação e data; marque “somente o dia” quando não houver horário específico.', 'Escolha a urgência e revise a regra automática de aviso apresentada.', 'Para outra programação, escolha a notificação personalizada e defina o dia e horário desejados.', 'Salve e consulte o calendário para visualizar tarefas e lembretes do mês.'],
     logica: 'Lembretes pertencem apenas ao usuário que os criou. Urgência e horário do aviso são conceitos diferentes; a opção personalizada permite separá-los.',
     dica: 'Use filtros e páginas do quadro para encontrar notas em uma coleção grande.',
   },

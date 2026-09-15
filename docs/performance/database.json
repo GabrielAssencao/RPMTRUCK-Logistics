@@ -1,0 +1,42 @@
+{
+  "environment": "isolated development; read-only; not a production load test",
+  "metadata": [
+    {
+      "tabela": "notificacoes",
+      "registros_estimados": 5,
+      "indices": 5
+    },
+    {
+      "tabela": "tarefas",
+      "registros_estimados": 1,
+      "indices": 5
+    },
+    {
+      "tabela": "containers",
+      "registros_estimados": 0,
+      "indices": 4
+    },
+    {
+      "tabela": "custos",
+      "registros_estimados": 0,
+      "indices": 7
+    },
+    {
+      "tabela": "mensagens_suporte",
+      "registros_estimados": 0,
+      "indices": 4
+    }
+  ],
+  "probes": {
+    "unreadMessages": {
+      "planningMs": 2.377,
+      "executionMs": 1.261,
+      "rootNode": "Aggregate"
+    },
+    "recentCosts": {
+      "planningMs": 4.233,
+      "executionMs": 0.027,
+      "rootNode": "Seq Scan"
+    }
+  }
+}

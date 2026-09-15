@@ -1,0 +1,22 @@
+import { expect, test } from '@playwright/test'
+
+test('solicitação mantém seleção, resumo e dados após falha com fundo acessível', async ({ page }) => {
+  await page.route('**/api/planos', route => route.fulfill({ json: { planos: [{ id: 'ESSENCIAL', nome: 'Essencial', descricao: 'Operação de demonstração', beneficios: ['Frota', 'Lembretes'], precoBase: 100, taxaImplantacao: 200, precoUsuarioAdicional: 20, precoVeiculoAdicional: 10, usuariosBase: 2, veiculosBase: 4, historicoAnos: 1, restrito: false, destaque: false, versao: 1 }] } }))
+  await page.route('**/api/solicitacoes', route => route.fulfill({ status: 503, json: { erro: 'Não foi possível enviar. Tente novamente.' } }))
+  await page.goto('/auth/solicitar-acesso')
+  const fractal = page.locator('[data-fractal-background]')
+  await expect(fractal).toBeVisible()
+  const reduced = await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
+  await expect.poll(() => fractal.locator('g').first().evaluate(el => getComputedStyle(el).animationName === 'none')).toBe(reduced)
+  const plan = page.getByRole('button', { name: /ESSENCIAL/ })
+  await plan.click()
+  await expect(plan).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByText('Resumo do Investimento')).toBeVisible()
+  await page.getByLabel('Nome da empresa', { exact: true }).fill('Empresa demonstração')
+  await page.getByLabel('Nome do responsável', { exact: true }).fill('Equipe demonstração')
+  await page.getByLabel('E-mail corporativo', { exact: true }).fill('demo@example.com')
+  await page.getByRole('button', { name: /ENVIAR SOLICITAÇÃO/ }).click()
+  await expect(page.getByRole('alert').filter({ hasText: 'Não foi possível enviar.' })).toBeVisible()
+  await expect(page.getByLabel('Nome da empresa', { exact: true })).toHaveValue('Empresa demonstração')
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { isAdminRole, verifySession } from '@/lib/sessionToken'
+import { limiteCorpoRequisicao } from '@/lib/requestBody'
 
 function createContentSecurityPolicy(nonce: string) {
   const isDevelopment = process.env.NODE_ENV !== 'production'
@@ -83,7 +84,7 @@ export async function proxy(request: NextRequest) {
       }
 
       const contentLength = Number(request.headers.get('content-length') || 0)
-      const maxBodyBytes = pathname.includes('/foto') ? 8 * 1024 * 1024 : 2 * 1024 * 1024
+      const maxBodyBytes = limiteCorpoRequisicao(pathname)
       if (Number.isFinite(contentLength) && contentLength > maxBodyBytes) {
         return withCsp(NextResponse.json({ erro: 'Corpo da requisição excede o limite permitido.' }, { status: 413 }), contentSecurityPolicy)
       }
@@ -111,6 +112,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const rotasSomenteGestor = [
+    '/dashboard/plano',
     '/dashboard/empresa/motoristas',
     '/dashboard/empresa/arquivos',
     '/dashboard/empresa/relatorios',

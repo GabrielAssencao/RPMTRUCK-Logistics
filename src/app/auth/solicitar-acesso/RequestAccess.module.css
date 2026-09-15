@@ -1,0 +1,7 @@
+.background { position: fixed; inset: 0; pointer-events: none; opacity: .65; }
+.surface { border-radius: 8px; box-shadow: 0 8px 24px #0000000a; }
+.page :is(button, a, input, textarea, select):focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+.page button[aria-pressed] { border-radius: 6px; }
+.page button[aria-pressed="false"]:enabled:hover { border-color: var(--primary) !important; }
+.page button[aria-pressed="true"] { box-shadow: inset 3px 0 0 var(--primary); }
+@media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { animation: none !important; transition: none !important; } }

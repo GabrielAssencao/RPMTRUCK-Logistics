@@ -718,3 +718,8 @@ a[href]:active {
   background: var(--primary);
   color: #000;
 }
+
+/* Shared scheduling fields: tasks, personal reminders and admin. */
+.input-cronograma { min-height: 2.75rem; width: 100%; border: 1px solid var(--border); background: var(--background); padding: 0.7rem 0.8rem; color: var(--foreground); font-size: 0.75rem; outline: none; }
+.modal-cronograma .input-cronograma { min-height: 2.5rem; padding: 0.55rem 0.65rem; }
+.input-cronograma:focus-visible { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent); }

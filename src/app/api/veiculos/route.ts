@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { criarNotificacao } from '@/lib/notificacoes'
 import { prisma } from '@/lib/prisma'
 import { nomeOperacional, placaSchema, quilometragemSchema } from '@/lib/domainValidation'
 import { CadastroVeiculoError, criarVeiculoEmpresaComLimite } from '@/lib/veiculosEmpresa'
+import { normalizarRenavam, renavamValido } from '@/utils/renavam'
+
+const renavamSchema = z.string().trim().max(14).nullable().optional().transform(normalizarRenavam)
+  .refine((valor) => valor === null || renavamValido(valor), 'RENAVAM inválido.')
 
 const veiculoSchema = z.object({
   modelo: nomeOperacional(2, 100),
   tipo: z.enum(['Cavalo Mecânico', 'Bitrem', 'Sider', 'Baú', 'Refrigerado']),
   placa: placaSchema,
+  renavam: renavamSchema,
   ano: z.coerce.number().int().min(1950).max(new Date().getFullYear() + 1).optional().nullable(),
   quilometragem: quilometragemSchema.default(0),
   status: z.enum(['OPERACIONAL', 'OFICINA', 'INATIVO']).default('OPERACIONAL'),
@@ -43,6 +49,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(novoVeiculo, { status: 201 })
   } catch (cause) {
     if (cause instanceof CadastroVeiculoError) return NextResponse.json({ erro: cause.message }, { status: cause.status })
+    if (cause instanceof Prisma.PrismaClientKnownRequestError && cause.code === 'P2002') {
+      const campos = Array.isArray(cause.meta?.target) ? cause.meta.target.join(',') : String(cause.meta?.target ?? '')
+      return NextResponse.json({ erro: campos.includes('renavam') ? 'Este RENAVAM já está cadastrado.' : 'Esta placa já está cadastrada.' }, { status: 409 })
+    }
     console.error('Erro ao criar veículo:', cause)
     return NextResponse.json({ erro: 'Não foi possível criar o veículo. Verifique se a placa já existe.' }, { status: 409 })
   }

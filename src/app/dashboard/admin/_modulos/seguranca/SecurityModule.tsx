@@ -1,12 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { Activity, Eye, EyeOff, RefreshCw, ShieldAlert, UserCheck } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { lerSecoesLogsAdmin, salvarSecoesLogsAdmin, type SecaoLogAdmin } from '@/lib/adminSidebarPreferences'
 
 type SecurityData = {
+  paginacao: Record<SecaoLogAdmin, { pagina: number; temProxima: boolean }>
   resumo: { sessoesAtivas: number; falhasLogin24h: number; bloqueiosRateLimit24h: number }
   empresas: Array<{ id: string; nome: string }>
   sessoes: Array<{
@@ -52,9 +53,12 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('pt-BR', {
   timeStyle: 'medium',
 }).format(new Date(value))
 
-async function fetchSecurityData(empresaId: string, signal?: AbortSignal): Promise<SecurityData> {
-  const query = empresaId === 'TODAS' ? '' : `?empresaId=${encodeURIComponent(empresaId)}`
-  const response = await fetch(`/api/admin/seguranca${query}`, { cache: 'no-store', signal })
+const paginasIniciais: Record<SecaoLogAdmin, number> = { SESSOES: 1, EVENTOS: 1, AUDITORIA: 1, EXCLUSOES: 1 }
+
+async function fetchSecurityData(empresaId: string, paginas: Record<SecaoLogAdmin, number>, signal?: AbortSignal): Promise<SecurityData> {
+  const query = new URLSearchParams(Object.entries(paginas).map(([secao, pagina]) => [`pagina${secao}`, String(pagina)]))
+  if (empresaId !== 'TODAS') query.set('empresaId', empresaId)
+  const response = await fetch(`/api/admin/seguranca?${query}`, { cache: 'no-store', signal })
   const body = await response.json()
   if (!response.ok) throw new Error(body.erro || 'Falha ao carregar os registros de segurança.')
   return body
@@ -66,6 +70,8 @@ export default function SecurityModule() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [empresaFiltro, setEmpresaFiltro] = useState('TODAS')
+  const [paginas, setPaginas] = useState(paginasIniciais)
+  const requisicao = useRef<AbortController | null>(null)
   const [secoesVisiveis, setSecoesVisiveis] = useState<Record<SecaoLogAdmin, boolean>>({ SESSOES: true, EVENTOS: true, AUDITORIA: true, EXCLUSOES: true })
 
   useEffect(() => {
@@ -78,21 +84,27 @@ export default function SecurityModule() {
   }
 
   const load = useCallback(async () => {
+    requisicao.current?.abort()
+    const controller = new AbortController()
+    requisicao.current = controller
     setLoading(true)
     setError('')
     try {
-      setData(await fetchSecurityData(empresaFiltro))
+      const resultado = await fetchSecurityData(empresaFiltro, paginas, controller.signal)
+      if (!controller.signal.aborted) setData(resultado)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Falha ao carregar os registros de segurança.')
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Falha ao carregar os registros de segurança.')
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) setLoading(false)
     }
-  }, [empresaFiltro])
+  }, [empresaFiltro, paginas])
 
   useEffect(() => {
+    requisicao.current?.abort()
     const controller = new AbortController()
-    void fetchSecurityData(empresaFiltro, controller.signal)
-      .then(setData)
+    requisicao.current = controller
+    void fetchSecurityData(empresaFiltro, paginas, controller.signal)
+      .then(resultado => { if (!controller.signal.aborted) setData(resultado) })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : 'Falha ao carregar os registros de segurança.')
@@ -101,8 +113,19 @@ export default function SecurityModule() {
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false)
       })
-    return () => controller.abort()
-  }, [empresaFiltro])
+    return () => requisicao.current?.abort()
+  }, [empresaFiltro, paginas])
+
+  const navegacao = (secao: SecaoLogAdmin) => ({
+    pagina: paginas[secao],
+    temProxima: data?.paginacao?.[secao].temProxima ?? false,
+    loading,
+    onPage: (pagina: number) => {
+      setLoading(true)
+      setError('')
+      setPaginas(atuais => ({ ...atuais, [secao]: pagina }))
+    },
+  })
 
   return (
     <MotionConfig reducedMotion="user">
@@ -120,6 +143,7 @@ export default function SecurityModule() {
               setLoading(true)
               setError('')
               setEmpresaFiltro(event.target.value)
+              setPaginas(paginasIniciais)
             }} className="min-h-10 w-full border bg-background px-3 text-xs text-foreground outline-none" style={{ borderColor: 'var(--border)' }}>
               <option value="TODAS">Todas as empresas</option>
               <option value="SISTEMA">Somente RPMTruck / sistema</option>
@@ -140,28 +164,28 @@ export default function SecurityModule() {
         <Metric icon={Activity} label="Bloqueios / 24h" value={data?.resumo.bloqueiosRateLimit24h ?? '—'} color="#f59e0b" />
       </div>
 
-      <LogTable title="Acessando agora" visible={secoesVisiveis.SESSOES} onToggle={() => alternarSecao('SESSOES')} empty="Nenhuma sessão ativa no intervalo." columns={['Usuário', 'Empresa', 'Papel', 'Última atividade']} rows={(data?.sessoes || []).map((item) => [
+      <LogTable title="Acessando agora" pagination={navegacao('SESSOES')} visible={secoesVisiveis.SESSOES} onToggle={() => alternarSecao('SESSOES')} empty="Nenhuma sessão ativa no intervalo." columns={['Usuário', 'Empresa', 'Papel', 'Última atividade']} rows={(data?.sessoes || []).map((item) => [
         `${item.usuario.nome} · ${item.usuario.email}`,
         item.empresa?.nome || 'RPMTruck',
         item.usuario.role,
         formatDate(item.ultimaAtividade),
       ])} />
 
-      <LogTable title="Eventos de segurança" visible={secoesVisiveis.EVENTOS} onToggle={() => alternarSecao('EVENTOS')} empty="Nenhum evento registrado." columns={['Evento', 'Usuário', 'Empresa', 'Data']} rows={(data?.eventos || []).map((item) => [
+      <LogTable title="Eventos de segurança" pagination={navegacao('EVENTOS')} visible={secoesVisiveis.EVENTOS} onToggle={() => alternarSecao('EVENTOS')} empty="Nenhum evento registrado." columns={['Evento', 'Usuário', 'Empresa', 'Data']} rows={(data?.eventos || []).map((item) => [
         `${item.tipo}${item.ipCorrelacao ? ` · IP#${item.ipCorrelacao}` : ''}`,
         item.usuario ? `${item.usuario.nome} · ${item.usuario.email}` : 'Não identificado',
         item.empresa?.nome || '—',
         formatDate(item.criadoEm),
       ])} />
 
-      <LogTable title="Auditoria operacional · retenção de 1 a 3 anos conforme o plano" visible={secoesVisiveis.AUDITORIA} onToggle={() => alternarSecao('AUDITORIA')} empty="Nenhuma ação auditada." columns={['Ação', 'Recurso', 'Responsável', 'Data']} rows={(data?.auditoria || []).map((item) => [
+      <LogTable title="Auditoria operacional · retenção de 1 a 3 anos conforme o plano" pagination={navegacao('AUDITORIA')} visible={secoesVisiveis.AUDITORIA} onToggle={() => alternarSecao('AUDITORIA')} empty="Nenhuma ação auditada." columns={['Ação', 'Recurso', 'Responsável', 'Data']} rows={(data?.auditoria || []).map((item) => [
         `${item.acao} · ${item.origem}`,
         `${item.tabela}${item.registroId ? ` · ${item.registroId.slice(0, 8)}` : ''}`,
         item.usuario?.nome || item.empresa?.nome || 'Processo do sistema',
         formatDate(item.criadoEm),
       ])} />
 
-      <LogTable title="Histórico de exclusões · comprovante mínimo" visible={secoesVisiveis.EXCLUSOES} onToggle={() => alternarSecao('EXCLUSOES')} empty="Nenhuma exclusão registrada." columns={['Protocolo', 'Status', 'Resumo', 'Conclusão / retenção']} rows={(data?.exclusoes || []).map((item) => [
+      <LogTable title="Histórico de exclusões · comprovante mínimo" pagination={navegacao('EXCLUSOES')} visible={secoesVisiveis.EXCLUSOES} onToggle={() => alternarSecao('EXCLUSOES')} empty="Nenhuma exclusão registrada." columns={['Protocolo', 'Status', 'Resumo', 'Conclusão / retenção']} rows={(data?.exclusoes || []).map((item) => [
         item.protocolo,
         item.status.replaceAll('_', ' '),
         item.resumo
@@ -174,10 +198,19 @@ export default function SecurityModule() {
   )
 }
 
+function LogPagination({ title, pagina, temProxima, loading, onPage }: { title: string; pagina: number; temProxima: boolean; loading: boolean; onPage: (pagina: number) => void }) {
+  const button = 'min-h-10 border border-border px-3 text-xs font-bold disabled:opacity-40'
+  return <nav aria-label={`Paginação: ${title}`} className="mt-3 flex items-center justify-between gap-3">
+    <button type="button" className={button} disabled={loading || pagina <= 1} onClick={() => onPage(pagina - 1)}>Anterior</button>
+    <span role="status" className="text-xs text-foreground-muted">{loading ? 'Carregando…' : `Página ${pagina} · até 20 registros`}</span>
+    <button type="button" className={button} disabled={loading || !temProxima} onClick={() => onPage(pagina + 1)}>Próxima</button>
+  </nav>
+}
+
 function Metric({ icon: Icon, label, value, color }: { icon: typeof Activity; label: string; value: number | string; color: string }) {
   return <div className="flex items-center gap-4 border p-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}><Icon size={20} style={{ color }} /><div><div className="text-2xl font-black font-rajdhani">{value}</div><div className="text-[10px] font-bold uppercase tracking-widest text-foreground-muted">{label}</div></div></div>
 }
 
-function LogTable({ title, visible, onToggle, empty, columns, rows }: { title: string; visible: boolean; onToggle: () => void; empty: string; columns: string[]; rows: string[][] }) {
-  return <section className="space-y-3"><div className="flex items-center justify-between gap-4"><h2 className="text-sm font-black uppercase tracking-widest font-rajdhani">{title}</h2><button type="button" role="switch" aria-checked={visible} aria-label={`${visible ? 'Ocultar' : 'Exibir'} ${title}`} onClick={onToggle} className="interactive-control flex min-h-10 shrink-0 items-center gap-2 border px-3 text-[9px] font-black uppercase" style={{ borderColor: visible ? 'var(--primary)' : 'var(--border)', color: visible ? 'var(--primary)' : 'var(--foreground-muted)' }}>{visible ? <Eye size={14} /> : <EyeOff size={14} />}{visible ? 'Visível' : 'Oculto'}</button></div><AnimatePresence initial={false}>{visible && <motion.div key="conteudo" initial={{ opacity: 0, height: 0, y: -6 }} animate={{ opacity: 1, height: 'auto', y: 0 }} exit={{ opacity: 0, height: 0, y: -4 }} transition={{ duration: 0.24, ease: [0.2, 0, 0, 1] }} className="overflow-hidden"><div className="space-y-2 sm:hidden">{rows.length === 0 ? <p className="border p-6 text-center text-xs text-foreground-muted" style={{borderColor: 'var(--border)'}}>{empty}</p> : rows.map((row, rowIndex) => <article key={rowIndex} className="border p-3" style={{borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)'}}>{row.map((cell, cellIndex) => <div key={`${rowIndex}-${cellIndex}`} className="grid grid-cols-[6rem_minmax(0,1fr)] gap-2 border-b py-2 text-xs last:border-0" style={{borderColor: 'var(--border)'}}><span className="text-[9px] font-bold uppercase tracking-wider text-foreground-muted">{columns[cellIndex]}</span><span className="min-w-0 break-words">{cell}</span></div>)}</article>)}</div><div className="hidden overflow-x-auto border sm:block" style={{ borderColor: 'var(--border)' }}><table className="min-w-[680px] w-full text-left text-xs"><thead style={{ backgroundColor: 'var(--background-secondary)' }}><tr>{columns.map((column) => <th key={column} className="px-4 py-3 font-bold uppercase tracking-wider text-foreground-muted">{column}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan={columns.length} className="px-4 py-8 text-center text-foreground-muted">{empty}</td></tr> : rows.map((row, rowIndex) => <tr key={rowIndex} className="border-t" style={{ borderColor: 'var(--border)' }}>{row.map((cell, cellIndex) => <td key={`${rowIndex}-${cellIndex}`} className="px-4 py-3 align-top">{cell}</td>)}</tr>)}</tbody></table></div></motion.div>}</AnimatePresence></section>
+function LogTable({ title, visible, onToggle, empty, columns, rows, pagination }: { title: string; visible: boolean; onToggle: () => void; empty: string; columns: string[]; rows: string[][]; pagination: { pagina: number; temProxima: boolean; loading: boolean; onPage: (pagina: number) => void } }) {
+  return <section className="space-y-3"><div className="flex items-center justify-between gap-4"><h2 className="text-sm font-black uppercase tracking-widest font-rajdhani">{title}</h2><button type="button" role="switch" aria-checked={visible} aria-label={`${visible ? 'Ocultar' : 'Exibir'} ${title}`} onClick={onToggle} className="interactive-control flex min-h-10 shrink-0 items-center gap-2 border px-3 text-[9px] font-black uppercase" style={{ borderColor: visible ? 'var(--primary)' : 'var(--border)', color: visible ? 'var(--primary)' : 'var(--foreground-muted)' }}>{visible ? <Eye size={14} /> : <EyeOff size={14} />}{visible ? 'Visível' : 'Oculto'}</button></div><AnimatePresence initial={false}>{visible && <motion.div key="conteudo" initial={{ opacity: 0, height: 0, y: -6 }} animate={{ opacity: 1, height: 'auto', y: 0 }} exit={{ opacity: 0, height: 0, y: -4 }} transition={{ duration: 0.24, ease: [0.2, 0, 0, 1] }} className="overflow-hidden"><div className="space-y-2 sm:hidden">{rows.length === 0 ? <p className="border p-6 text-center text-xs text-foreground-muted" style={{borderColor: 'var(--border)'}}>{empty}</p> : rows.map((row, rowIndex) => <article key={rowIndex} className="border p-3" style={{borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)'}}>{row.map((cell, cellIndex) => <div key={`${rowIndex}-${cellIndex}`} className="grid grid-cols-[6rem_minmax(0,1fr)] gap-2 border-b py-2 text-xs last:border-0" style={{borderColor: 'var(--border)'}}><span className="text-[9px] font-bold uppercase tracking-wider text-foreground-muted">{columns[cellIndex]}</span><span className="min-w-0 break-words">{cell}</span></div>)}</article>)}</div><div className="hidden overflow-x-auto border sm:block" style={{ borderColor: 'var(--border)' }}><table className="min-w-[680px] w-full text-left text-xs"><thead style={{ backgroundColor: 'var(--background-secondary)' }}><tr>{columns.map((column) => <th key={column} className="px-4 py-3 font-bold uppercase tracking-wider text-foreground-muted">{column}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan={columns.length} className="px-4 py-8 text-center text-foreground-muted">{empty}</td></tr> : rows.map((row, rowIndex) => <tr key={rowIndex} className="border-t" style={{ borderColor: 'var(--border)' }}>{row.map((cell, cellIndex) => <td key={`${rowIndex}-${cellIndex}`} className="px-4 py-3 align-top">{cell}</td>)}</tr>)}</tbody></table></div><LogPagination title={title} {...pagination} /></motion.div>}</AnimatePresence></section>
 }

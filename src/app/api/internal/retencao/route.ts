@@ -3,6 +3,9 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { executarLimpezaRetencao } from '@/lib/retencaoDados'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { atualizarCobrancasMensais } from '@/lib/financeiro/cicloCobranca'
+
+import { limparLembretesConcluidos } from '@/lib/lembreteRetencao'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -26,8 +29,10 @@ export async function GET(request: NextRequest) {
   try {
     const limited = await applyRateLimit(request, 'retention-run', RATE_LIMITS.RETENTION_RUN.limit, RATE_LIMITS.RETENTION_RUN.windowMs)
     if (limited) return limited
+    const cobrancas = await atualizarCobrancasMensais()
+    const lembretesRemovidos = await limparLembretesConcluidos()
     const resultado = await executarLimpezaRetencao()
-    return NextResponse.json(resultado, {
+    return NextResponse.json({ ...resultado, cobrancas, lembretesRemovidos }, {
       status: resultado.falhasEmpresas > 0 ? 500 : 200,
       headers: { 'Cache-Control': 'private, no-store' },
     })

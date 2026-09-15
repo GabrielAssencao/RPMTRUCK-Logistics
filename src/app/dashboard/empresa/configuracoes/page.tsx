@@ -7,6 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import SubscriptionManagement from './_componentes/SubscriptionManagement'
 import { AppearancePreferences, NavigationPreferences, NotificationPreferences } from './_componentes/PreferencePanels'
 import SecuritySessions from './_componentes/SecuritySessions'
+import InitialDataImport from '@/components/dashboard/InitialDataImport'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { ProfileSkeleton } from '@/components/motion/OperationalFeedback'
 import {
@@ -40,7 +41,7 @@ import {
 // aqui. Centralizando, escolher uma cor em Configurações agora sempre bate
 // com uma logo real.
 
-type SettingsTab = 'PERFIL' | 'APARENCIA' | 'NAVEGACAO' | 'NOTIFICACOES' | 'SEGURANCA' | 'ASSINATURA' | 'RISCO'
+type SettingsTab = 'PERFIL' | 'APARENCIA' | 'NAVEGACAO' | 'NOTIFICACOES' | 'SEGURANCA' | 'ASSINATURA' | 'RISCO' | 'IMPORTACAO'
 
 export default function ConfiguracoesPage() {
   const { primary, setPrimary, isLight, setIsLight } = useTheme()
@@ -64,6 +65,7 @@ export default function ConfiguracoesPage() {
   useEffect(() => {
     queueMicrotask(() => {
       setMontado(true)
+      if (new URLSearchParams(window.location.search).get('aba') === 'importacao') setTabAtiva('IMPORTACAO')
       setModulosOcultos(lerModulosOcultosEmpresa())
       setEstiloFundo(lerEstiloFundoEmpresa())
     })
@@ -192,6 +194,7 @@ export default function ConfiguracoesPage() {
             ativa={tabAtiva === 'APARENCIA'} onClick={() => setTabAtiva('APARENCIA')} 
             icone={<Palette size={16} />} label="APARÊNCIA & TEMA" primary={primary} 
           />
+          {identidade.role === 'GESTOR_EMPRESA' && <TabButton ativa={tabAtiva === 'IMPORTACAO'} onClick={() => setTabAtiva('IMPORTACAO')} icone={<Building2 size={16} />} label="IMPORTAR MEUS DADOS" primary={primary} />}
           <TabButton
             ativa={tabAtiva === 'NAVEGACAO'} onClick={() => setTabAtiva('NAVEGACAO')}
             icone={<PanelLeft size={16} />} label="NAVEGAÇÃO" primary={primary}
@@ -250,6 +253,7 @@ export default function ConfiguracoesPage() {
               </motion.div>
             )}
 
+            {tabAtiva === 'IMPORTACAO' && <InitialDataImport />}
             {/* TIPO: PERFIL */}
             {tabAtiva === 'PERFIL' && (
               <motion.div key="perfil" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>

@@ -23,6 +23,7 @@ const solicitacaoSchema = z.object({
   email: z.string().trim().email().max(254).toLowerCase(),
   whatsapp: whatsappSchema,
   plano: z.enum(['ESSENCIAL', 'AVANCADO', 'ENTERPRISE']),
+  diaVencimento: z.coerce.number().refine(value => value === 5 || value === 28).default(28),
   mensagem: textoOperacional(3, 1500).optional().or(z.literal('')),
   contatoPref: z.enum(['email', 'whatsapp']).default('email'),
   veiculos: z.coerce.number().int().min(0).max(100_000).optional(),
@@ -42,8 +43,52 @@ export async function GET(request: NextRequest) {
     const chamados = await prisma.solicitacaoAcesso.findMany({
       orderBy: { criado_em: 'desc' }
     });
-    
-    return NextResponse.json(chamados, { status: 200 });
+    const empresasAprovadas = chamados
+      .filter((chamado) => chamado.status === 'APROVADO' && chamado.empresaId)
+      .map((chamado) => chamado.empresaId as string);
+    const emailsAprovados = chamados
+      .filter((chamado) => chamado.status === 'APROVADO')
+      .map((chamado) => chamado.email);
+    const usuarios = emailsAprovados.length > 0 || empresasAprovadas.length > 0
+      ? await prisma.usuario.findMany({
+          where: {
+            OR: [
+              { email: { in: [...new Set(emailsAprovados)] } },
+              { empresaId: { in: [...new Set(empresasAprovadas)] }, role: 'GESTOR_EMPRESA' },
+            ],
+            excluidoEm: null,
+            empresa: { is: { excluidoEm: null } },
+          },
+          select: {
+            id: true,
+            empresaId: true,
+            email: true,
+            nome: true,
+            ativo: true,
+            exigeTrocaSenha: true,
+            senhaTemporariaExpiraEm: true,
+            senhaAlteradaEm: true,
+          },
+        })
+      : [];
+    const usuarioPorEmail = new Map(usuarios.map((usuario) => [usuario.email, usuario]));
+    const gestorPorEmpresa = new Map(usuarios
+      .filter((usuario) => usuario.empresaId)
+      .map((usuario) => [usuario.empresaId as string, usuario]));
+
+    const agora = new Date();
+    return NextResponse.json(chamados.map((chamado) => {
+      const acesso = chamado.status === 'APROVADO'
+        ? (chamado.empresaId ? gestorPorEmpresa.get(chamado.empresaId) : undefined) ?? usuarioPorEmail.get(chamado.email) ?? null
+        : null;
+      return {
+        ...chamado,
+        acesso: acesso ? {
+          ...acesso,
+          credencialTemporariaExpirada: Boolean(acesso.exigeTrocaSenha && acesso.senhaTemporariaExpiraEm && acesso.senhaTemporariaExpiraEm <= agora),
+        } : null,
+      };
+    }), { status: 200 });
   } catch (error) {
     console.error('Erro ao listar solicitações no Admin:', error);
     return NextResponse.json(
@@ -69,7 +114,7 @@ export async function POST(request: NextRequest) {
       await recordSecurityEvent({ tipo: 'BOT_REJEITADO', request, email: parsed.data.email, ip: getClientIp(request) });
       return NextResponse.json({ erro: 'Verificação de segurança recusada.' }, { status: 403 });
     }
-    const { empresa, responsavel, email, whatsapp, plano, mensagem, contatoPref } = parsed.data;
+    const { empresa, responsavel, email, whatsapp, plano, mensagem, contatoPref, diaVencimento } = parsed.data;
     const planoComercial = await obterPlanoComercial(plano);
     if (!planoComercial?.ativo || !planoComercial.visivelLanding) {
       return NextResponse.json({ erro: 'O plano selecionado não está disponível para novas solicitações.' }, { status: 400 });
@@ -95,6 +140,7 @@ export async function POST(request: NextRequest) {
         whatsapp: whatsapp || null,
         veiculos: PLANOS_CONFIG[plano].veiculosBase,
         plano,
+        diaVencimento,
         mensagem: mensagem || null,
         contatoPref: contatoPref || 'email',
         status: 'PENDENTE'

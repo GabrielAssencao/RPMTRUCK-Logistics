@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
-import { motion, useInView } from 'framer-motion'
+import { m as motion, useInView } from 'framer-motion'
 import { Check, Star, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -50,11 +50,11 @@ export default function Plans() {
           className="text-center mb-20"
         >
           <div className="text-xs tracking-[0.3em] uppercase mb-4 font-bold" style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}>
-            PLANOS & NÍVEIS
+            UM PLANO PARA CADA OPERAÇÃO
           </div>
           <h2 className="text-5xl md:text-7xl font-bold text-foreground font-rajdhani">
-            ESCOLHA SEU<br />
-            <span style={{ color: primary }}>NÍVEL DE PERFORMANCE</span>
+            SUA FROTA CRESCE.<br />
+            <span style={{ color: primary }}>A GESTÃO ACOMPANHA.</span>
           </h2>
         </motion.div>
 

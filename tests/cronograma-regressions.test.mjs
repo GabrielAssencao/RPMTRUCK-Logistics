@@ -52,7 +52,7 @@ test('notificacoes de tarefas deixam assunto, urgencia e data claros', async () 
   const presentation = await import(`data:text/javascript;base64,${Buffer.from(javascript).toString('base64')}`)
 
   assert.match(reminders, /titulo: `Tarefa: \$\{tarefa\.titulo\}`/)
-  assert.match(reminders, /Prazo previsto para \$\{dataHoraContextual\(tarefa\.prazo\)\}/)
+  assert.match(reminders, /Prazo previsto para \$\{tarefa\.diaInteiro \? formatoData\.format\(tarefa\.prazo\) : dataHoraContextual\(tarefa\.prazo\)\}/)
   assert.match(reminders, /titulo: `Lembrete: \$\{lembrete\.titulo\}`/)
   assert.match(reminders, /Urg.ncia leve[\s\S]*Urg.ncia m.dia[\s\S]*Urg.ncia alta/i)
 
@@ -91,8 +91,8 @@ test('lembretes pessoais são isolados, notificáveis e integrados ao calendári
   const page = read('src/app/dashboard/empresa/tarefas/page.tsx')
 
   assert.match(schema, /model LembretePessoal \{[\s\S]*empresaId String[\s\S]*usuarioId String[\s\S]*notificacoes Notificacao\[\]/)
-  assert.match(collection, /where: \{ empresaId: auth\.session\.empresaId, usuarioId: auth\.session\.userId \}/)
-  assert.match(item, /where: \{ id, empresaId: auth\.session\.empresaId, usuarioId: auth\.session\.userId \}/)
+  assert.match(collection, /where: \{ empresaId: auth\.session\.empresaId \?\? null, usuarioId: auth\.session\.userId \}/)
+  assert.match(item, /where: \{ id, empresaId: auth\.session\.empresaId \?\? null, usuarioId: auth\.session\.userId \}/)
   assert.match(rules, /LEVE: 3[\s\S]*MEDIA: 3[\s\S]*ALTA: 5/)
   assert.match(reminders, /lembretePessoal\.updateMany\([\s\S]*notificacaoEm: null[\s\S]*lembretePessoalId: lembrete\.id/)
   assert.match(board, /Meu quadro de lembretes[\s\S]*Somente você pode visualizar/)
@@ -100,11 +100,35 @@ test('lembretes pessoais são isolados, notificáveis e integrados ao calendári
   assert.match(dateTimePicker, /aria-label="Dia"[\s\S]*aria-label="Mês"[\s\S]*aria-label="Ano"/)
   assert.match(dateTimePicker, /24 horas[\s\S]*Array\.from\(\{ length: 24 \}/)
   assert.doesNotMatch(dateTimePicker, /type="time"|type="date"/)
-  assert.match(page, /BrazilianDateTimePicker value=\{form\.inicio\}[\s\S]*BrazilianDateTimePicker value=\{form\.prazo\}[\s\S]*BrazilianDateTimePicker value=\{form\.lembreteEm\}/)
+  assert.match(page, /BrazilianDateTimePicker[^>]*value=\{form\.inicio\}[\s\S]*BrazilianDateTimePicker[^>]*value=\{form\.prazo\}/)
+  assert.match(page, /Automática pela prioridade[\s\S]*Escolher data e hora[\s\S]*value=\{form\.notificarEm\}/)
   assert.match(page, /lembretesCalendario[\s\S]*Quadro de lembretes/)
   assert.match(page, /visualizacao === 'LEMBRETES' \|\| visualizacao === 'CALENDARIO'[\s\S]*Novo lembrete/)
   assert.match(page, /visualizacao === 'QUADRO' \|\| visualizacao === 'CALENDARIO'[\s\S]*Nova tarefa/)
   assert.match(board, /createRequest[\s\S]*ultimoPedidoCriacao[\s\S]*showCreateAction/)
+})
+
+test('tarefas removem duração do formulário e calculam o aviso pela prioridade no servidor', async () => {
+  const page = read('src/app/dashboard/empresa/tarefas/page.tsx')
+  const collection = read('src/app/api/tarefas/route.ts')
+  const item = read('src/app/api/tarefas/[id]/route.ts')
+  const migration = read('prisma/migrations/20260915210000_tarefa_modo_notificacao/migration.sql')
+  const typescript = await import('typescript')
+  const javascript = typescript.transpileModule(read('src/lib/tarefaNotificacao.ts'), {
+    compilerOptions: { module: typescript.ModuleKind.ESNext, target: typescript.ScriptTarget.ES2022 },
+  }).outputText
+  const regras = await import(`data:text/javascript;base64,${Buffer.from(javascript).toString('base64')}`)
+  const referencia = new Date(2026, 8, 20, 12, 0)
+  const agora = new Date(2026, 8, 1, 12, 0)
+
+  assert.equal(regras.DIAS_ANTECEDENCIA_TAREFA.BAIXA, 3)
+  assert.equal(regras.DIAS_ANTECEDENCIA_TAREFA.MEDIA, 4)
+  assert.equal(regras.DIAS_ANTECEDENCIA_TAREFA.ALTA, 5)
+  assert.equal(regras.calcularNotificacaoTarefa({ prazo: referencia, prioridade: 'MEDIA', modo: 'AUTOMATICA', agora }).getDate(), 16)
+  assert.doesNotMatch(page, /Duração estimada \(minutos\)/)
+  assert.match(collection, /calcularNotificacaoTarefa[\s\S]*modoNotificacao/)
+  assert.match(item, /reprogramarNotificacao[\s\S]*calcularNotificacaoTarefa/)
+  assert.match(migration, /DEFAULT 'PERSONALIZADA'[\s\S]*SET DEFAULT 'AUTOMATICA'/)
 })
 
 test('novos agendamentos começam no horário atual e o servidor rejeita datas passadas', async () => {

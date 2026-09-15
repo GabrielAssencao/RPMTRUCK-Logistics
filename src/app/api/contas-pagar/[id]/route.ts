@@ -1,3 +1,4 @@
+import { lerFormularioLimitado, RequestBodyError } from '@/lib/requestBody'
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
@@ -32,7 +33,7 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/co
   const { id } = await context.params
   let caminhoNovo: string | null = null
   try {
-    const form = await request.formData()
+    const form = await lerFormularioLimitado(request)
     const acao = form.get('acao')
     if (acao !== 'PAGAR' && acao !== 'CANCELAR' && acao !== 'REABRIR' && acao !== 'EDITAR') return NextResponse.json({ erro: 'Ação inválida.' }, { status: 400 })
     const atual = await prisma.contaPagar.findFirst({
@@ -171,6 +172,7 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/co
     caminhoNovo = null
     return NextResponse.json({ sucesso: true, status: 'PAGO' })
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ erro: error.message }, { status: error.status })
     if (caminhoNovo) await removerArquivosContaPagar([caminhoNovo])
     if (error instanceof ArquivoContaPagarError) return NextResponse.json({ erro: error.message }, { status: error.status })
     if (error instanceof Error && error.message === 'JA_PROCESSADA') return NextResponse.json({ erro: 'Esta conta já foi processada em outra sessão.' }, { status: 409 })

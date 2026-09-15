@@ -17,3 +17,13 @@ export function formatarDataHoraBrasil(data = new Date()) {
 export function anteriorAoMinutoDaReferencia(data: Date, referencia = new Date()) {
   return data < inicioDoMinuto(referencia)
 }
+
+export function chaveDataBrasil(data = new Date()) {
+  const partes = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(data)
+  const obter = (tipo: Intl.DateTimeFormatPartTypes) => partes.find((parte) => parte.type === tipo)?.value ?? ''
+  return `${obter('year')}-${obter('month')}-${obter('day')}`
+}
+
+export function anteriorAoDiaDaReferencia(data: Date, referencia = new Date()) {
+  return chaveDataBrasil(data) < chaveDataBrasil(referencia)
+}

@@ -383,7 +383,7 @@ export default function ContasPagarPage() {
 
       <div className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)' }}>
         <div className="flex overflow-x-auto">{(['PENDENTE', 'PAGO', 'CANCELADO', 'TODOS'] as const).map((item) => <button key={item} type="button" onClick={() => setFiltro(item)} className="min-h-10 whitespace-nowrap border px-4 text-[10px] font-black uppercase" style={{ color: filtro === item ? '#000' : 'var(--foreground-muted)', backgroundColor: filtro === item ? primary : 'transparent', borderColor: filtro === item ? primary : 'var(--border)' }}>{item}</button>)}</div>
-        {capacidades?.exportacaoLote && <Link href="/api/contas-pagar/exportar" download className="flex min-h-10 items-center justify-center border px-4 text-[10px] font-black uppercase" style={{ borderColor: 'var(--border)' }}><Download size={14} className="mr-2" />Exportar CSV</Link>}
+        {capacidades?.exportacaoLote && <Link href="/api/contas-pagar/exportar" download className="flex min-h-10 items-center justify-center border px-4 text-[10px] font-black uppercase" style={{ borderColor: 'var(--border)' }}><Download size={14} className="mr-2" />Exportar Excel</Link>}
       </div>
 
       {carregando ? <DominoLoader label="Carregando contas a pagar" /> : exibidas.length === 0 ? <div className="border border-dashed py-16 text-center" style={{ borderColor: 'var(--border)' }}><ReceiptText className="mx-auto mb-3 text-foreground-muted" /><p className="text-sm font-bold">Nenhuma conta nesta categoria.</p><p className="mt-1 text-xs text-foreground-muted">Cadastre o primeiro vencimento para iniciar a organização.</p></div> : (

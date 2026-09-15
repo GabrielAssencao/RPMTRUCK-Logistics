@@ -1,17 +1,17 @@
 'use client'
 
 import { useRef } from 'react'
-import { motion, useInView } from 'framer-motion'
+import { m as motion, useInView } from 'framer-motion'
 import { Truck, Shield, BarChart3, Zap, Route, Fuel } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 
 const FEATURES = [
-  { icon: Truck,     title: 'Gestão de Frota',         desc: 'Cadastro completo de veículos com modelo, tipo e placa. Controle total da sua frota com histórico detalhado.',          tag: 'Plano Essencial'    },
-  { icon: Shield,    title: 'Controle de Motoristas',   desc: 'Vincule motoristas aos veículos e acompanhe o histórico completo de cada um em qualquer período.',                       tag: 'Plano Avançado'     },
-  { icon: BarChart3, title: 'Relatórios Avançados',     desc: 'Gráficos de custos mensais e anuais por motorista e veículo. 3 anos de dados para decisões estratégicas.',              tag: 'Plano Enterprise'   },
-  { icon: Fuel,      title: 'Custos de Combustível',    desc: 'Lance autonomia e abastecimento semana a semana. Saiba exatamente o que cada caminhão consome.',                          tag: 'Plano Avançado'     },
-  { icon: Route,     title: 'Pedágios & Rotas',         desc: 'Registre gastos com pedágios por semana e por motorista. Identifique rotas mais custosas.',                              tag: 'Plano Avançado'     },
-  { icon: Zap,       title: 'Manutenção',               desc: 'Acompanhe todos os custos de manutenção por veículo. Histórico completo para negociações com seguradoras.',              tag: 'Plano Enterprise'   },
+  { icon: Truck,     title: 'Gestão de Frota',         desc: 'Conheça cada caminhão além da placa. Reúna cadastro e histórico para acompanhar sua frota com mais clareza.', tag: 'Plano Essencial' },
+  { icon: Shield,    title: 'Controle de Motoristas',   desc: 'Equipe no mesmo ritmo da operação. Vincule motoristas aos veículos e consulte o histórico de cada condutor.', tag: 'Plano Avançado' },
+  { icon: BarChart3, title: 'Relatórios Avançados',     desc: 'Transforme o histórico em direção. Compare custos por veículo, motorista e período para orientar suas próximas decisões.', tag: 'Plano Enterprise' },
+  { icon: Fuel,      title: 'Custos de Combustível',    desc: 'O motor gira. Você acompanha o consumo. Registre abastecimentos e autonomia para entender o gasto de cada caminhão.', tag: 'Plano Avançado' },
+  { icon: Route,     title: 'Pedágios & Rotas',         desc: 'Cada trajeto tem um custo. Organize os gastos com pedágios por semana e motorista para enxergar onde sua operação pesa.', tag: 'Plano Avançado' },
+  { icon: Zap,       title: 'Manutenção',               desc: 'Leia os sinais da sua frota. Acompanhe serviços, peças e custos por veículo, com um histórico que ajuda a planejar os próximos cuidados.', tag: 'Plano Enterprise' },
 ]
 
 function FeatureCard({ feature, index, isVisible }: { feature: typeof FEATURES[0]; index: number; isVisible: boolean }) {
@@ -113,7 +113,7 @@ export default function Features() {
             className="text-xs tracking-[0.3em] uppercase font-bold mb-4"
             style={{ fontFamily: 'JetBrains Mono, monospace', color: primary }}
           >
-            Funcionalidades
+            Os sinais da sua operação, conectados
           </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
@@ -122,8 +122,8 @@ export default function Features() {
             className="text-5xl md:text-7xl font-bold leading-tight text-foreground"
             style={{ fontFamily: 'Rajdhani, sans-serif' }}
           >
-            TUDO QUE SUA<br />
-            <span style={{ color: primary }}>FROTA PRECISA</span>
+            LEIA OS SINAIS.<br />
+            <span style={{ color: primary }}>ASSUMA O CONTROLE.</span>
           </motion.h2>
         </motion.div>
 

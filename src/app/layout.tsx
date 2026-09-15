@@ -29,10 +29,9 @@ const jetBrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'RPMTruck Logistics | Gestão de Frota de Alta Performance',
-  description: 'Plataforma completa de gerenciamento de caminhões, motoristas e custos operacionais.',
+  title: 'RPMTruck | O pulso da frota. O ritmo da gestão.',
+  description: 'Agilidade na gestão e cuidado com a frota. Conecte caminhões, motoristas, manutenção e custos com a RPMTruck para decidir com clareza.',
   keywords: ['gestão de frota', 'caminhões', 'logística', 'motoristas', 'custos operacionais'],
-  icons: { icon: '/logos/logoRPMTRUCK_verde.png' },
 }
 
 export const viewport: Viewport = {

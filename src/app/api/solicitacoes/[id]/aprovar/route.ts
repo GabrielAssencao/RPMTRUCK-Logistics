@@ -9,6 +9,7 @@ import { obterPlanoComercial } from '@/lib/financeiro/planosComerciais';
 import { executarComAuditoria } from '@/lib/auditoria';
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 import { gerarSenhaTemporaria, TEMPORARY_PASSWORD_TTL_MS } from '@/lib/temporaryPassword';
+import { competenciaBrasil, PRAZO_PAGAMENTO_INICIAL_MS } from '@/lib/financeiro/situacaoFinanceira';
 
 class SolicitacaoJaProcessadaError extends Error {
   constructor() {
@@ -42,8 +43,10 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const configPlano = PLANOS_PADRONIZADOS[solicitacao.plano];
     const dataAtual = new Date();
     const mesesValores = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    const mesReferencia = mesesValores[dataAtual.getMonth()];
-    const anoReferencia = dataAtual.getFullYear();
+    const competencia = competenciaBrasil(dataAtual);
+    const mesReferencia = mesesValores[competencia.mes - 1];
+    const anoReferencia = competencia.ano;
+    const prazoInicial = solicitacao.plano === 'PREVIEW' ? null : new Date(dataAtual.getTime() + PRAZO_PAGAMENTO_INICIAL_MS);
 
     // Gerando uma senha padrão temporária inicial forte para o cliente
     const senhaProvisoria = gerarSenhaTemporaria();
@@ -73,10 +76,18 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
           nome_contato: solicitacao.responsavel,
           plano: solicitacao.plano,
           status: StatusEmpresa.ATIVO,
+          diaVencimento: solicitacao.diaVencimento,
+          cobrancaIniciadaEm: prazoInicial ? dataAtual : null,
+          pagamentoInicialVenceEm: prazoInicial,
           modulos: [...configPlano.modulosPadrao],
           usuarios_adicionais: 0,
           veiculos_adicionais: 0
         }
+      });
+
+      await tx.solicitacaoAcesso.update({
+        where: { id },
+        data: { empresaId: novaEmpresa.id },
       });
 
       // Passo C: Criar o Usuário Dono/Gestor master da transportadora
@@ -95,7 +106,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       await tx.notificacao.create({
         data: {
           titulo: 'Acesso aprovado',
-          mensagem: `A empresa ${novaEmpresa.nome} foi ativada no plano ${novaEmpresa.plano}.`,
+          mensagem: prazoInicial ? `Plano ${novaEmpresa.plano}: pague a primeira mensalidade e a implantação até ${prazoInicial.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}. Depois, as mensalidades vencem todo dia ${solicitacao.diaVencimento}.` : `A empresa ${novaEmpresa.nome} foi ativada em teste no Preview.`,
           modulo: 'GERAL',
           empresaId: novaEmpresa.id,
           usuarioId: novoGestor.id,
@@ -109,6 +120,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
             mes: mesReferencia,
             ano: anoReferencia,
             tipo: 'IMPLEMENTACAO',
+            vencimento: prazoInicial,
             valor: planoComercial.taxaImplantacao,
             status: StatusFatura.PENDENTE,
             empresaId: novaEmpresa.id
@@ -123,6 +135,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
             mes: mesReferencia,
             ano: anoReferencia,
             tipo: 'MENSALIDADE',
+            vencimento: prazoInicial,
             valor: planoComercial.precoBase,
             status: StatusFatura.PENDENTE,
             empresaId: novaEmpresa.id

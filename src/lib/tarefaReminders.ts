@@ -42,7 +42,7 @@ export async function entregarLembretesTarefas({ empresaId, usuarioId }: Entrega
       lembreteEm: { lte: agora },
       lembreteEnviadoEm: null,
     },
-    select: { id: true, titulo: true, empresaId: true, responsavelId: true, prazo: true },
+    select: { id: true, titulo: true, empresaId: true, responsavelId: true, prazo: true, diaInteiro: true },
     orderBy: { lembreteEm: 'asc' },
     take: 25,
   })
@@ -66,7 +66,7 @@ export async function entregarLembretesTarefas({ empresaId, usuarioId }: Entrega
       await tx.notificacao.create({
         data: {
           titulo: `Tarefa: ${tarefa.titulo}`,
-          mensagem: tarefa.prazo ? `Prazo previsto para ${dataHoraContextual(tarefa.prazo)}.` : 'Esta tarefa está pendente no seu quadro.',
+          mensagem: tarefa.prazo ? `Prazo previsto para ${tarefa.diaInteiro ? formatoData.format(tarefa.prazo) : dataHoraContextual(tarefa.prazo)}.` : 'Esta tarefa está pendente no seu quadro.',
           modulo: 'TAREFAS',
           empresaId: tarefa.empresaId,
           usuarioId: tarefa.responsavelId,
@@ -81,7 +81,7 @@ export async function entregarLembretesTarefas({ empresaId, usuarioId }: Entrega
   return entregues
 }
 
-export async function entregarLembretesPessoais({ empresaId, usuarioId }: EntregarLembretesInput) {
+export async function entregarLembretesPessoais({ empresaId, usuarioId }: { empresaId: string | null; usuarioId: string }) {
   const agora = new Date()
   const pendentes = await prisma.lembretePessoal.findMany({
     where: {
@@ -91,7 +91,7 @@ export async function entregarLembretesPessoais({ empresaId, usuarioId }: Entreg
       notificarEm: { lte: agora },
       notificacaoEm: null,
     },
-    select: { id: true, titulo: true, empresaId: true, usuarioId: true, dataHora: true, urgencia: true },
+    select: { id: true, titulo: true, empresaId: true, usuarioId: true, dataHora: true, urgencia: true, diaInteiro: true },
     orderBy: { notificarEm: 'asc' },
     take: 25,
   })
@@ -115,7 +115,7 @@ export async function entregarLembretesPessoais({ empresaId, usuarioId }: Entreg
       await tx.notificacao.create({
         data: {
           titulo: `Lembrete: ${lembrete.titulo}`,
-          mensagem: `${URGENCIA_LEMBRETE[lembrete.urgencia] ?? 'Lembrete pessoal'} · Agendado para ${dataHoraContextual(lembrete.dataHora)}.`,
+          mensagem: `${URGENCIA_LEMBRETE[lembrete.urgencia] ?? 'Lembrete pessoal'} · Agendado para ${lembrete.diaInteiro ? formatoData.format(lembrete.dataHora) : dataHoraContextual(lembrete.dataHora)}.`,
           modulo: 'TAREFAS',
           empresaId: lembrete.empresaId,
           usuarioId: lembrete.usuarioId,

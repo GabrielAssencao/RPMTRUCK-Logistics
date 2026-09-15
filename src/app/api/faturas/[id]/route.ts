@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { requireAdminAuth } from '@/lib/auth'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { avaliarSituacaoFinanceira } from '@/lib/financeiro/situacaoFinanceira'
+import { faturasPendentesFinanceiras } from '@/lib/financeiro/acessoFinanceiro'
 
 const schema = z.object({
   valor: z.coerce.number().min(0).max(9_999_999_999.99).optional(),
@@ -15,7 +17,7 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/fa
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
   const limited = await applyRateLimit(request, `admin-fatura:${auth.session.userId}`, RATE_LIMITS.ADMIN_MUTATION.limit, RATE_LIMITS.ADMIN_MUTATION.windowMs)
   if (limited) return limited
-  const parsed = schema.safeParse(await request.json())
+  const parsed = schema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ erro: 'Alteração inválida.' }, { status: 400 })
   const { id } = await context.params
 
@@ -34,13 +36,18 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/fa
       if (alterada.count !== 1) throw new Error('JA_LIQUIDADA')
       const fatura = await tx.fatura.findUniqueOrThrow({ where: { id } })
       if (parsed.data.status === 'PAGO') {
+        if (fatura.tipo === 'MENSALIDADE' && fatura.valor > 0) await tx.empresa.updateMany({
+          where: { id: fatura.empresaId, primeiraMensalidadePagaEm: null },
+          data: { primeiraMensalidadePagaEm: fatura.pago_em },
+        })
         const total = await tx.fatura.aggregate({ where: { empresaId: fatura.empresaId, status: 'PAGO' }, _sum: { valor: true } })
         await tx.empresa.update({
           where: { id: fatura.empresaId },
           data: { total_pago_historico: Number(total._sum.valor ?? 0).toFixed(2).replace('.', ',') },
         })
       }
-      return fatura
+      const empresa = await tx.empresa.findUniqueOrThrow({ where: { id: fatura.empresaId }, include: { faturas: faturasPendentesFinanceiras } })
+      return { ...fatura, financeiro: avaliarSituacaoFinanceira(empresa) }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
     return NextResponse.json(resultado)
   } catch (error) {
