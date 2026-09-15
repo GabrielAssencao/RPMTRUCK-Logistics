@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { FileText, ReceiptText } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import DocumentoFinanceiroViewer, { type DocumentoFinanceiro } from '@/components/dashboard/DocumentoFinanceiroViewer'
 
 interface ContaArquivo {
   id: string
@@ -25,6 +26,7 @@ export default function ArquivosContasPagar({ limite = 50 }: { limite?: number }
   const [indisponivel, setIndisponivel] = useState(false)
   const [carregando, setCarregando] = useState(true)
   const [feedback, setFeedback] = useState('')
+  const [documentoAberto, setDocumentoAberto] = useState<DocumentoFinanceiro | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -49,19 +51,22 @@ export default function ArquivosContasPagar({ limite = 50 }: { limite?: number }
     const response = await fetch(`/api/contas-pagar/${contaId}/arquivo?tipo=${tipo}`, { cache: 'no-store' })
     const data = await response.json()
     if (!response.ok) return setFeedback(data.erro || 'Não foi possível abrir o arquivo.')
-    window.open(data.url, '_blank', 'noopener,noreferrer')
+    setDocumentoAberto({ contaId, tipo, url: data.url, nome: data.nome || (tipo === 'boleto' ? 'Boleto' : 'Comprovante') })
   }
 
   if (indisponivel) return null
   const comArquivos = contas.filter((conta) => conta.possuiBoleto || conta.possuiComprovante).slice(0, limite)
 
   return (
-    <section className="border" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+    <>
+      {documentoAberto && <DocumentoFinanceiroViewer documento={documentoAberto} onClose={() => setDocumentoAberto(null)} />}
+      <section className="border" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
       <div className="border-b p-4" style={{ borderColor: 'var(--border)' }}><h2 className="text-xs font-black uppercase tracking-widest">Boletos e comprovantes privados</h2><p className="mt-1 text-[10px] text-foreground-muted">Histórico financeiro referenciado no banco e liberado por URL assinada temporária.</p></div>
       {feedback && <p role="status" className="border-b p-3 text-xs text-red-500" style={{ borderColor: 'var(--border)' }}>{feedback}</p>}
       {carregando ? <p className="p-6 text-xs text-foreground-muted">Carregando documentos financeiros...</p> : comArquivos.length === 0 ? <p className="p-6 text-xs text-foreground-muted">Nenhum boleto ou comprovante armazenado.</p> : (
-        <div className="divide-y" style={{ borderColor: 'var(--border)' }}>{comArquivos.map((conta) => <article key={conta.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate text-xs font-bold uppercase">{conta.descricao}</p><p className="mt-1 text-[9px] text-foreground-muted">{conta.fornecedor || 'Fornecedor não informado'} · {new Date(`${conta.vencimento}T12:00:00`).toLocaleDateString('pt-BR')} · {moeda.format(conta.valor)} · {conta.status}</p></div><div className="flex flex-wrap gap-2">{conta.possuiBoleto && <button type="button" onClick={() => void abrirArquivo(conta.id, 'boleto')} className="flex min-h-10 items-center gap-2 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}><FileText size={13} /> Boleto</button>}{conta.possuiComprovante && <button type="button" onClick={() => void abrirArquivo(conta.id, 'comprovante')} className="flex min-h-10 items-center gap-2 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><ReceiptText size={13} /> Comprovante</button>}</div></article>)}</div>
+        <div className="divide-y" style={{ borderColor: 'var(--border)' }}>{comArquivos.map((conta) => <article key={conta.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate text-xs font-bold uppercase">{conta.descricao}</p><p className="mt-1 text-[9px] text-foreground-muted">{conta.fornecedor || 'Fornecedor não informado'} · {new Date(`${conta.vencimento}T12:00:00`).toLocaleDateString('pt-BR')} · {moeda.format(conta.valor)} · {conta.status}</p></div><div className="flex flex-wrap gap-2">{conta.possuiBoleto && <button type="button" onClick={() => void abrirArquivo(conta.id, 'boleto')} className="flex min-h-10 items-center gap-2 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: primary, color: primary }}><FileText size={13} />Visualizar boleto</button>}{conta.possuiComprovante && <button type="button" onClick={() => void abrirArquivo(conta.id, 'comprovante')} className="flex min-h-10 items-center gap-2 border px-3 text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)' }}><ReceiptText size={13} />Visualizar comprovante</button>}</div></article>)}</div>
       )}
-    </section>
+      </section>
+    </>
   )
 }
