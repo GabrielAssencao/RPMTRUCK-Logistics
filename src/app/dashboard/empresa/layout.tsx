@@ -32,6 +32,7 @@ import {
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
 import SidebarBrandMark, { SidebarBrandIdentity } from '@/components/dashboard/SidebarBrandMark'
+import SidebarAccountCard from '@/components/dashboard/SidebarAccountCard'
 import DashboardEnvironmentBackground from '@/components/dashboard/DashboardEnvironmentBackground'
 import { normalizarModulos, type ModuloCodigo } from '@/utils/planos'
 import { normalizarCorTema } from '@/data/temasELogos'
@@ -62,6 +63,7 @@ interface NavEmpresaItem {
 }
 
 interface PerfilEmpresaUsuario {
+  nome: string
   role: 'GESTOR_EMPRESA' | 'OPERADOR' | 'VISUALIZADOR'
   acessoDashboardGeral: boolean
   modulosAcesso: ModuloCodigo[]
@@ -264,11 +266,14 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
   const atualizarResumoSuporte = useCallback(async () => {
     if (!eGestor) return
     try {
-      const response = await fetch('/api/chat', { cache: 'no-store' })
+      const response = await fetch('/api/chat?resumo=true', { cache: 'no-store' })
       if (!response.ok) return
       const body = await response.json()
       const tickets = Array.isArray(body.tickets) ? body.tickets : []
-      setTicketsNaoLidos(tickets.reduce((total: number, ticket: { naoLidas?: number }) => total + (ticket.naoLidas ?? 0), 0))
+      const totalNaoLidas = typeof body.resumo?.mensagensNaoLidas === 'number'
+        ? body.resumo.mensagensNaoLidas
+        : tickets.reduce((total: number, ticket: { naoLidas?: number }) => total + (ticket.naoLidas ?? 0), 0)
+      setTicketsNaoLidos(totalNaoLidas)
     } catch {
       // O atalho permanece disponível mesmo se o contador não puder ser atualizado.
     }
@@ -320,14 +325,13 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
     const itensVisiveis = itensPermitidos.filter((item) => !modulosOcultos.includes(item.path))
     const itensOcultos = itensPermitidos.filter((item) => modulosOcultos.includes(item.path))
     return (
-      <div className="flex flex-col h-full justify-between p-4 font-mono">
+      <div className={`flex flex-col h-full justify-between p-4 font-mono ${expandida ? '' : 'pt-0'}`}>
         <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1 custom-scrollbar">
           {/* Header da Sidebar com Logo Ajustada */}
-          <div className="-mx-4 -mt-4 mb-6 flex h-16 items-center justify-start border-b border-white/10 px-4">
+          <div className={`-mx-4 mb-3 flex shrink-0 items-center justify-start border-b border-border px-4 ${expandida ? 'h-20' : 'h-16'}`}>
             {expandida ? (
               <SidebarBrandIdentity
                 primary={primary}
-                subtitle={nomeEmpresa}
               />
             ) : (
               <SidebarBrandMark primary={primary} />
@@ -459,61 +463,10 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* ─── RODAPÉ: CONFIGURAÇÕES + SAIR ─── */}
-        <div className="shrink-0 space-y-1 pt-4 border-t border-white/10">
-          <Link
-            href={NOTIFICACOES_ITEM.path}
-            onClick={() => setMobileOpen(false)}
-            title={!expandida ? NOTIFICACOES_ITEM.label : undefined}
-            className={`flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${
-              notificacoesAtivas
-                ? 'text-black font-black'
-                : 'text-foreground-muted hover:text-foreground hover:bg-white/5'
-            }`}
-            style={{
-              backgroundColor: notificacoesAtivas ? primary : 'transparent',
-              clipPath: notificacoesAtivas ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
-            }}
-          >
-            <span className="relative flex w-5 shrink-0 items-center justify-center">
-              <Bell size={18} className={notificacoesAtivas ? 'text-black' : 'text-foreground-muted'} />
-              {!expandida && totalNotificacoes > 0 && <span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full border border-black" style={{ backgroundColor: semanticColors.warning }} />}
-            </span>
-            {expandida && <span className="flex-1 truncate">{NOTIFICACOES_ITEM.label}</span>}
-            {expandida && totalNotificacoes > 0 && <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black" style={{ backgroundColor: notificacoesAtivas ? '#000' : primary, color: notificacoesAtivas ? primary : '#000' }}>{totalNotificacoes > 99 ? '99+' : totalNotificacoes}</span>}
-          </Link>
-          {eGestor && (
-            <Link
-              href={CONFIG_ITEM.path}
-              onClick={() => setMobileOpen(false)}
-              title={!expandida ? CONFIG_ITEM.label : undefined}
-              className={`flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${
-                pathname === CONFIG_ITEM.path
-                  ? 'text-black font-black'
-                  : 'text-foreground-muted hover:text-foreground hover:bg-white/5'
-              }`}
-              style={{
-                backgroundColor: pathname === CONFIG_ITEM.path ? primary : 'transparent',
-                clipPath: pathname === CONFIG_ITEM.path ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
-              }}
-            >
-              <Settings size={18} className={`shrink-0 ${pathname === CONFIG_ITEM.path ? 'text-black' : 'text-foreground-muted'}`} />
-              {expandida && <span className="flex-1 truncate">{CONFIG_ITEM.label}</span>}
-            </Link>
-          )}
-          {!eGestor && perfilUsuario?.podePersonalizarTema && (
-            <Link
-              href="/dashboard/empresa/tema"
-              onClick={() => setMobileOpen(false)}
-              title={!expandida ? 'PERSONALIZAR TEMA' : undefined}
-              className={`flex items-center gap-3 rounded-sm px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${pathname === '/dashboard/empresa/tema' ? 'text-black font-black' : 'text-foreground-muted hover:bg-white/5 hover:text-foreground'}`}
-              style={{ backgroundColor: pathname === '/dashboard/empresa/tema' ? primary : 'transparent' }}
-            >
-              <Palette size={18} className="shrink-0" />
-              {expandida && <span className="flex-1 truncate">PERSONALIZAR TEMA</span>}
-            </Link>
-          )}
-
-          <button 
+        <div className="shrink-0 space-y-1 pt-4 border-t border-border">
+          <SidebarAccountCard name={perfilUsuario?.nome || 'Usuário'} company={nomeEmpresa} expanded={expandida}
+            logout={(
+              <button
             onClick={handleLogout}
             title={!expandida ? 'SAIR DO TERMINAL' : undefined}
             className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10 transition-all rounded-sm font-mono"
@@ -521,6 +474,63 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
             <LogOut size={18} className="shrink-0" />
             {expandida && <span>SAIR DO TERMINAL</span>}
           </button>
+            )}
+          >
+            <Link
+              href={NOTIFICACOES_ITEM.path}
+              onClick={() => setMobileOpen(false)}
+              title={!expandida ? NOTIFICACOES_ITEM.label : undefined}
+              className={`flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${
+                notificacoesAtivas
+                  ? 'text-black font-black'
+                  : 'text-foreground-muted hover:text-foreground hover:bg-white/5'
+              }`}
+              style={{
+                backgroundColor: notificacoesAtivas ? primary : 'transparent',
+                clipPath: notificacoesAtivas ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
+              }}
+            >
+              <span className="relative flex w-5 shrink-0 items-center justify-center">
+                <Bell size={18} className={notificacoesAtivas ? 'text-black' : 'text-foreground-muted'} />
+                {!expandida && totalNotificacoes > 0 && <span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full border border-black" style={{ backgroundColor: semanticColors.warning }} />}
+              </span>
+              {expandida && <span className="flex-1 truncate">{NOTIFICACOES_ITEM.label}</span>}
+              {expandida && totalNotificacoes > 0 && <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black" style={{ backgroundColor: notificacoesAtivas ? '#000' : primary, color: notificacoesAtivas ? primary : '#000' }}>{totalNotificacoes > 99 ? '99+' : totalNotificacoes}</span>}
+            </Link>
+            {eGestor && (
+              <Link
+                href={CONFIG_ITEM.path}
+                onClick={() => setMobileOpen(false)}
+                title={!expandida ? CONFIG_ITEM.label : undefined}
+                className={`flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${
+                  pathname === CONFIG_ITEM.path
+                    ? 'text-black font-black'
+                    : 'text-foreground-muted hover:text-foreground hover:bg-white/5'
+                }`}
+                style={{
+                  backgroundColor: pathname === CONFIG_ITEM.path ? primary : 'transparent',
+                  clipPath: pathname === CONFIG_ITEM.path ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
+                }}
+              >
+                <Settings size={18} className={`shrink-0 ${pathname === CONFIG_ITEM.path ? 'text-black' : 'text-foreground-muted'}`} />
+                {expandida && <span className="flex-1 truncate">{CONFIG_ITEM.label}</span>}
+              </Link>
+            )}
+            {!eGestor && perfilUsuario?.podePersonalizarTema && (
+              <Link
+                href="/dashboard/empresa/tema"
+                onClick={() => setMobileOpen(false)}
+                title={!expandida ? 'PERSONALIZAR TEMA' : undefined}
+                className={`flex items-center gap-3 rounded-sm px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${pathname === '/dashboard/empresa/tema' ? 'text-black font-black' : 'text-foreground-muted hover:bg-white/5 hover:text-foreground'}`}
+                style={{ backgroundColor: pathname === '/dashboard/empresa/tema' ? primary : 'transparent' }}
+              >
+                <Palette size={18} className="shrink-0" />
+                {expandida && <span className="flex-1 truncate">PERSONALIZAR TEMA</span>}
+              </Link>
+            )}
+
+
+          </SidebarAccountCard>
         </div>
       </div>
     )

@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
       prisma.empresa.findMany({
         where: { excluidoEm: null },
         include: {
+          importacao_inicial: { select: { status: true } },
           faturas: faturasPendentesFinanceiras,
           _count: {
             select: {

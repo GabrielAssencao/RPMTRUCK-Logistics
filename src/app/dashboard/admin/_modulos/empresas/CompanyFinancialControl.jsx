@@ -9,7 +9,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { motion } from 'framer-motion';
 import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog';
 import CompanyUsersManager from './CompanyUsersManager'; 
-import CompanyVehiclesManager from './CompanyVehiclesManager'; 
+import CompanyVehiclesManager from './CompanyVehiclesManager';
+import InitialDataImport from '@/components/dashboard/InitialDataImport';
 import { MODULOS, MODULOS_CONFIG, obterModulosPadrao, PLANOS, PLANOS_CONFIG, adicionaisPadraoNaTrocaDePlano } from '@/utils/planos';
 
 // ─── CONSTANTES DE PRECIFICAÇÃO E LIMITES ────────────────────────────────
@@ -123,6 +124,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
     { id: 'plano', label: 'MÓDULOS & PLANO', icon: <Layers size={14}/> },
     { id: 'usuarios', label: 'USUÁRIOS DA EMPRESA', icon: <Users size={14}/> },
     { id: 'veiculos', label: 'VEÍCULOS', icon: <Truck size={14}/> },
+    { id: 'importacao', label: empresa.importacao_inicial?.status === 'PENDENTE' ? 'IMPORTAÇÃO PENDENTE' : 'IMPORTAÇÃO INICIAL', icon: <Plus size={14}/> },
     { id: 'pagamentos', label: 'PAGAMENTOS', icon: <CreditCard size={14}/> },
   ];
 
@@ -181,6 +183,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate }) {
 
       {/* CONTEÚDO DINÂMICO DAS ABAS */}
       <div className="py-4">
+        {tabAtiva === 'importacao' && <InitialDataImport admin empresaId={empresa.id} onApproved={() => void onUpdate?.()} />}
         {tabAtiva === 'geral' && (
            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <StatCard label="VEÍCULOS" val={`${empresa._count?.veiculos_frota ?? 0} / ${config.veiculosBase + vExtra}`} sub="Frota atual" />

@@ -1,35 +1,39 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, Lock, Eye, EyeOff, ArrowLeft, Key, ShieldCheck, CheckCircle, AlertTriangle } from 'lucide-react'
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion'
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, Key, ShieldCheck, AlertTriangle } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
-import dynamic from 'next/dynamic'
+import { BrandLogo } from '@/components/brand/BrandLogo'
+import LoginVisual from './_componentes/LoginVisual'
+import LoginEntry from './_componentes/LoginEntry'
+import { getExperience3DReady, getServerExperience3DReady, subscribeExperience3D } from '@/lib/experience3d'
 import TurnstileWidget from '@/components/security/TurnstileWidget'
 
-const TruckPanel = dynamic(() => import('@/app/auth/login/_componentes/TruckPanel'), { ssr: false })
-
-type Tab = 'login' | 'forgot'
-
 export default function LoginPage() {
+  return <MotionConfig reducedMotion="user"><LoginContent /></MotionConfig>
+}
+
+function LoginContent() {
   const router = useRouter()
+  const experience3DReady = useSyncExternalStore(subscribeExperience3D, getExperience3DReady, getServerExperience3DReady)
   const { primary, isLight } = useTheme()
-  const [tab, setTab] = useState<Tab>('login')
   const [step, setStep] = useState(0) 
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [sent, setSent] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [newPassword, setNewPassword] = useState('') 
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [forgotEmail, setForgotEmail] = useState('')
   const [error, setError] = useState('') 
   const [turnstileToken, setTurnstileToken] = useState('')
   const [turnstileVersion, setTurnstileVersion] = useState(0)
+  const [destination, setDestination] = useState<string | null>(null)
+  const [authenticatedRole, setAuthenticatedRole] = useState<string>()
+  const authenticating = useRef(false)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -39,6 +43,7 @@ export default function LoginPage() {
   }, [])
 
   const handleNextStep = async () => {
+    if (authenticating.current || destination) return
     setError('')
 
     if (step === 0) {
@@ -61,6 +66,7 @@ export default function LoginPage() {
         return
       }
       const etapaOrigem = step
+      authenticating.current = true
       if (etapaOrigem === 1) setStep(2)
       else setLoading(true)
 
@@ -92,31 +98,29 @@ export default function LoginPage() {
           return
         }
 
+        setAuthenticatedRole(data.usuario.role)
         // Lógica de redirecionamento pós-login
-        localStorage.setItem('@rpmtruck:user', JSON.stringify(data.usuario))
+        try {
+          localStorage.setItem('@rpmtruck:user', JSON.stringify(data.usuario))
+        } catch {
+          // Authentication uses the session cookie; local storage only supplies display data.
+        }
         
         if (data.usuario.role === 'ADMIN_RPM' || data.usuario.role === 'ADMIN') {
-          router.replace('/dashboard/admin')
+          setDestination('/dashboard/admin')
         } else if (data.acessoSomentePlano) {
-          router.replace('/dashboard/plano')
+          setDestination('/dashboard/plano')
         } else {
-          router.replace('/dashboard/empresa')
+          setDestination('/dashboard/empresa')
         }
       } catch {
         setError('Erro de conexão com o servidor.')
         setStep(step === 3 ? 3 : 1)
       } finally {
+        authenticating.current = false
         setLoading(false)
       }
     }
-  }
-
-  const handleForgot = async () => {
-    if (!forgotEmail) return
-    setLoading(true)
-    await new Promise(r => setTimeout(r, 1500))
-    setLoading(false)
-    setSent(true)
   }
 
   const resetLogin = () => {
@@ -129,8 +133,10 @@ export default function LoginPage() {
     setError('')
   }
 
+  if (destination) return <LoginEntry role={authenticatedRole} onEntered={() => router.replace(destination)} />
+
   // ─── Conteúdo do painel direito ───────────────────────────────────────────────
-  const panelContent = tab === 'login' ? (
+  const panelContent = (
     <LoginForm
       step={step}
       email={email} setEmail={setEmail}
@@ -151,32 +157,19 @@ export default function LoginPage() {
       turnstileVersion={turnstileVersion}
       onTurnstileToken={setTurnstileToken}
     />
-  ) : (
-    <ForgotForm
-      forgotEmail={forgotEmail}
-      setForgotEmail={setForgotEmail}
-      sent={sent}
-      loading={loading}
-      onSubmit={handleForgot}
-      onBack={() => { setTab('login'); setSent(false); setForgotEmail('') }}
-      primary={primary}
-    />
   )
 
   // ─── LAYOUT MOBILE ─────────────────────────────────────────────────────────────
   if (isMobile) {
     return (
       <div className="min-h-screen flex flex-col transition-colors duration-300" style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
-        <div className="relative h-36 flex flex-col items-center justify-center overflow-hidden" style={{ backgroundColor: primary }}>
-          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000 0, #000 1px, transparent 0, transparent 50%)', backgroundSize: '12px 12px' }} />
-          <div className="absolute top-4 left-6 w-8 h-8 border-2 border-black/20 rounded-sm" />
-          <div className="absolute bottom-4 right-8 w-5 h-5 border border-black/20 rounded-full" />
-          <div className="absolute top-6 right-16 text-black/20 text-xl font-black" style={{ fontFamily: 'Rajdhani' }}>+</div>
-          <div className="relative z-10 text-center">
-            <div className="font-black text-2xl text-black" style={{ fontFamily: 'Rajdhani, sans-serif' }}>RPM<span className="opacity-70">TRUCK</span></div>
-            <div className="text-xs text-black/60 uppercase tracking-[0.3em] mt-1" style={{ fontFamily: 'JetBrains Mono, monospace' }}>LOGISTICS</div>
-          </div>
-        </div>
+        <header className="relative flex items-center justify-between px-6 py-6 border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+          <Link href="/" aria-label="RPMTruck — início" className="flex items-center gap-3">
+            <BrandLogo variant="wordmark" className="h-14 w-32" primary={primary} />
+
+          </Link>
+          <Link href="/" className="text-xs flex items-center gap-2" style={{ color: 'var(--foreground-muted)' }}><ArrowLeft size={14} />Início</Link>
+        </header>
         <div className="flex-1 flex items-start justify-center px-6 pt-10 pb-10">
           <div className="w-full max-w-sm">{panelContent}</div>
         </div>
@@ -189,20 +182,20 @@ export default function LoginPage() {
     <div className="min-h-screen flex transition-colors duration-300 overflow-hidden" style={{ backgroundColor: 'var(--background)' }}>
       <motion.div initial={{ x: -60, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }} className="relative hidden md:flex flex-col w-[52%] overflow-hidden" style={{ backgroundColor: isLight ? '#f0f0f0' : '#080808' }}>
         <div className="absolute inset-0">
-          <TruckPanel primary={primary} isLight={isLight} />
+          <LoginVisual enabled={experience3DReady} primary={primary} isLight={isLight} />
         </div>
         <div className="absolute inset-y-0 right-0 w-32 z-10 pointer-events-none" style={{ background: `linear-gradient(to right, transparent, ${isLight ? '#ffffff' : '#0f0f0f'})` }} />
-        <div className="relative z-20 flex flex-col justify-between h-full p-10">
+        <div className="relative z-20 flex flex-col justify-between min-h-screen w-full p-10 pointer-events-none">
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-            <Link href="/" className="inline-flex items-center gap-2 group">
-              <div className="font-black text-2xl" style={{ fontFamily: 'Rajdhani, sans-serif', color: 'var(--foreground)' }}>RPM<span style={{ color: primary }}>TRUCK</span></div>
-              <span className="text-xs uppercase tracking-widest opacity-50" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--foreground)' }}>LOGISTICS</span>
+            <Link href="/" aria-label="RPMTruck — início" className="inline-flex items-center gap-3 group pointer-events-auto">
+              <BrandLogo variant="wordmark" className="h-16 w-36" primary={primary} />
+
             </Link>
           </motion.div>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.7 }} className="mb-16">
             <div className="text-xs uppercase tracking-[0.3em] font-bold mb-3" style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}>Bem-vindo de volta</div>
-            <h1 className="text-5xl font-black leading-none mb-4" style={{ fontFamily: 'Rajdhani, sans-serif', color: 'var(--foreground)' }}>POTÊNCIA<br />&amp; <span style={{ color: primary }}>CONTROLE</span><br />NA SUA MÃO</h1>
-            <p className="text-sm max-w-xs" style={{ color: 'var(--foreground-muted)', fontFamily: 'Outfit, sans-serif' }}>Acesse o painel para gerenciar sua frota, motoristas e custos operacionais em tempo real.</p>
+            <h1 className="text-5xl font-black leading-none mb-4" style={{ fontFamily: 'Rajdhani, sans-serif', color: 'var(--foreground)' }}>O PULSO<br /><span style={{ color: primary }}>DA SUA FROTA.</span><br />NAS SUAS MÃOS.</h1>
+            <p className="text-sm max-w-xs" style={{ color: 'var(--foreground-muted)', fontFamily: 'Outfit, sans-serif' }}>Acompanhe os sinais de cada caminhão, confira os custos e dê ritmo ao próximo passo da operação.</p>
             <div className="mt-6 flex items-center gap-3">
               <div className="w-8 h-0.5" style={{ backgroundColor: primary }} />
               <div className="w-2 h-0.5" style={{ backgroundColor: primary, opacity: 0.5 }} />
@@ -220,7 +213,7 @@ export default function LoginPage() {
             <Link href="/" className="flex items-center gap-1.5 text-xs uppercase tracking-widest font-bold transition-opacity hover:opacity-60" style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}><ArrowLeft size={12} /> Início</Link>
           </div>
           {panelContent}
-          {step !== 3 && tab === 'login' && (
+          {step !== 3 && (
             <p className="text-center text-xs mt-8" style={{ color: 'var(--foreground-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
               Ainda não tem acesso? <Link href="/auth/solicitar-acesso" className="font-bold transition-opacity hover:opacity-70" style={{ color: primary }}>Solicite aqui →</Link>
             </p>
@@ -377,9 +370,6 @@ function LoginForm({
     </div>
   )
 }
-
-// ... ForgotForm e StyledInput/SubmitBtn permanecem os mesmos que você enviou.
-function ForgotForm({ forgotEmail, setForgotEmail, sent, loading, onSubmit, onBack, primary }: { forgotEmail: string; setForgotEmail: (v: string) => void; sent: boolean; loading: boolean; onSubmit: () => void; onBack: () => void; primary: string }) { return ( <div> <button onClick={onBack} className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-bold mb-8 transition-opacity hover:opacity-60" style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}> <ArrowLeft size={12} /> Voltar ao login </button> <div className="mb-8"> <div className="text-xs uppercase tracking-[0.25em] font-bold mb-2" style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}> SEGURANÇA RPMTRUCK </div> <h2 className="text-4xl font-black" style={{ fontFamily: 'Rajdhani, sans-serif', color: 'var(--foreground)' }}> {sent ? 'SOLICITAÇÃO\nENVIADA!' : 'SOLICITAR\nREDEFINIÇÃO'} </h2> </div> <AnimatePresence mode="wait"> {!sent ? ( <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4"> <StyledInput icon={<Mail size={14} />} label="E-mail corporativo cadastrado" type="email" placeholder="seu@empresa.com" value={forgotEmail} onChange={setForgotEmail} primary={primary} onEnter={onSubmit} autoFocus /> <div className="p-4 border text-xs" style={{ borderColor: `${primary}30`, backgroundColor: `${primary}08`, color: 'var(--foreground-muted)', fontFamily: 'Outfit, sans-serif' }}> <span className="font-bold uppercase tracking-widest block mb-1" style={{ color: primary, fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}>ℹ Como funciona</span> Sua solicitação de redefinição de senha será enviada para o administrador da plataforma aprovar. A liberação poderá ocorrer via E-mail ou ser ativada na própria plataforma (basta logar novamente). </div> <SubmitBtn onClick={onSubmit} disabled={!forgotEmail} loading={loading} primary={primary} label="ENVIAR PARA APROVAÇÃO →" /> </motion.div> ) : ( <motion.div key="success" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-4 space-y-4"> <div className="w-16 h-16 flex items-center justify-center mx-auto border-2" style={{ borderColor: primary, clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))' }}> <CheckCircle size={26} style={{ color: primary }} /> </div> <div> <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>O administrador foi notificado para a conta</p> <p className="font-bold mt-1" style={{ color: 'var(--foreground)' }}>{forgotEmail}</p> </div> <p className="text-xs max-w-xs mx-auto" style={{ color: 'var(--foreground-muted)' }}> Aguarde a liberação. Assim que for aprovada, você receberá um e-mail com o link, ou poderá acessar diretamente usando sua senha antiga para registrar uma nova. </p> <button onClick={onBack} className="text-xs uppercase tracking-widest font-bold transition-opacity hover:opacity-70 mt-4 inline-block" style={{ color: primary, fontFamily: 'JetBrains Mono, monospace' }}> ← Retornar ao login </button> </motion.div> )} </AnimatePresence> </div> ) }
 
 function StyledInput({ icon, label, type = 'text', placeholder, value, onChange, primary, onEnter, autoFocus }: { icon: React.ReactNode; label: string; type?: string; placeholder: string; value: string; onChange: (v: string) => void; primary: string; onEnter?: () => void; autoFocus?: boolean }) { return ( <label className="block"> <span className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--foreground-muted)', fontFamily: 'JetBrains Mono, monospace' }}> <span style={{ color: primary }}>{icon}</span> {label} </span> <input type={type} placeholder={placeholder} value={value} autoFocus={autoFocus} onChange={e => onChange(e.target.value)} onKeyDown={e => e.key === 'Enter' && onEnter?.()} className="w-full px-4 py-3 text-sm outline-none transition-all duration-200 border" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)', color: 'var(--foreground)', fontFamily: 'Outfit, sans-serif' }} onFocus={e => e.target.style.borderColor = primary} onBlur={e => e.target.style.borderColor = 'var(--border)'} /> </label> ) }
 

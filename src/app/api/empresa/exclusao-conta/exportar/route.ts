@@ -2,7 +2,8 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { criarTokenBackupEmpresa } from '@/lib/empresaBackupToken'
-import { gerarBackupEmpresaExcel } from '@/lib/empresaBackupExcel'
+import { gerarBackupEmpresaExcel, type SecaoBackupEmpresa } from '@/lib/empresaBackupExcel'
+import { lerLoteProtegido } from '@/lib/importacaoInicial'
 import { decryptSensitive, exposeEmpresa, exposeMotorista } from '@/lib/fieldEncryption'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
   if (!empresa) return NextResponse.json({ erro: 'Empresa não encontrada.' }, { status: 404 })
 
   const empresaExposta = exposeEmpresa(empresa)
-  const secoes = [
+  const secoes: SecaoBackupEmpresa[] = [
     { nome: 'LEIA-ME', linhas: [{
       geradoEm: new Date(),
       empresa: empresaExposta.nome,
@@ -82,6 +83,15 @@ export async function POST(request: NextRequest) {
     { nome: 'Eventos seguranca', linhas: eventos },
     { nome: 'Auditoria', linhas: auditoria },
   ]
+  const importacao = await prisma.importacaoInicial.findUnique({ where: { empresaId } })
+  if (importacao) {
+    const { dados, ...metadata } = importacao
+    secoes.push({ nome: 'Importacao inicial', linhas: [metadata] })
+    if (dados) {
+      const lote = lerLoteProtegido(dados, empresaId, importacao.checksum)
+      for (const [aba, linhas] of Object.entries(lote)) secoes.push({ nome: `Import ${aba}`, linhas })
+    }
+  }
   const arquivo = await gerarBackupEmpresaExcel(secoes)
   const token = await criarTokenBackupEmpresa(auth.session.userId, empresaId)
   const data = new Date().toISOString().slice(0, 10)

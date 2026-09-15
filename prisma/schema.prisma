@@ -273,9 +273,29 @@ model Empresa {
   solicitacoes_assinatura SolicitacaoAssinatura[]
   contas_pagar            ContaPagar[]
   conversas_suporte       ConversaSuporte[]
+  importacao_inicial      ImportacaoInicial?
 
   @@index([excluidoEm])
   @@map("empresas")
+}
+
+model ImportacaoInicial {
+  id             String   @id @default(uuid())
+  empresaId      String   @unique(map: "importacoes_iniciais_empresa_key")
+  empresa        Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade, map: "importacoes_iniciais_empresa_fkey")
+  status         String   @default("PENDENTE")
+  dados          String?
+  resumo         Json
+  checksum       String
+  enviadoPorId   String
+  revisadoPorId  String?
+  motivo         String?
+  criado_em      DateTime @default(now())
+  atualizado_em  DateTime @updatedAt
+  aprovado_em    DateTime?
+
+  @@index([status, criado_em], map: "importacoes_iniciais_status_data_idx")
+  @@map("importacoes_iniciais")
 }
 
 model Usuario {

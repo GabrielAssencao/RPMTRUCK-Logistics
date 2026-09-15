@@ -1,22 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { motion, useScroll, useTransform } from 'framer-motion'
+import { m as motion, useScroll, useTransform } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
-import { CORES_E_LOGOS, obterLogoPorTema } from '@/data/temasELogos'
+import { CORES_E_LOGOS } from '@/data/temasELogos'
+
+import { BrandLogo } from '@/components/brand/BrandLogo'
 
 export default function Navbar() {
-  const { isLight, setIsLight, primary, setPrimary, themeReady } = useTheme()
+  const { isLight, setIsLight, primary, setPrimary } = useTheme()
   const [mobileOpen, setMobile] = useState(false)
   const router = useRouter()
 
   const { scrollY } = useScroll()
   const navChromeOpacity = useTransform(scrollY, [0, 80], [0, 1])
 
-  const currentLogo = obterLogoPorTema(primary)
 
   return (
     <>
@@ -29,22 +29,7 @@ export default function Navbar() {
         <div className="relative flex w-full items-center justify-between px-6 py-4 md:px-20">
 
           {/* LOGO */}
-          <Link href="/" className="flex items-center gap-2 select-none">
-            <Image
-              src={`/logos/${currentLogo}`}
-              alt="RPM Truck Logo"
-              width={32}
-              height={32}
-              className={`h-8 w-8 object-contain transition-opacity duration-200 ${themeReady ? 'opacity-100' : 'opacity-0'}`}
-              priority
-            />
-            <span 
-              className="text-xl font-bold tracking-tight text-foreground hidden sm:block ml-2" 
-              style={{ fontFamily: 'Rajdhani, sans-serif' }}
-            >
-              RPM<span style={{ color: primary }}>TRUCK</span>
-            </span>
-          </Link>
+          <Link href="/" aria-label="RPMTruck, início" className="flex items-center select-none"><BrandLogo variant="wordmark" primary={primary} className="h-12 w-28 sm:w-36" /></Link>
 
           {/* SELETOR DE TEMAS & LOGIN */}
           <div className="flex items-center gap-3">

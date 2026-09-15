@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion'
 import { 
   Check, 
   Building2, 
@@ -20,6 +20,9 @@ import {
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import TurnstileWidget from '@/components/security/TurnstileWidget'
+import FractalBackdrop from '@/components/brand/FractalBackdrop'
+import { BrandLogo } from '@/components/brand/BrandLogo'
+import styles from './RequestAccess.module.css'
 import { usePlanosPublicos, type PlanoPublico } from '@/hooks/usePlanosPublicos'
 import { formatarTelefoneBR, somenteDigitosTelefoneBR, telefoneBRValido } from '@/utils/telefone'
 
@@ -45,6 +48,10 @@ type FormData = {
 }
 
 export default function SolicitarAcesso() {
+  return <MotionConfig reducedMotion="user"><RequestAccessForm /></MotionConfig>
+}
+
+function RequestAccessForm() {
   const { primary, isLight } = useTheme()
   const router = useRouter()
   const [selectedPlan, setSelectedPlan] = useState<string>('')
@@ -137,7 +144,8 @@ export default function SolicitarAcesso() {
   }
 
   return (
-    <div className="min-h-screen transition-colors duration-300 relative overflow-hidden font-mono" style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
+    <div className={`${styles.page} min-h-screen transition-colors duration-300 relative overflow-hidden font-mono`} style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
+      <div className={styles.background}><FractalBackdrop /></div>
       <div className="fixed inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: `linear-gradient(${primary}55 1px, transparent 1px), linear-gradient(90deg, ${primary}55 1px, transparent 1px)`, backgroundSize: '60px 60px' }} />
       <div className="fixed inset-0 pointer-events-none" style={{ background: `radial-gradient(ellipse 50% 30% at 50% 0%, ${primary}15 0%, transparent 70%)` }} />
 
@@ -151,9 +159,7 @@ export default function SolicitarAcesso() {
           <ArrowLeft size={16} /> Voltar
         </button>
 
-        <div className="font-bold text-lg font-rajdhani" style={{ color: 'var(--foreground)' }}>
-          RPM<span style={{ color: primary }}>TRUCK</span>
-        </div>
+        <div role="img" aria-label="RPMTruck"><BrandLogo variant="wordmark" primary={primary} className="h-12 w-28" /></div>
 
         {/* Rotear para a rota correta de Login */}
         <Link 
@@ -194,7 +200,7 @@ export default function SolicitarAcesso() {
                     {plan.featured && (
                       <span className="absolute -top-3 left-4 z-10 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 border font-mono" style={{ color: primary, borderColor: primary, backgroundColor: 'var(--card)' }}>Popular</span>
                     )}
-                    <button disabled={plan.restricted} onClick={() => !plan.restricted && handlePlanSelect(plan.id)} className="w-full relative p-4 text-left border transition-all duration-200 group flex flex-col" style={{ borderColor: selectedPlan === plan.id ? primary : 'var(--border)', backgroundColor: selectedPlan === plan.id ? `${primary}12` : 'var(--card)', opacity: plan.restricted ? 0.45 : 1, cursor: plan.restricted ? 'not-allowed' : 'pointer', clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}>
+                    <button aria-pressed={selectedPlan === plan.id} disabled={plan.restricted} onClick={() => !plan.restricted && handlePlanSelect(plan.id)} className="w-full relative p-4 text-left border transition-all duration-200 group flex flex-col" style={{ borderColor: selectedPlan === plan.id ? primary : 'var(--border)', backgroundColor: selectedPlan === plan.id ? `${primary}12` : 'var(--card)', opacity: plan.restricted ? 0.45 : 1, cursor: plan.restricted ? 'not-allowed' : 'pointer', clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}>
                       <div className="w-full flex items-start justify-between gap-2">
                         <div className="w-full">
                           <div className="font-bold text-sm mb-0.5 flex items-center gap-2 font-rajdhani" style={{ color: selectedPlan === plan.id ? primary : 'var(--foreground)' }}>
@@ -272,7 +278,7 @@ export default function SolicitarAcesso() {
             </FormSection>
 
             {(errorMessage || erroPlanos) && (
-              <div className="p-4 border text-xs font-bold uppercase tracking-wider bg-red-500/10 border-red-500/30 text-red-500 font-mono">
+              <div role="alert" className="p-4 border text-xs font-bold uppercase tracking-wider bg-red-500/10 border-red-500/30 text-red-500 font-mono">
                 ⚠ {errorMessage || erroPlanos}{' '}
                 {erroPlanos && <button type="button" onClick={() => void recarregar()} className="underline">Tentar novamente</button>}
               </div>
@@ -364,7 +370,7 @@ export default function SolicitarAcesso() {
 
 function FormSection({ label, primary, children }: { label: string; primary: string; children: React.ReactNode }) {
   return (
-    <div className="border p-6 transition-colors duration-300" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
+    <div className={`${styles.surface} border p-6 transition-colors duration-300`} style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
       <div className="text-xs uppercase tracking-[0.2em] font-bold mb-5 flex items-center gap-2 font-mono" style={{ color: primary }}>
         <span className="w-1 h-4" style={{ backgroundColor: primary }} /> {label}
       </div>
@@ -413,7 +419,7 @@ function SuccessScreen({ primary, form, planos, onVoltar }: { primary: string; i
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center text-center px-6 transition-colors duration-300 font-mono" style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
-      <div className="fixed inset-0 pointer-events-none" style={{ background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${primary}10 0%, transparent 70%)` }} />
+      <div className={styles.background}><FractalBackdrop /></div>
       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }} className="relative z-10 max-w-lg">
         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-8" style={{ backgroundColor: `${primary}20`, border: `2px solid ${primary}` }}>
           <Check size={36} style={{ color: primary }} />

@@ -103,7 +103,7 @@ function assertUnique(values, message) {
   if (new Set(present).size !== present.length) throw new Error(message)
 }
 
-function prepare(empresas, motoristas, contasPagar) {
+function prepare(empresas, motoristas, contasPagar, importacoes) {
   const preparedEmpresas = empresas.map((empresa) => {
     const cnpj = decrypt(empresa.cnpj, empresa.id, 'empresa.cnpj')
     const telefone = decrypt(empresa.telefone, empresa.id, 'empresa.telefone')
@@ -152,7 +152,8 @@ function prepare(empresas, motoristas, contasPagar) {
     assertUnique(tenant.map((motorista) => motorista.cpfHash), 'Existem CPFs duplicados em uma empresa após normalização.')
     assertUnique(tenant.map((motorista) => motorista.cnhHash), 'Existem CNHs duplicadas em uma empresa após normalização.')
   }
-  return { preparedEmpresas, preparedMotoristas, preparedContasPagar }
+  const preparedImportacoes = importacoes.map(item => ({ id: item.id, dados: encryptActive(item.dados, decrypt(item.dados, item.empresaId, 'importacaoInicial.dados'), item.empresaId, 'importacaoInicial.dados') }))
+  return { preparedEmpresas, preparedMotoristas, preparedContasPagar, preparedImportacoes }
 }
 
 async function readData(client) {
@@ -162,6 +163,7 @@ async function readData(client) {
       select: { id: true, empresaId: true, cpf: true, rg: true, cnh: true, cpfHash: true, cnhHash: true },
     }),
     client.contaPagar.findMany({ select: { id: true, empresaId: true, linha_digitavel: true } }),
+    client.importacaoInicial.findMany({ where: { status: 'PENDENTE' }, select: { id: true, empresaId: true, dados: true } }),
   ])
 }
 
@@ -176,7 +178,8 @@ function assertActiveVersion(value, message) {
   if (value && encryptedValueVersion(value) !== activeVersion) throw new Error(message)
 }
 
-function verifyRotated(empresas, motoristas, contasPagar) {
+function verifyRotated(empresas, motoristas, contasPagar, importacoes) {
+  for (const item of importacoes) { assertActiveVersion(item.dados, 'Pending import data was not rotated.'); decrypt(item.dados, item.empresaId, 'importacaoInicial.dados') }
   for (const empresa of empresas) {
     for (const [field, value] of [['empresa.cnpj', empresa.cnpj], ['empresa.telefone', empresa.telefone]]) {
       assertActiveVersion(value, `A verificação final encontrou dados empresariais fora da ${activeVersion}.`)
@@ -217,13 +220,14 @@ function verifyRotated(empresas, motoristas, contasPagar) {
 }
 
 try {
-  const [empresas, motoristas, contasPagar] = await readData(prisma)
+  const [empresas, motoristas, contasPagar, importacoes] = await readData(prisma)
   const versions = countVersions([
     ...empresas.flatMap((empresa) => [empresa.cnpj, empresa.telefone]),
     ...motoristas.flatMap((motorista) => [motorista.cpf, motorista.rg, motorista.cnh]),
     ...contasPagar.map((conta) => conta.linha_digitavel),
+    ...importacoes.map(item => item.dados),
   ])
-  prepare(empresas, motoristas, contasPagar)
+  prepare(empresas, motoristas, contasPagar, importacoes)
 
   process.stdout.write(
     `Rotação ${previousVersion} -> ${activeVersion} ${apply ? 'APLICAR' : 'SIMULAÇÃO'} em ${targetEnvironment}: `
@@ -268,6 +272,7 @@ try {
           data: { linha_digitavel: conta.linha_digitavel },
         })
       }
+      for (const item of current.preparedImportacoes) await tx.importacaoInicial.update({ where: { id: item.id }, data: { dados: item.dados } })
 
       const rotatedData = await readData(tx)
       verifyRotated(...rotatedData)

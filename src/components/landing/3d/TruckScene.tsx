@@ -941,9 +941,9 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
                 fontFamily: 'Rajdhani, sans-serif',
               }}
             >
-              POTÊNCIA<br />
-              <span style={{ color: primary }}>&amp; CONTROLE</span><br />
-              <span style={{ fontSize: 'clamp(28px, 4.5vw, 56px)' }}>NA SUA FROTA</span>
+              SUA FROTA.<br />
+              <span style={{ color: primary }}>SEU RITMO.</span><br />
+              <span style={{ fontSize: 'clamp(28px, 4.5vw, 56px)' }}>SEU CONTROLE.</span>
             </h1>
 
             <p
@@ -951,7 +951,7 @@ export default function TruckScene({ children }: { children?: React.ReactNode })
               className="text-base md:text-xl mb-10 max-w-md font-light text-foreground-muted"
               style={{ fontFamily: 'Outfit, sans-serif' }}
             >
-              Acelere a gestão da sua frota com nossa plataforma completa de alta performance.
+              RPMTruck: o pulso da frota e o ritmo da gestão. Conecte veículos, custos e equipe para decidir com clareza.
             </p>
 
             <div className="flex flex-wrap items-center gap-4">

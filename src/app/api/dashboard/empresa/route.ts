@@ -242,6 +242,7 @@ export async function GET(request: NextRequest) {
     })),
   ]
 
+  const importacaoInicial = gestor ? await prisma.importacaoInicial.findUnique({ where: { empresaId }, select: { status: true } }) : null
   return NextResponse.json({
     usuario: {
       nome: usuario.nome,
@@ -254,6 +255,7 @@ export async function GET(request: NextRequest) {
       plano: auth.empresa.plano,
       modulos: auth.empresa.modulos,
       delegacaoTarefas: tarefasHabilitadas,
+      importacaoInicialDisponivel: gestor && importacaoInicial?.status !== 'APROVADO',
     },
     metricas: {
       totalVeiculos,

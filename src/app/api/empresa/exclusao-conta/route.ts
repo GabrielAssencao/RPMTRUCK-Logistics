@@ -138,6 +138,7 @@ export async function POST(request: NextRequest) {
       if (!empresa[0]) throw new Error('EMPRESA_JA_EXCLUIDA')
 
       await tx.solicitacaoAssinatura.deleteMany({ where: { empresaId } })
+      await tx.importacaoInicial.deleteMany({ where: { empresaId } })
       await tx.notificacao.deleteMany({ where: { empresaId } })
       await tx.alertaLeitura.deleteMany({ where: { usuario: { empresaId } } })
       await tx.alertaSistema.deleteMany({ where: { destinatario: { empresaId } } })

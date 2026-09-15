@@ -37,14 +37,24 @@ function medirCanvas(canvas: HTMLCanvasElement): DimensoesCanvas {
   }
 }
 
-function valorDoRelevo(x: number, y: number, fase: number) {
-  const relevos = [
+interface Relevo {
+  x: number
+  y: number
+  sx: number
+  sy: number
+  altura: number
+}
+
+function criarRelevos(fase: number): Relevo[] {
+  return [
     { x: 0.16 + Math.sin(fase) * 0.055, y: 0.18 + Math.cos(fase) * 0.035, sx: 0.23, sy: 0.31, altura: 1.12 },
     { x: 0.79 + Math.cos(fase) * 0.06, y: 0.2 + Math.sin(fase * 2) * 0.025, sx: 0.3, sy: 0.28, altura: 0.98 },
     { x: 0.53 + Math.sin(fase + 1.8) * 0.07, y: 0.82 + Math.cos(fase) * 0.045, sx: 0.34, sy: 0.3, altura: 1.24 },
     { x: -0.08 + Math.cos(fase + 0.7) * 0.035, y: 0.67, sx: 0.25, sy: 0.37, altura: 0.82 },
   ]
+}
 
+function valorDoRelevo(x: number, y: number, relevos: readonly Relevo[], faseFluxo: number) {
   let valor = 0
   for (const relevo of relevos) {
     const dx = (x - relevo.x) / relevo.sx
@@ -52,7 +62,7 @@ function valorDoRelevo(x: number, y: number, fase: number) {
     valor += relevo.altura * Math.exp(-(dx * dx + dy * dy) * 1.15)
   }
 
-  const fluxo = Math.sin(x * 5.2 + y * 3.1 + Math.sin(fase) * 0.55) * 0.035
+  const fluxo = Math.sin(x * 5.2 + y * 3.1 + faseFluxo) * 0.035
   return valor + fluxo
 }
 
@@ -86,10 +96,13 @@ function desenharTopografia(canvas: HTMLCanvasElement, fase: number, dimensoes: 
   const colunas = limitar(Math.round(largura / 17), 48, 96)
   const linhas = limitar(Math.round(altura / 17), 32, 68)
   const valores = new Float32Array((colunas + 1) * (linhas + 1))
+  // Parameters depend on the frame, not on each of its thousands of grid points.
+  const relevos = criarRelevos(fase)
+  const faseFluxo = Math.sin(fase) * 0.55
 
   for (let linha = 0; linha <= linhas; linha += 1) {
     for (let coluna = 0; coluna <= colunas; coluna += 1) {
-      valores[linha * (colunas + 1) + coluna] = valorDoRelevo(coluna / colunas, linha / linhas, fase)
+      valores[linha * (colunas + 1) + coluna] = valorDoRelevo(coluna / colunas, linha / linhas, relevos, faseFluxo)
     }
   }
 

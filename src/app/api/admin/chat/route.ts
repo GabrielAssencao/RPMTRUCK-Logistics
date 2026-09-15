@@ -13,6 +13,13 @@ export async function GET(request: NextRequest) {
   const limited = await applyRateLimit(request, `admin-chat:${auth.session.userId}`, RATE_LIMITS.CHAT_READ.limit, RATE_LIMITS.CHAT_READ.windowMs)
   if (limited) return limited
 
+  if (request.nextUrl.searchParams.get('resumo') === 'true') {
+    const mensagensNaoLidas = await prisma.mensagemSuporte.count({
+      where: { lida_em: null, tipo: 'USUARIO', autor: { role: { not: 'ADMIN_RPM' } } },
+    })
+    return NextResponse.json({ resumo: { mensagensNaoLidas } }, { headers: { 'Cache-Control': 'private, no-store' } })
+  }
+
   const competenciaAtual = inicioCompetencia()
   const [tickets, ticketsAtivos, mensagensNaoLidas, extrasNoMes, bugsConfirmadosNoMes] = await Promise.all([
     prisma.conversaSuporte.findMany({

@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { useTheme } from '@/contexts/ThemeContext'
 
+import { BrandLogo } from '@/components/brand/BrandLogo'
+
 export default function Footer() {
   const { primary } = useTheme()
 
@@ -15,15 +17,7 @@ export default function Footer() {
 
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div
-            className="text-xl font-bold text-foreground select-none"
-            style={{ fontFamily: 'Rajdhani, sans-serif' }}
-          >
-            RPM<span style={{ color: primary }}>TRUCK</span>
-            <span className="text-foreground-muted text-xs ml-1 font-normal tracking-widest">
-              LOGISTICS
-            </span>
-          </div>
+          <Link href="/" aria-label="RPMTruck, início"><BrandLogo variant="wordmark" primary={primary} className="h-14 w-36" /></Link>
 
           <div
             className="flex flex-wrap items-center justify-center gap-6 text-xs text-foreground-muted uppercase tracking-widest"

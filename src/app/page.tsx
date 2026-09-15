@@ -12,10 +12,11 @@ import CTA       from '@/components/landing/CTA'
 import Footer    from '@/components/landing/Footer'
 import CookieNotice from '@/components/legal/CookieNotice'
 import { LandingStatsProvider } from '@/contexts/LandingStatsContext'
+import LandingMotion from '@/components/landing/LandingMotion'
 
 export default function LandingPage() {
   return (
-    <>
+    <LandingMotion>
       
       <Navbar />
 
@@ -31,6 +32,6 @@ export default function LandingPage() {
         </LandingStatsProvider>
       </Hero>
       <CookieNotice />
-    </>
+    </LandingMotion>
   )
 }

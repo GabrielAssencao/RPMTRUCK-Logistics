@@ -1,16 +1,16 @@
 'use client'
 
 import { useMemo, useRef } from 'react'
-import { motion, useInView } from 'framer-motion'
+import { m as motion, useInView } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useLandingStats } from '@/contexts/LandingStatsContext'
 
 const STATIC_FEATURES = [
-  '⚡ GESTÃO DE FROTA',
-  '◆ CONTROLE DE MOTORISTAS',
-  '◆ RELATÓRIOS AVANÇADOS',
-  '◆ CUSTOS SEMANAIS',
-  '◆ DASHBOARD EM TEMPO REAL',
+  '⚡ RPMTRUCK: O PULSO DA FROTA',
+  '◆ AGILIDADE NA GESTÃO',
+  '◆ EQUIPE NO MESMO RITMO',
+  '◆ CLAREZA NOS CUSTOS',
+  '◆ CUIDADO EM CADA MANUTENÇÃO',
 ]
 
 export default function Ticker() {

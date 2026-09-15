@@ -1,6 +1,6 @@
 'use client'
 
-import { motion, useInView } from 'framer-motion'
+import { m as motion, useInView } from 'framer-motion'
 import { useRef } from 'react'
 import Link from 'next/link'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -38,7 +38,7 @@ export default function CTA() {
           className="text-xs tracking-[0.3em] uppercase mb-6 font-bold"
           style={{ fontFamily: 'JetBrains Mono, monospace', color: primary }}
         >
-          Pronto para começar?
+          O próximo passo começa com você
         </motion.div>
 
         <motion.h2
@@ -48,8 +48,8 @@ export default function CTA() {
           className="text-5xl md:text-7xl font-bold leading-none mb-6 text-foreground"
           style={{ fontFamily: 'Rajdhani, sans-serif' }}
         >
-          PRONTO PARA<br />
-          <span style={{ color: primary }}>ACELERAR SUA GESTÃO?</span>
+          DÊ RITMO À GESTÃO.<br />
+          <span style={{ color: primary }}>DÊ FÔLEGO À FROTA.</span>
         </motion.h2>
 
         <motion.p
@@ -59,7 +59,7 @@ export default function CTA() {
           className="text-foreground-muted text-base md:text-lg mb-10 max-w-xl mx-auto"
           style={{ fontFamily: 'Outfit, sans-serif' }}
         >
-          Solicite agora o acesso e transforme como você gerencia sua frota.
+          Menos informações espalhadas. Mais clareza para agir. Solicite seu acesso à RPMTruck e reúna sua operação em um só lugar.
         </motion.p>
 
         <motion.div

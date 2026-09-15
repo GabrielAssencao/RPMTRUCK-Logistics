@@ -4,10 +4,8 @@ import { decryptSensitive } from '@/lib/fieldEncryption'
 import { prisma } from '@/lib/prisma'
 import { CAPACIDADES_CONTAS_PAGAR } from '@/lib/financeiro/contasPagar'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
-
-function csv(valor: unknown) {
-  return `"${String(valor ?? '').replaceAll('"', '""')}"`
-}
+import { gerarBackupEmpresaExcel } from '@/lib/empresaBackupExcel'
+import { EXCEL_MIME } from '@/lib/excelFormatting'
 
 export async function GET(request: NextRequest) {
   const auth = await requireEmpresaAuth(request, { modulo: 'CONTAS_PAGAR', acao: 'GESTAO' })
@@ -16,14 +14,12 @@ export async function GET(request: NextRequest) {
   const limited = await applyRateLimit(request, `contas-pagar-export:${auth.session.userId}`, RATE_LIMITS.REPORT_GENERATE.limit, RATE_LIMITS.REPORT_GENERATE.windowMs)
   if (limited) return limited
   const contas = await prisma.contaPagar.findMany({ where: { empresaId: auth.empresaId! }, orderBy: { vencimento: 'asc' }, take: 5_000 })
-  const linhas = [
-    ['Descrição', 'Fornecedor', 'Vencimento', 'Valor', 'Status', 'Linha digitável', 'Pago em'].map(csv).join(';'),
-    ...contas.map((conta) => [
-      conta.descricao, conta.fornecedor, conta.vencimento.toISOString().slice(0, 10), Number(conta.valor).toFixed(2), conta.status,
-      decryptSensitive(conta.linha_digitavel, auth.empresaId!, 'contaPagar.linhaDigitavel') ?? '', conta.pago_em?.toISOString() ?? '',
-    ].map(csv).join(';')),
-  ]
-  return new NextResponse(`\uFEFF${linhas.join('\r\n')}`, {
-    headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="contas-a-pagar.csv"', 'Cache-Control': 'private, no-store' },
+  const arquivo = await gerarBackupEmpresaExcel([{ nome: 'Contas a pagar', linhas: contas.map(conta => ({
+    descricao: conta.descricao, fornecedor: conta.fornecedor, vencimento: conta.vencimento,
+    valor: Number(conta.valor), status: conta.status,
+    linha_digitavel: decryptSensitive(conta.linha_digitavel, auth.empresaId!, 'contaPagar.linhaDigitavel') ?? '', pago_em: conta.pago_em,
+  })) }])
+  return new NextResponse(new Uint8Array(arquivo), {
+    headers: { 'Content-Type': EXCEL_MIME, 'Content-Disposition': 'attachment; filename="contas-a-pagar.xlsx"', 'Cache-Control': 'private, no-store' },
   })
 }

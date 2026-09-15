@@ -23,6 +23,7 @@ import {
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
 import SidebarBrandMark, { SidebarBrandIdentity } from '@/components/dashboard/SidebarBrandMark'
+import SidebarAccountCard from '@/components/dashboard/SidebarAccountCard'
 import DashboardEnvironmentBackground from '@/components/dashboard/DashboardEnvironmentBackground'
 import { useSessionActivity } from '@/hooks/useSessionActivity'
 import { DashboardMotion } from '@/components/motion/DashboardMotion'
@@ -75,9 +76,20 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
   const { primary, isLight } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarExpandida, setSidebarExpandida] = useState(false)
+  const [accountName, setAccountName] = useState('Administrador')
   const [pendenciasPorModulo, setPendenciasPorModulo] = useState<Record<string, number>>({})
   const [ticketsNaoLidos, setTicketsNaoLidos] = useState(0)
   const [estiloFundo, setEstiloFundo] = useState<EstiloFundoEmpresa>('DESLIGADO')
+
+  useEffect(() => {
+    const initial = window.setTimeout(() => {
+      try {
+        const account: unknown = JSON.parse(localStorage.getItem('@rpmtruck:user') || 'null')
+        if (account && typeof account === 'object' && 'nome' in account && typeof account.nome === 'string' && account.nome.trim()) setAccountName(account.nome)
+      } catch { /* A identificação local é apenas apresentação. */ }
+    }, 0)
+    return () => window.clearTimeout(initial)
+  }, [])
 
   useEffect(() => {
     const sincronizar = (event?: Event) => {
@@ -94,7 +106,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
 
   const atualizarResumoSuporte = useCallback(async () => {
     try {
-      const response = await fetch('/api/admin/chat', { cache: 'no-store' })
+      const response = await fetch('/api/admin/chat?resumo=true', { cache: 'no-store' })
       if (!response.ok) return
       const body = await response.json()
       const tickets = Array.isArray(body.tickets) ? body.tickets : []
@@ -131,13 +143,12 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
   const renderSidebarContent = (expandida: boolean) => {
     const totalNotificacoes = Object.values(pendenciasPorModulo).reduce((total, quantidade) => total + quantidade, 0)
     return (
-      <div className="flex flex-col h-full justify-between p-4 font-mono">
+      <div className={`flex flex-col h-full justify-between p-4 font-mono ${expandida ? '' : 'pt-0'}`}>
         <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1 custom-scrollbar">
-          <div className="-mx-4 -mt-4 mb-6 flex h-16 items-center justify-start border-b border-white/10 px-4">
+          <div className={`-mx-4 mb-3 flex shrink-0 items-center justify-start border-b border-border px-4 ${expandida ? 'h-20' : 'h-16'}`}>
             {expandida ? (
               <SidebarBrandIdentity
                 primary={primary}
-                subtitle="ADMIN MASTER"
               />
             ) : (
               <SidebarBrandMark primary={primary} />
@@ -191,42 +202,10 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
           </nav>
         </div>
 
-        <div className="shrink-0 space-y-1 pt-4 border-t border-white/10">
-          <button
-            onClick={() => changeTab(NOTIFICATIONS_ITEM.id)}
-            title={!expandida ? NOTIFICATIONS_ITEM.label : undefined}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${activeTab === NOTIFICATIONS_ITEM.id ? 'text-black font-black' : 'text-foreground-muted hover:text-foreground hover:bg-white/5'}`}
-            style={{
-              backgroundColor: activeTab === NOTIFICATIONS_ITEM.id ? primary : 'transparent',
-              clipPath: activeTab === NOTIFICATIONS_ITEM.id ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
-            }}
-          >
-            <span className="relative shrink-0">
-              <Bell size={18} />
-              {totalNotificacoes > 0 && !expandida && <span className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full border border-black" style={{ backgroundColor: primary }} />}
-            </span>
-            {expandida && <span className="flex-1 truncate text-left">{NOTIFICATIONS_ITEM.label}</span>}
-            {expandida && totalNotificacoes > 0 && <span className="min-w-5 rounded-full px-1.5 py-0.5 text-center text-[9px] font-black text-black" style={{ backgroundColor: primary }}>{totalNotificacoes > 99 ? '99+' : totalNotificacoes}</span>}
-          </button>
-
-          <button
-            onClick={() => changeTab(CONFIG_ITEM.id)}
-            title={!expandida ? CONFIG_ITEM.label : undefined}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${
-              activeTab === CONFIG_ITEM.id
-                ? 'text-black font-black'
-                : 'text-foreground-muted hover:text-foreground hover:bg-white/5'
-            }`}
-            style={{
-              backgroundColor: activeTab === CONFIG_ITEM.id ? primary : 'transparent',
-              clipPath: activeTab === CONFIG_ITEM.id ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
-            }}
-          >
-            <Settings size={18} className={`shrink-0 ${activeTab === CONFIG_ITEM.id ? 'text-black' : 'text-foreground-muted'}`} />
-            {expandida && <span className="flex-1 text-left truncate">{CONFIG_ITEM.label}</span>}
-          </button>
-
-          <button 
+        <div className="shrink-0 space-y-1 pt-4 border-t border-border">
+          <SidebarAccountCard name={accountName} company="RPMTruck" expanded={expandida}
+            logout={(
+              <button
             onClick={handleLogout}
             title={!expandida ? 'SAIR DO TERMINAL' : undefined}
             className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10 transition-all rounded-sm font-mono"
@@ -234,6 +213,44 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
             <LogOut size={18} className="shrink-0" />
             {expandida && <span>SAIR DO TERMINAL</span>}
           </button>
+            )}
+          >
+            <button
+              onClick={() => changeTab(NOTIFICATIONS_ITEM.id)}
+              title={!expandida ? NOTIFICATIONS_ITEM.label : undefined}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${activeTab === NOTIFICATIONS_ITEM.id ? 'text-black font-black' : 'text-foreground-muted hover:text-foreground hover:bg-white/5'}`}
+              style={{
+                backgroundColor: activeTab === NOTIFICATIONS_ITEM.id ? primary : 'transparent',
+                clipPath: activeTab === NOTIFICATIONS_ITEM.id ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
+              }}
+            >
+              <span className="relative shrink-0">
+                <Bell size={18} />
+                {totalNotificacoes > 0 && !expandida && <span className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full border border-black" style={{ backgroundColor: primary }} />}
+              </span>
+              {expandida && <span className="flex-1 truncate text-left">{NOTIFICATIONS_ITEM.label}</span>}
+              {expandida && totalNotificacoes > 0 && <span className="min-w-5 rounded-full px-1.5 py-0.5 text-center text-[9px] font-black text-black" style={{ backgroundColor: primary }}>{totalNotificacoes > 99 ? '99+' : totalNotificacoes}</span>}
+            </button>
+
+            <button
+              onClick={() => changeTab(CONFIG_ITEM.id)}
+              title={!expandida ? CONFIG_ITEM.label : undefined}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all rounded-sm ${
+                activeTab === CONFIG_ITEM.id
+                  ? 'text-black font-black'
+                  : 'text-foreground-muted hover:text-foreground hover:bg-white/5'
+              }`}
+              style={{
+                backgroundColor: activeTab === CONFIG_ITEM.id ? primary : 'transparent',
+                clipPath: activeTab === CONFIG_ITEM.id ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' : 'none'
+              }}
+            >
+              <Settings size={18} className={`shrink-0 ${activeTab === CONFIG_ITEM.id ? 'text-black' : 'text-foreground-muted'}`} />
+              {expandida && <span className="flex-1 text-left truncate">{CONFIG_ITEM.label}</span>}
+            </button>
+
+
+          </SidebarAccountCard>
         </div>
       </div>
     )

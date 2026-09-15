@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createHash } from 'node:crypto'
 import ExcelJS from 'exceljs'
+import { ajustarAlturaExcel, preservarTextosExtensosExcel } from '@/lib/excelFormatting'
 
 interface EmpresaRelatorio {
   nome: string
@@ -150,7 +151,8 @@ function estilizarLinhas(planilha: ExcelJS.Worksheet) {
         celula.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CORES.cinzaClaro } }
       }
     })
-    linha.height = Math.min(60, Math.max(20, linhasNecessarias * 15))
+    linha.height = Math.min(409, Math.max(24, linhasNecessarias * 16 + 8))
+    ajustarAlturaExcel(linha, planilha)
   })
 }
 
@@ -218,7 +220,7 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
     ;[2, 5].forEach((coluna) => {
       resumo.getCell(linha, coluna).alignment = { vertical: 'middle', wrapText: true }
     })
-    resumo.getRow(linha).height = 28
+    ajustarAlturaExcel(resumo.getRow(linha), resumo, 28)
   }
 
   adicionarLinhaIdentificacao(4, 'Empresa', dados.empresa.nome, 'CNPJ', dados.empresa.cnpj || 'Não informado')
@@ -247,7 +249,7 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
         celula.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CORES.cinzaClaro } }
       }
     })
-    resumo.getRow(linha).height = 30
+    ajustarAlturaExcel(resumo.getRow(linha), resumo, 30)
   })
   ;['F10', 'B11', 'D11', 'F11'].forEach((endereco) => { resumo.getCell(endereco).numFmt = moeda })
 
@@ -415,6 +417,7 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
     ['Versão do formato', 'RPMTruck Operacional 2.0'],
   ].forEach((linha) => auditoria.addRow(linha))
   auditoria.getColumn(2).alignment = { wrapText: true, vertical: 'top' }
+  auditoria.eachRow((row) => ajustarAlturaExcel(row, auditoria))
 
   const dicionario = workbook.addWorksheet('Dicionário')
   prepararTabela(dicionario, [
@@ -436,6 +439,7 @@ export async function gerarRelatorioOperacionalExcel(dados: DadosRelatorioOperac
   ].forEach(([aba, campo, descricao]) => dicionario.addRow({ aba, campo, descricao }))
   estilizarLinhas(dicionario)
 
+  preservarTextosExtensosExcel(workbook)
   const buffer = await workbook.xlsx.writeBuffer()
   return {
     conteudo: Buffer.from(buffer),

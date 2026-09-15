@@ -21,6 +21,20 @@ function periodoCusto(data: Date) {
   }
 }
 
+export function dadosCustoComissaoContainer(container: ContainerComComissao) {
+  const ativa = container.comissao_ativa && container.comissao > 0 && container.status !== 'CANCELADO'
+  if (!ativa) return null
+  return {
+    data: container.data, ...periodoCusto(container.data),
+    categoria: 'COMISSAO_TRANSPORTE' as const,
+    descricao: `Comissão sobre frete — Container ${container.codigo}`,
+    valor: container.comissao, formaPagamento: 'COMISSÃO AUTOMÁTICA',
+    status: container.status === 'ENTREGUE' ? 'PAGO' as const : 'PENDENTE' as const,
+    veiculoId: container.veiculoId, motoristaId: container.motoristaId,
+    empresaId: container.empresaId,
+  }
+}
+
 export async function sincronizarCustoComissaoContainer(
   tx: Prisma.TransactionClient,
   container: ContainerComComissao,
@@ -40,26 +54,11 @@ export async function sincronizarCustoComissaoContainer(
     custoAtual = { ...custoAtual, relatorioArquivoId: null }
   }
 
-  const deveGerarCusto = container.comissao_ativa
-    && container.comissao > 0
-    && container.status !== 'CANCELADO'
+  const dados = dadosCustoComissaoContainer(container)
 
-  if (!deveGerarCusto) {
+  if (!dados) {
     if (custoAtual) await tx.custo.delete({ where: { id: custoAtual.id } })
     return null
-  }
-
-  const dados = {
-    data: container.data,
-    ...periodoCusto(container.data),
-    categoria: 'COMISSAO_TRANSPORTE' as const,
-    descricao: `Comissão sobre frete — Container ${container.codigo}`,
-    valor: container.comissao,
-    formaPagamento: 'COMISSÃO AUTOMÁTICA',
-    status: container.status === 'ENTREGUE' ? 'PAGO' as const : 'PENDENTE' as const,
-    veiculoId: container.veiculoId,
-    motoristaId: container.motoristaId,
-    empresaId: container.empresaId,
   }
 
   if (custoAtual) {

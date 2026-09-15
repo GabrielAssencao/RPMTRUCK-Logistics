@@ -74,7 +74,7 @@ export default function CompaniesModule() {
                 <tbody>
                   {empresasFiltradas.map((empresa) => (
                     <tr key={empresa.id} className="border-b last:border-0 hover:bg-black/5 text-sm font-bold" style={{ borderColor: 'var(--border)' }}>
-                      <td className="px-5 py-4 font-black uppercase tracking-wide">{empresa.nome}</td>
+                      <td className="px-5 py-4 font-black uppercase tracking-wide">{empresa.nome}{empresa.importacao_inicial?.status === 'PENDENTE' && <span className="mt-1 block text-[10px] text-primary">Importação aguardando revisão</span>}</td>
                       <td className="px-5 py-4"><span className="text-[10px] font-mono px-2 py-0.5 border" style={{ color: primary, borderColor: `${primary}30` }}>{empresa.plano}</span></td>
                       
                       {/* COLUNA MENSALIDADE CORRIGIDA */}
