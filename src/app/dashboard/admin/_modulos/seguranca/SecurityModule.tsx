@@ -5,10 +5,12 @@ import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { Activity, Eye, EyeOff, RefreshCw, ShieldAlert, UserCheck } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { lerSecoesLogsAdmin, salvarSecoesLogsAdmin, type SecaoLogAdmin } from '@/lib/adminSidebarPreferences'
+import { formatarDuracaoSessao, sessaoEstaOnline } from '@/lib/sessionPresence'
 
 type SecurityData = {
   paginacao: Record<SecaoLogAdmin, { pagina: number; temProxima: boolean }>
-  resumo: { sessoesAtivas: number; falhasLogin24h: number; bloqueiosRateLimit24h: number }
+  resumo: { sessoesAtivas: number; loginsSucesso24h: number; falhasLogin24h: number; bloqueiosRateLimit24h: number }
+  presenca: { verificadoEm: string; onlineWindowMs: number }
   empresas: Array<{ id: string; nome: string }>
   sessoes: Array<{
     id: string
@@ -73,6 +75,7 @@ export default function SecurityModule() {
   const [paginas, setPaginas] = useState(paginasIniciais)
   const requisicao = useRef<AbortController | null>(null)
   const [secoesVisiveis, setSecoesVisiveis] = useState<Record<SecaoLogAdmin, boolean>>({ SESSOES: true, EVENTOS: true, AUDITORIA: true, EXCLUSOES: true })
+  const [agora, setAgora] = useState(() => Date.now())
 
   useEffect(() => {
     const initial = window.setTimeout(() => setSecoesVisiveis(lerSecoesLogsAdmin()), 0)
@@ -83,15 +86,20 @@ export default function SecurityModule() {
     setSecoesVisiveis((atuais) => salvarSecoesLogsAdmin({ ...atuais, [secao]: !atuais[secao] }))
   }
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silencioso = false) => {
     requisicao.current?.abort()
     const controller = new AbortController()
     requisicao.current = controller
-    setLoading(true)
-    setError('')
+    if (!silencioso) {
+      setLoading(true)
+      setError('')
+    }
     try {
       const resultado = await fetchSecurityData(empresaFiltro, paginas, controller.signal)
-      if (!controller.signal.aborted) setData(resultado)
+      if (!controller.signal.aborted) {
+        setData(resultado)
+        setError('')
+      }
     } catch (cause) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Falha ao carregar os registros de segurança.')
     } finally {
@@ -100,21 +108,25 @@ export default function SecurityModule() {
   }, [empresaFiltro, paginas])
 
   useEffect(() => {
-    requisicao.current?.abort()
-    const controller = new AbortController()
-    requisicao.current = controller
-    void fetchSecurityData(empresaFiltro, paginas, controller.signal)
-      .then(resultado => { if (!controller.signal.aborted) setData(resultado) })
-      .catch((cause: unknown) => {
-        if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : 'Falha ao carregar os registros de segurança.')
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
+    const relogio = window.setInterval(() => setAgora(Date.now()), 1000)
+    const atualizar = () => {
+      if (document.visibilityState === 'visible') void load(true)
+    }
+    const atualizacao = window.setInterval(atualizar, 60_000)
+    window.addEventListener('focus', atualizar)
+    document.addEventListener('visibilitychange', atualizar)
+    return () => {
+      window.clearInterval(relogio)
+      window.clearInterval(atualizacao)
+      window.removeEventListener('focus', atualizar)
+      document.removeEventListener('visibilitychange', atualizar)
+    }
+  }, [load])
+
+  useEffect(() => {
+    queueMicrotask(() => void load())
     return () => requisicao.current?.abort()
-  }, [empresaFiltro, paginas])
+  }, [load])
 
   const navegacao = (secao: SecaoLogAdmin) => ({
     pagina: paginas[secao],
@@ -158,16 +170,19 @@ export default function SecurityModule() {
 
       {error && <div className="border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-500">{error}</div>}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Metric icon={UserCheck} label="Sessões ativas" value={data?.resumo.sessoesAtivas ?? '—'} color={primary} />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric icon={UserCheck} label="Conectados agora" value={data?.resumo.sessoesAtivas ?? '—'} color={primary} />
+        <Metric icon={Activity} label="Entradas confirmadas / 24h" value={data?.resumo.loginsSucesso24h ?? '—'} color="var(--status-success)" />
         <Metric icon={ShieldAlert} label="Falhas de login / 24h" value={data?.resumo.falhasLogin24h ?? '—'} color="#ef4444" />
         <Metric icon={Activity} label="Bloqueios / 24h" value={data?.resumo.bloqueiosRateLimit24h ?? '—'} color="#f59e0b" />
       </div>
 
-      <LogTable title="Acessando agora" pagination={navegacao('SESSOES')} visible={secoesVisiveis.SESSOES} onToggle={() => alternarSecao('SESSOES')} empty="Nenhuma sessão ativa no intervalo." columns={['Usuário', 'Empresa', 'Papel', 'Última atividade']} rows={(data?.sessoes || []).map((item) => [
+      <LogTable title="Acessando agora" pagination={navegacao('SESSOES')} visible={secoesVisiveis.SESSOES} onToggle={() => alternarSecao('SESSOES')} empty="Nenhum usuário com presença confirmada agora." columns={['Usuário', 'Empresa', 'Papel', 'Estado', 'Tempo conectado', 'Última atividade']} rows={(data?.sessoes || []).map((item) => [
         `${item.usuario.nome} · ${item.usuario.email}`,
         item.empresa?.nome || 'RPMTruck',
         item.usuario.role,
+        sessaoEstaOnline(item.ultimaAtividade, agora) ? '● Conectado agora' : 'Sem atividade recente',
+        formatarDuracaoSessao(agora - new Date(item.criadoEm).getTime()),
         formatDate(item.ultimaAtividade),
       ])} />
 

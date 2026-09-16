@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit'
 import { recordSecurityEvent } from '@/lib/securityEvents'
+import { sessaoEstaOnline, SESSION_ONLINE_WINDOW_MS } from '@/lib/sessionPresence'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,27 +20,38 @@ export async function GET(request: NextRequest) {
   if (limited) return limited
 
   const agora = new Date()
-  const sessions = await prisma.sessaoUsuario.findMany({
-    where: {
-      usuarioId: auth.session.userId,
-      revogadaEm: null,
-      expiraEm: { gt: agora },
-    },
-    orderBy: { ultimaAtividade: 'desc' },
-    take: 10,
-    select: {
-      id: true,
-      userAgent: true,
-      criadoEm: true,
-      ultimaAtividade: true,
-      expiraEm: true,
-    },
-  })
+  const select = {
+    id: true,
+    userAgent: true,
+    criadoEm: true,
+    ultimaAtividade: true,
+    expiraEm: true,
+  } as const
+  const filtroBase = {
+    usuarioId: auth.session.userId,
+    revogadaEm: null,
+    expiraEm: { gt: agora },
+  } as const
+  const [sessaoAtual, outrasSessoes] = await Promise.all([
+    prisma.sessaoUsuario.findFirst({
+      where: { ...filtroBase, id: auth.session.sessionId },
+      select,
+    }),
+    prisma.sessaoUsuario.findMany({
+      where: { ...filtroBase, id: { not: auth.session.sessionId } },
+      orderBy: { ultimaAtividade: 'desc' },
+      take: 24,
+      select,
+    }),
+  ])
+  const sessions = [sessaoAtual, ...outrasSessoes].filter((session): session is NonNullable<typeof session> => Boolean(session))
 
   return NextResponse.json({
+    onlineWindowMs: SESSION_ONLINE_WINDOW_MS,
     sessions: sessions.map((session) => ({
       ...session,
       atual: session.id === auth.session?.sessionId,
+      conectadaAgora: sessaoEstaOnline(session.ultimaAtividade, agora.getTime()),
     })),
   }, { headers: { 'Cache-Control': 'private, no-store' } })
 }

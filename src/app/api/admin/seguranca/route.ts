@@ -3,6 +3,7 @@ import { requireAdminAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { z } from 'zod'
+import { SESSION_ONLINE_WINDOW_MS } from '@/lib/sessionPresence'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,10 +50,10 @@ export async function GET(request: NextRequest) {
       : {}
 
   const agora = new Date()
-  const ativoDesde = new Date(agora.getTime() - 5 * 60 * 1000)
+  const ativoDesde = new Date(agora.getTime() - SESSION_ONLINE_WINDOW_MS)
   const ultimas24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000)
 
-  const [sessoes, eventos, auditoria, exclusoes, falhasLogin, bloqueiosRateLimit, sessoesAtivas, empresas] = await Promise.all([
+  const [sessoes, eventos, auditoria, exclusoes, falhasLogin, loginsSucesso, bloqueiosRateLimit, sessoesAtivas, empresas] = await Promise.all([
     prisma.sessaoUsuario.findMany({
       where: { ...porEmpresa, revogadaEm: null, expiraEm: { gt: agora }, ultimaAtividade: { gte: ativoDesde } },
       orderBy: [{ ultimaAtividade: 'desc' }, { id: 'desc' }],
@@ -115,6 +116,7 @@ export async function GET(request: NextRequest) {
           },
         }),
     prisma.eventoSeguranca.count({ where: { ...porEmpresa, tipo: 'LOGIN_FALHA', criadoEm: { gte: ultimas24h } } }),
+    prisma.eventoSeguranca.count({ where: { ...porEmpresa, tipo: 'LOGIN_SUCESSO', criadoEm: { gte: ultimas24h } } }),
     prisma.eventoSeguranca.count({ where: { ...porEmpresa, tipo: 'RATE_LIMIT', criadoEm: { gte: ultimas24h } } }),
     prisma.sessaoUsuario.count({ where: { ...porEmpresa, revogadaEm: null, expiraEm: { gt: agora }, ultimaAtividade: { gte: ativoDesde } } }),
     prisma.empresa.findMany({ orderBy: { nome: 'asc' }, select: { id: true, nome: true, excluidoEm: true } }),
@@ -143,7 +145,8 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(
     {
-      resumo: { sessoesAtivas, falhasLogin24h: falhasLogin, bloqueiosRateLimit24h: bloqueiosRateLimit },
+      resumo: { sessoesAtivas, loginsSucesso24h: loginsSucesso, falhasLogin24h: falhasLogin, bloqueiosRateLimit24h: bloqueiosRateLimit },
+      presenca: { verificadoEm: agora, onlineWindowMs: SESSION_ONLINE_WINDOW_MS },
       empresas: empresas.map(identificarEmpresa),
       paginacao: {
         SESSOES: { pagina: paginas.data.SESSOES, temProxima: sessoes.length > tamanhoPagina },

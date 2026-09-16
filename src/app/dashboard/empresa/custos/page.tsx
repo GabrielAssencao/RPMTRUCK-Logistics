@@ -9,7 +9,7 @@ import { obterAnoMesSemana, MESES } from '@/lib/dataUtils'
 import { PLANOS_CONFIG, type PlanoTipo } from '@/utils/planos'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { DominoLoader } from '@/components/motion/OperationalFeedback'
-import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
+import { DASHBOARD_EMPRESA_ATUALIZADA_EVENT, sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 import { 
   DollarSign, 
   Search, 
@@ -117,6 +117,7 @@ export default function CustosPage() {
 
   const [custos, setCustos] = useState<RegistroCusto[]>([])
   const [carregandoCustos, setCarregandoCustos] = useState(true)
+  const [versaoDados, setVersaoDados] = useState(0)
 
   useEffect(() => {
     queueMicrotask(() => setMontado(true))
@@ -124,6 +125,21 @@ export default function CustosPage() {
       const perfilData = await perfilResponse.json()
       if (perfilResponse.ok && perfilData.empresa?.plano in PLANOS_CONFIG) setPlanoEmpresa(perfilData.empresa.plano)
     }).catch(error => setErroFormulario(error instanceof Error ? error.message : 'Falha ao carregar o perfil.'))
+  }, [])
+
+  useEffect(() => {
+    const atualizar = () => setVersaoDados((versao) => versao + 1)
+    const atualizarQuandoVisivel = () => {
+      if (document.visibilityState === 'visible') atualizar()
+    }
+    window.addEventListener(DASHBOARD_EMPRESA_ATUALIZADA_EVENT, atualizar)
+    window.addEventListener('focus', atualizar)
+    document.addEventListener('visibilitychange', atualizarQuandoVisivel)
+    return () => {
+      window.removeEventListener(DASHBOARD_EMPRESA_ATUALIZADA_EVENT, atualizar)
+      window.removeEventListener('focus', atualizar)
+      document.removeEventListener('visibilitychange', atualizarQuandoVisivel)
+    }
   }, [])
 
   useEffect(() => {
@@ -144,7 +160,7 @@ export default function CustosPage() {
         if (!controller.signal.aborted) setCarregandoCustos(false)
       })
     return () => controller.abort()
-  }, [anoSelecionado])
+  }, [anoSelecionado, versaoDados])
 
   if (!montado || carregandoDuplas || carregandoCustos) return <DominoLoader label="Carregando custos e despesas" />
 

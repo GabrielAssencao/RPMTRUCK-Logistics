@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-
-const HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000
+import { SESSION_HEARTBEAT_INTERVAL_MS } from '@/lib/sessionPresence'
 
 /**
  * Mantém a presença operacional atualizada apenas enquanto a aba está visível.
@@ -28,7 +27,7 @@ export function useSessionActivity() {
     }
 
     registrar()
-    const intervalId = window.setInterval(registrar, HEARTBEAT_INTERVAL_MS)
+    const intervalId = window.setInterval(registrar, SESSION_HEARTBEAT_INTERVAL_MS)
     document.addEventListener('visibilitychange', aoMudarVisibilidade)
     window.addEventListener('focus', registrar)
     window.addEventListener('online', registrar)
