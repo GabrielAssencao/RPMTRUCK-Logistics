@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
+import { DASHBOARD_EMPRESA_ATUALIZADA_EVENT, sinalizarAtualizacaoDashboardEmpresa } from '@/lib/dashboardEvents'
 
 export type StatusContainer = 'AGENDADO' | 'EM_TRANSITO' | 'ENTREGUE' | 'CANCELADO'
 export type TipoContainer = '20 PÉS' | '40 PÉS' | '40 HC' | 'REEFER' | 'TANQUE' | 'OUTRO'
@@ -57,21 +57,42 @@ export function ContainersProvider({ children }: { children: ReactNode }) {
   const [erro, setErro] = useState('')
 
   useEffect(() => {
-    const controller = new AbortController()
-    fetch('/api/containers', { cache: 'no-store', signal: controller.signal })
-      .then(async response => {
-        const data = await response.json()
-        if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar containers.')
-        setContainers(data.containers)
-        setDuplas(data.duplas)
-      })
-      .catch(cause => {
-        if (cause instanceof Error && cause.name !== 'AbortError') setErro(cause.message)
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
-    return () => controller.abort()
+    let controller: AbortController | null = null
+
+    const carregar = () => {
+      controller?.abort()
+      controller = new AbortController()
+      const signal = controller.signal
+      void fetch('/api/containers', { cache: 'no-store', signal })
+        .then(async response => {
+          const data = await response.json()
+          if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar containers.')
+          if (signal.aborted) return
+          setContainers(data.containers)
+          setDuplas(data.duplas)
+          setErro('')
+        })
+        .catch(cause => {
+          if (cause instanceof Error && cause.name !== 'AbortError') setErro(cause.message)
+        })
+        .finally(() => {
+          if (!signal.aborted) setLoading(false)
+        })
+    }
+    const carregarQuandoVisivel = () => {
+      if (document.visibilityState === 'visible') carregar()
+    }
+
+    carregar()
+    window.addEventListener(DASHBOARD_EMPRESA_ATUALIZADA_EVENT, carregar)
+    window.addEventListener('focus', carregar)
+    document.addEventListener('visibilitychange', carregarQuandoVisivel)
+    return () => {
+      controller?.abort()
+      window.removeEventListener(DASHBOARD_EMPRESA_ATUALIZADA_EVENT, carregar)
+      window.removeEventListener('focus', carregar)
+      document.removeEventListener('visibilitychange', carregarQuandoVisivel)
+    }
   }, [])
 
   const adicionarContainer = useCallback(async (registro: Omit<RegistroContainer, 'id' | 'veiculoId' | 'motoristaId' | 'comissao'>) => {

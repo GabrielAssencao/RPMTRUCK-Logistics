@@ -121,7 +121,10 @@ test('modais operacionais respeitam a viewport sem sobrepor os campos', () => {
   assert.match(styles, /\.adaptive-form-overlay[\s\S]*top: 4rem;[\s\S]*bottom: 0;[\s\S]*height: auto/)
   assert.match(styles, /\.adaptive-form-panel[\s\S]*max-height: calc\(100% - 1\.5rem\)/)
   assert.match(styles, /@media \(min-width: 1100px\) and \(min-height: 720px\)[\s\S]*justify-content: flex-end/)
-  assert.match(styles, /\.adaptive-form-panel \{[\s\S]*height: 100%;[\s\S]*max-height: 100%/)
+  assert.match(
+    styles,
+    /@media \(min-width: 1100px\) and \(min-height: 720px\)[\s\S]*align-items: center;[\s\S]*padding: 1rem;[\s\S]*\.adaptive-form-panel \{[\s\S]*height: auto;[\s\S]*max-height: calc\(100% - 2rem\)/,
+  )
   assert.match(containers, /adaptive-form-panel[\s\S]*overflow-y-auto/)
   assert.match(containers, /grid-cols-\[minmax\(0,1fr\)_4rem_2\.5rem\]/)
   assert.doesNotMatch(containers, /sm:grid-cols-\[minmax\(0,1\.15fr\)_minmax\(0,0\.85fr\)\]/)

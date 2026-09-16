@@ -581,17 +581,14 @@ a[href]:active {
 
 @media (min-width: 1100px) and (min-height: 720px) {
   .adaptive-form-overlay {
-    align-items: stretch;
+    align-items: center;
     justify-content: flex-end;
-    padding: 0;
+    padding: 1rem;
   }
 
   .adaptive-form-panel {
-    height: 100%;
-    max-height: 100%;
-    border-top-width: 0;
-    border-right-width: 0;
-    border-bottom-width: 0;
+    height: auto;
+    max-height: calc(100% - 2rem);
   }
 }
 
