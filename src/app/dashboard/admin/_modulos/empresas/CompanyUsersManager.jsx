@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react';
-import { UserPlus, Shield, Edit, Trash2, X, Check, AlertTriangle, Clock3, CircleCheck, KeyRound } from 'lucide-react';
+import { UserPlus, Shield, ShieldCheck, ShieldOff, Edit, Trash2, X, Check, AlertTriangle, Clock3, CircleCheck, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog';
 
@@ -13,6 +13,8 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary, onU
   const [editingUser, setEditingUser] = useState(null);
   const [usuarioParaExcluir, setUsuarioParaExcluir] = useState(null);
   const [excluindo, setExcluindo] = useState(false);
+  const [redefinindoMfa, setRedefinindoMfa] = useState('');
+  const [usuarioMfaParaRedefinir, setUsuarioMfaParaRedefinir] = useState(null);
   
   // Estado do Formulário
   const [formData, setFormData] = useState({ nome: '', email: '', cargo: 'OPERADOR', status: 'ativo', senha: '' });
@@ -24,6 +26,12 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary, onU
   useEffect(() => { if (carregado) onUsageChange?.(usuarios.length); }, [usuarios.length, carregado, onUsageChange]);
   const vagasDisponiveis = Math.max(0, limiteTotal - usuarios.length);
   const limiteExcedido = vagasDisponiveis <= 0;
+  const resumoMfa = usuarios.reduce((resumo, usuario) => {
+    if (usuario.mfaAdmin?.ativadoEm) resumo.ativos += 1;
+    else if (usuario.mfaAdmin?.obrigatorio) resumo.pendentes += 1;
+    else resumo.semMfa += 1;
+    return resumo;
+  }, { ativos: 0, pendentes: 0, semMfa: 0 });
 
   const handleOpenModal = (user = null) => {
     if (user) {
@@ -69,6 +77,20 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary, onU
     }
   };
 
+  const resetMfa = async (usuario) => {
+    if (redefinindoMfa) return;
+    setRedefinindoMfa(usuario.id); setFeedback('');
+    try {
+      const response = await fetch(`/api/admin/usuarios/${usuario.id}/mfa`, { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.erro);
+      setUsuarios(current => current.map(item => item.id === usuario.id ? { ...item, mfaAdmin: { obrigatorio: true, ativadoEm: null } } : item));
+      setFeedback(data.mensagem);
+      setUsuarioMfaParaRedefinir(null);
+    } catch (error) { setFeedback(error.message || 'Não foi possível redefinir o MFA.'); }
+    finally { setRedefinindoMfa(''); }
+  };
+
   return (
     <div className="space-y-6">
       {feedback && <div role="status" className="border p-3 text-xs" style={{ borderColor: primary, color: primary }}>{feedback}</div>}
@@ -84,6 +106,11 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary, onU
             <p className="text-[10px] font-mono opacity-50 uppercase tracking-widest mt-0.5">
               USO: {usuarios.length} DE {limiteTotal} LICENÇAS
             </p>
+            {carregado && (
+              <p className="mt-1 text-[9px] font-mono uppercase tracking-wider text-foreground-muted">
+                MFA: {resumoMfa.ativos} ativo{resumoMfa.ativos === 1 ? '' : 's'} · {resumoMfa.pendentes} pendente{resumoMfa.pendentes === 1 ? '' : 's'} · {resumoMfa.semMfa} sem MFA
+              </p>
+            )}
           </div>
         </div>
         
@@ -104,10 +131,10 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary, onU
 
       {/* TABELA DE USUÁRIOS */}
       <div className="border overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
-        <table className="min-w-[980px] w-full text-left border-collapse">
+        <table className="min-w-[1080px] w-full text-left border-collapse">
           <thead className="bg-background-secondary border-b" style={{ borderColor: 'var(--border)' }}>
             <tr>
-              {['COLABORADOR', 'NÍVEL DE ACESSO', 'CONTA', 'PRIMEIRO ACESSO', 'ÚLTIMO RESET', 'AÇÕES'].map(h => (
+              {['COLABORADOR', 'NÍVEL DE ACESSO', 'CONTA', 'MFA', 'PRIMEIRO ACESSO', 'ÚLTIMO RESET', 'AÇÕES'].map(h => (
                 <th key={h} className="px-5 py-3 text-[10px] font-black tracking-widest opacity-60">{h}</th>
               ))}
             </tr>
@@ -135,6 +162,9 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary, onU
                   </span>
                 </td>
                 <td className="px-5 py-4">
+                  <MfaStatusBadge mfa={u.mfaAdmin} />
+                </td>
+                <td className="px-5 py-4">
                   <PrimeiroAcessoBadge usuario={u} />
                 </td>
                 <td className="px-5 py-4">
@@ -151,6 +181,9 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary, onU
                   <div className="flex gap-2">
                     <button onClick={() => handleOpenModal(u)} className="p-1.5 border opacity-60 hover:opacity-100 hover:text-primary transition-all" style={{ borderColor: 'var(--border)' }} title="Editar Perfil">
                       <Edit size={14} />
+                    </button>
+                    <button onClick={() => setUsuarioMfaParaRedefinir(u)} disabled={redefinindoMfa === u.id} className="p-1.5 border opacity-60 hover:opacity-100 hover:text-primary transition-all disabled:opacity-30" style={{ borderColor: 'var(--border)' }} title="Redefinir MFA e encerrar sessões">
+                      <KeyRound size={14} />
                     </button>
                     <button onClick={() => setUsuarioParaExcluir(u)} className="p-1.5 border opacity-60 hover:opacity-100 hover:text-red-500 transition-all" style={{ borderColor: 'var(--border)' }} title="Revogar Acesso">
                       <Trash2 size={14} />
@@ -249,6 +282,17 @@ export default function CompanyUsersManager({ empresa, limiteTotal, primary, onU
         onConfirm={() => void handleDelete()}
       />
 
+      <ActionConfirmDialog
+        open={Boolean(usuarioMfaParaRedefinir)}
+        title="Redefinir autenticação em duas etapas"
+        description={usuarioMfaParaRedefinir ? `O autenticador de ${usuarioMfaParaRedefinir.nome}, os códigos de recuperação e todas as sessões confiáveis serão invalidados. No próximo login será necessário configurar um novo QR Code.` : ''}
+        confirmLabel="Redefinir MFA"
+        loadingLabel="Redefinindo..."
+        loading={Boolean(redefinindoMfa)}
+        onClose={() => { if (!redefinindoMfa) setUsuarioMfaParaRedefinir(null) }}
+        onConfirm={() => { if (usuarioMfaParaRedefinir) void resetMfa(usuarioMfaParaRedefinir) }}
+      />
+
     </div>
   );
 }
@@ -275,4 +319,26 @@ function PrimeiroAcessoBadge({ usuario }) {
   return usuario.credencialTemporariaExpirada
     ? <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-red-500"><KeyRound size={12} /> Credencial expirada</span>
     : <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-amber-500"><Clock3 size={12} /> Aguardando troca</span>;
+}
+
+function MfaStatusBadge({ mfa }) {
+  if (mfa?.ativadoEm) {
+    return (
+      <span className="inline-flex items-center gap-1.5 border border-green-500/30 bg-green-500/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-green-500" title={`Ativado em ${new Date(mfa.ativadoEm).toLocaleDateString('pt-BR')}`}>
+        <ShieldCheck size={12} aria-hidden="true" /> Ativado
+      </span>
+    );
+  }
+  if (mfa?.obrigatorio) {
+    return (
+      <span className="inline-flex items-center gap-1.5 border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-amber-500" title="O usuário precisa concluir a configuração no próximo login">
+        <Clock3 size={12} aria-hidden="true" /> Configuração pendente
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 border px-2 py-1 text-[9px] font-black uppercase tracking-wider text-foreground-muted" style={{ borderColor: 'var(--border)' }} title="MFA ainda não configurado">
+      <ShieldOff size={12} aria-hidden="true" /> Não ativado
+    </span>
+  );
 }

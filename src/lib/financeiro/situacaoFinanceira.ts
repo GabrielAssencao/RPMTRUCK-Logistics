@@ -10,10 +10,27 @@ export const SITUACOES_FINANCEIRAS = {
 } as const
 
 export const PRAZO_PAGAMENTO_INICIAL_MS = 3 * 24 * 60 * 60 * 1000
+export const DIAS_CARENCIA_FINANCEIRA = 3
+
+export function limiteBloqueioFinanceiro(vencimento: Date) {
+  return new Date(vencimento.getTime() + DIAS_CARENCIA_FINANCEIRA * 24 * 60 * 60 * 1000)
+}
 
 export function podeRegularizarFinanceiro(role: string, situacao: string | undefined) {
   return (role === 'GESTOR_EMPRESA' || role === 'GESTOR')
     && (situacao === 'INADIMPLENTE' || situacao === 'PAGAMENTO_INICIAL_VENCIDO')
+}
+
+/** Rotas estritamente necessárias para o gestor quitar uma dívida sem liberar a operação. */
+export function rotaRegularizacaoFinanceira(pathname: string, method: string) {
+  if (pathname === '/api/empresa/assinatura') return method === 'GET' || method === 'POST'
+  if (pathname === '/api/empresa/perfil') return method === 'GET' || method === 'PATCH'
+  // Inadimplência não pode impedir o gestor de interromper cobranças futuras.
+  // A rota continua tenant-scoped e aceita apenas o cancelamento, nunca nova adesão.
+  if (pathname === '/api/empresa/recorrencia') return method === 'DELETE'
+  if (/^\/api\/empresa\/faturas\/[^/]+\/cobranca$/.test(pathname)) return method === 'POST'
+  if (/^\/api\/empresa\/faturas\/[^/]+\/(?:pix-qr|comprovante)$/.test(pathname)) return method === 'GET' || method === 'POST'
+  return false
 }
 
 export function competenciaBrasil(agora: Date) {
@@ -23,7 +40,7 @@ export function competenciaBrasil(agora: Date) {
 
 /** Instante do bloqueio: meia-noite de Brasília depois do dia contratado. */
 export function limiteVencimentoMensal(ano: number, mes: number, dia: number) {
-  if (dia !== 5 && dia !== 28) throw new Error('DIA_VENCIMENTO_INVALIDO')
+  if (!Number.isInteger(dia) || dia < 1 || dia > 28) throw new Error('DIA_VENCIMENTO_INVALIDO')
   return new Date(Date.UTC(ano, mes - 1, dia + 1, 3))
 }
 
@@ -41,6 +58,10 @@ export function avaliarSituacaoFinanceira(empresa: EstadoFinanceiro, agora = new
   const primeiraPaga = empresa.primeiraMensalidadePagaEm !== null
   const vencida = empresa.faturas.some(fatura => {
     const vencimento = fatura.vencimento ?? (!primeiraPaga ? empresa.pagamentoInicialVenceEm : null)
+    return vencimento !== null && limiteBloqueioFinanceiro(vencimento) <= agora
+  })
+  const emCarencia = !vencida && empresa.faturas.some(fatura => {
+    const vencimento = fatura.vencimento ?? (!primeiraPaga ? empresa.pagamentoInicialVenceEm : null)
     return vencimento !== null && vencimento <= agora
   })
   let situacao: keyof typeof SITUACOES_FINANCEIRAS = empresa.plano === 'PREVIEW' ? 'PREVIEW'
@@ -53,5 +74,5 @@ export function avaliarSituacaoFinanceira(empresa: EstadoFinanceiro, agora = new
     ? 'O prazo do primeiro pagamento terminou. Regularize a mensalidade e a implantação com o suporte para ingressar no plano.'
     : situacao === 'INADIMPLENTE' ? 'Acesso suspenso por cobrança vencida. Procure o suporte para regularizar o plano.'
       : 'O acesso desta empresa foi suspenso pelo administrador.'
-  return { situacao, descricao: SITUACOES_FINANCEIRAS[situacao], bloqueado, mensagem }
+  return { situacao, descricao: SITUACOES_FINANCEIRAS[situacao], bloqueado, emCarencia, mensagem }
 }

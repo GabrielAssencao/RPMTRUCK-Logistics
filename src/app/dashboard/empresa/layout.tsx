@@ -28,6 +28,7 @@ import {
   MessageSquare,
   BookOpen,
   Palette,
+  BrainCircuit,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
@@ -81,6 +82,7 @@ const NAVIGATION_ICONS: Record<string, LucideIcon> = {
   '/dashboard/empresa/motoristas': Users,
   '/dashboard/empresa/containers': ContainerIcon,
   '/dashboard/empresa/custos': DollarSign,
+  '/dashboard/empresa/inteligencia': BrainCircuit,
   '/dashboard/empresa/contas-pagar': ReceiptText,
   '/dashboard/empresa/cronograma': ClipboardList,
   '/dashboard/empresa/arquivos': Archive,
@@ -94,6 +96,7 @@ const NOTIFICATION_MODULES: Record<string, string> = {
   '/dashboard/empresa/motoristas': 'MOTORISTAS',
   '/dashboard/empresa/containers': 'CONTAINERS',
   '/dashboard/empresa/custos': 'CUSTOS',
+  '/dashboard/empresa/inteligencia': 'CUSTOS',
   '/dashboard/empresa/contas-pagar': 'CONTAS_PAGAR',
   '/dashboard/empresa/cronograma': 'TAREFAS',
   '/dashboard/empresa/arquivos': 'RELATORIOS',
@@ -163,6 +166,10 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
       .then(async (response) => {
         const data = await response.json()
         if (!response.ok) throw new Error(data.erro || 'Acesso suspenso.')
+        if (data.acessoSomentePlano) {
+          router.replace('/dashboard/plano')
+          return
+        }
         setNomeEmpresa(data.empresa.nome)
         setModulosAtivos(normalizarModulos(data.usuario.modulosAcesso))
         setPerfilUsuario(data.usuario)

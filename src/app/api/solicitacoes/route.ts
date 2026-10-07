@@ -1,3 +1,4 @@
+import { lerJsonLimitado, RequestBodyError } from '@/lib/requestBody'
 // src/app/api/solicitacoes/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -23,7 +24,7 @@ const solicitacaoSchema = z.object({
   email: z.string().trim().email().max(254).toLowerCase(),
   whatsapp: whatsappSchema,
   plano: z.enum(['ESSENCIAL', 'AVANCADO', 'ENTERPRISE']),
-  diaVencimento: z.coerce.number().refine(value => value === 5 || value === 28).default(28),
+  diaVencimento: z.coerce.number().int().min(1).max(28).default(28),
   mensagem: textoOperacional(3, 1500).optional().or(z.literal('')),
   contatoPref: z.enum(['email', 'whatsapp']).default('email'),
   veiculos: z.coerce.number().int().min(0).max(100_000).optional(),
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
   try {
     const bloqueio = await applyRateLimit(request, `solicitacao:${getClientIp(request)}`, RATE_LIMITS.PUBLIC_SIGNUP.limit, RATE_LIMITS.PUBLIC_SIGNUP.windowMs);
     if (bloqueio) return bloqueio;
-    const parsed = solicitacaoSchema.safeParse(await request.json());
+    const parsed = solicitacaoSchema.safeParse(await lerJsonLimitado(request));
     if (!parsed.success) return NextResponse.json({ erro: 'Revise os dados da solicitação.' }, { status: 400 });
     const bot = await verifyBotToken({
       token: parsed.data.turnstileToken,
@@ -132,8 +133,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const novaSolicitacao = await executarComAuditoria({ origem: 'PUBLIC_API' }, (tx) => tx.solicitacaoAcesso.create({
-      data: {
+    const novaSolicitacao = await executarComAuditoria({ origem: 'PUBLIC_API' }, async (tx) => {
+      const agora = new Date()
+      const promocao = await tx.promocaoComercial.findFirst({
+        where: { plano, ativa: true, visivelSolicitacao: true, escopo: 'NOVAS_EMPRESAS', OR: [{ inicio: null }, { inicio: { lte: agora } }], AND: [{ OR: [{ fim: null }, { fim: { gte: agora } }] }] },
+        orderBy: { criado_em: 'asc' },
+      })
+      let elegivel = false
+      if (promocao) {
+        if (promocao.grupo) {
+          const grupoPromocoes = await tx.promocaoComercial.findMany({
+            where: { grupo: promocao.grupo, ativa: true },
+            select: { adesoesConfirmadas: true, limiteAdesoes: true },
+          })
+          const totalConfirmadas = grupoPromocoes.reduce((acc, item) => acc + item.adesoesConfirmadas, 0)
+          const limite = promocao.limiteAdesoes ?? 5
+          elegivel = totalConfirmadas < limite
+        } else {
+          elegivel = promocao.limiteAdesoes === null || promocao.adesoesConfirmadas < promocao.limiteAdesoes
+        }
+      }
+      return tx.solicitacaoAcesso.create({ data: {
         empresa,
         responsavel,
         email,
@@ -143,9 +163,10 @@ export async function POST(request: NextRequest) {
         diaVencimento,
         mensagem: mensagem || null,
         contatoPref: contatoPref || 'email',
-        status: 'PENDENTE'
-      }
-    }));
+        status: 'PENDENTE',
+        ...(elegivel && promocao ? { promocaoId: promocao.id, precoBasePromocional: promocao.precoBaseInicial, precoBaseRenovacao: promocao.precoBaseRenovacao, promocaoMesesIniciais: promocao.mesesPrecoInicial, taxaImplantacaoPromocional: promocao.taxaImplantacao } : {}),
+      } })
+    });
 
     await notificarAdmins({ titulo: 'Nova solicitação de acesso', mensagem: `${novaSolicitacao.empresa} solicitou o plano ${novaSolicitacao.plano}.`, modulo: 'ACESSO' });
 
@@ -155,6 +176,7 @@ export async function POST(request: NextRequest) {
     );
 
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ erro: error.message }, { status: error.status });
     console.error('Erro crítico no recebimento do lead:', error);
     return NextResponse.json(
       { erro: 'Falha interna na engine de dados do servidor RPMTruck.' },

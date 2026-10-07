@@ -5,7 +5,7 @@ import { normalizarModulos, PLANOS_CONFIG } from '@/utils/planos'
 import { avaliarSituacaoFinanceira } from '@/lib/financeiro/situacaoFinanceira'
 import { faturasPendentesFinanceiras } from '@/lib/financeiro/acessoFinanceiro'
 import { atualizarCobrancasMensais } from '@/lib/financeiro/cicloCobranca'
-import { calcularMensalidadePorCatalogo, listarPlanosComerciais } from '@/lib/financeiro/planosComerciais'
+import { calcularMensalidadeEmpresa, listarPlanosComerciais } from '@/lib/financeiro/planosComerciais'
 import { exposeEmpresa } from '@/lib/fieldEncryption'
 
 export const dynamic = 'force-dynamic'
@@ -46,13 +46,7 @@ export async function GET(request: NextRequest) {
           financeiro: avaliarSituacaoFinanceira(empresa),
           limiteUsuarios: PLANOS_CONFIG[empresa.plano].usuariosBase + empresa.usuarios_adicionais,
           modulos: normalizarModulos(empresa.modulos),
-          mensalidade: planoComercial
-            ? calcularMensalidadePorCatalogo(
-                planoComercial,
-                empresa.usuarios_adicionais,
-                empresa.veiculos_adicionais,
-              )
-            : null,
+          mensalidade: planoComercial ? calcularMensalidadeEmpresa(empresa, planoComercial) : null,
         }
       }),
     )

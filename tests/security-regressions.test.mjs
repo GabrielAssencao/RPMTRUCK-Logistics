@@ -331,7 +331,7 @@ test('assistente faz triagem limitada e entrega o chamado ao atendimento humano'
   assert.equal(entrega.acao, 'ESCALAR')
   assert.match(entrega.resumoAdmin, /RESUMO INTERNO DA TRIAGEM/)
   assert.equal(bot.montarRespostaTriagemBot({ ...contexto, mensagensUsuario: ['Mais detalhes'], interacoesAutomaticas: 4 }), null)
-  assert.match(chat, /!escopo\.admin && ticket\.status === 'ABERTO'/)
+  assert.match(chat, /!escopo\.admin && ticket\.origem === 'EMPRESA' && ticket\.status === 'ABERTO'/)
   assert.match(chat, /interacoesAutomaticas: ticket\.etapaTriagem/)
   assert.match(chat, /etapaTriagem: ticket\.etapaTriagem[\s\S]*triagemConcluidaEm: null/)
   assert.match(chat, /reivindicacaoTriagem\?\.count === 1/)
@@ -340,7 +340,7 @@ test('assistente faz triagem limitada e entrega o chamado ao atendimento humano'
   assert.match(chat, /resultadoTriagem\?\.acao === 'ESCALAR'/)
 })
 
-test('franquia de suporte ignora apenas bugs confirmados pelo superadmin', () => {
+test('franquia de suporte ignora bugs confirmados e conversas iniciadas pelo superadmin', () => {
   const plans = read('src/utils/planos.ts')
   const tickets = read('src/app/api/chat/tickets/route.ts')
   const companyChat = read('src/app/api/chat/route.ts')
@@ -353,12 +353,15 @@ test('franquia de suporte ignora apenas bugs confirmados pelo superadmin', () =>
   assert.match(plans, /AVANCADO:[\s\S]*ticketsSuporteMes: 35/)
   assert.match(plans, /ENTERPRISE:[\s\S]*ticketsSuporteMes: 50/)
   assert.match(tickets, /classificacaoCobranca: 'ATENDIMENTO'/)
+  assert.match(tickets, /origem: 'EMPRESA'/)
   assert.match(companyChat, /classificacaoCobranca: 'ATENDIMENTO'/)
+  assert.match(companyChat, /origem: 'EMPRESA'/)
   assert.match(adminTicket, /requireAdminAuth\(request\)/)
   assert.match(adminTicket, /BUG_SISTEMA_CONFIRMADO/)
   assert.match(adminTicket, /classificadoPorId:[\s\S]*auth\.session!\.userId/)
   assert.match(adminTicket, /recalcularCoberturaCompetencia\(tx, atual\.empresaId, atual\.competencia\)/)
   assert.match(support, /WHEN ordenados\."classificacao_cobranca" = 'BUG_SISTEMA_CONFIRMADO' THEN 0/)
+  assert.match(support, /WHEN ordenados\."origem" = 'SUPERADMIN' THEN false/)
   assert.match(support, /ELSE ordenados\.ordem > conversa\."franquia_no_momento"/)
   assert.doesNotMatch(support, /SET[\s\S]{0,80}"franquia_no_momento"\s*=/)
   assert.doesNotMatch(adminUi, /window\.confirm/)
@@ -366,6 +369,32 @@ test('franquia de suporte ignora apenas bugs confirmados pelo superadmin', () =>
   assert.match(adminUi, /<ActionConfirmDialog/)
   assert.match(migration, /CREATE TYPE "ClassificacaoCobrancaTicket"/)
   assert.match(migration, /FOREIGN KEY \("classificado_por_id"\)/)
+})
+
+test('superadmin inicia relacionamento sem franquia e controla respostas no backend', () => {
+  const adminChat = read('src/app/api/admin/chat/route.ts')
+  const adminTicket = read('src/app/api/admin/chat/[id]/route.ts')
+  const companyChat = read('src/app/api/chat/route.ts')
+  const adminUi = read('src/app/dashboard/admin/_modulos/chat/ChatModule.tsx')
+  const companyUi = read('src/components/dashboard/SupportTicketCenter.tsx')
+  const workspace = read('src/components/dashboard/ChatWorkspace.tsx')
+  const migration = read('prisma/migrations/20261006183000_comunicacao_superadmin/migration.sql')
+
+  assert.match(adminChat, /export async function POST/)
+  assert.match(adminChat, /requireAdminAuth\(request\)/)
+  assert.match(adminChat, /origem: 'SUPERADMIN'/)
+  assert.match(adminChat, /cobravelExtra: false/)
+  assert.match(adminChat, /notificarUsuariosDaEmpresa\(empresa\.id[\s\S]*\['GESTOR_EMPRESA'\], tx\)/)
+  assert.match(adminTicket, /respostasEmpresaHabilitadas: z\.boolean\(\)\.optional\(\)/)
+  assert.match(adminTicket, /Conversas administrativas não participam da franquia/)
+  assert.match(adminTicket, /histórico não pode ser excluído/)
+  assert.match(companyChat, /!escopo\.admin && !ticket\.respostasEmpresaHabilitadas/)
+  assert.match(workspace, /respostaPausada/)
+  assert.match(adminUi, /Iniciar conversa/)
+  assert.match(adminUi, /Permitidas · pausar/)
+  assert.match(companyUi, /Conversa da administração/)
+  assert.match(migration, /CREATE TYPE "OrigemConversaSuporte"/)
+  assert.match(migration, /"respostas_empresa_habilitadas" BOOLEAN NOT NULL DEFAULT true/)
 })
 
 test('migração de tickets preserva histórico e corrige a ambiguidade do rate limit', () => {
@@ -437,7 +466,7 @@ test('central de seguranca filtra logs no servidor sem confiar no cliente', () =
 test('retencao automatica exige segredo e aplica prazos limitados', () => {
   const route = read('src/app/api/internal/retencao/route.ts')
   const cleanup = read('src/lib/retencaoDados.ts')
-  const deletion = read('src/app/api/empresa/exclusao-conta/route.ts')
+  const deletion = read('src/lib/empresaExclusao.ts')
   const migration = read('prisma/migrations/20260908100000_retencao_logs_comprovantes_exclusao/migration.sql')
 
   assert.match(route, /CRON_SECRET/)

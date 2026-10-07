@@ -1,6 +1,7 @@
 import type {
   CategoriaTicketSuporte,
   ClassificacaoCobrancaTicket,
+  OrigemConversaSuporte,
   PlanoTipo,
   PrioridadeTicketSuporte,
   StatusTicketSuporte,
@@ -17,6 +18,8 @@ export interface SupportTicket {
   franquiaNoMomento: number
   ordemNaCompetencia: number
   classificacaoCobranca: ClassificacaoCobrancaTicket
+  origem: OrigemConversaSuporte
+  respostasEmpresaHabilitadas: boolean
   classificadoEm?: string | null
   criado_em: string
   atualizado_em: string

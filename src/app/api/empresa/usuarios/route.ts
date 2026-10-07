@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
         temaClaro: true,
         rotuloEquipe: true,
         podePersonalizarTema: true,
+        mfaAdmin: { select: { obrigatorio: true, ativadoEm: true } },
       },
       orderBy: { criado_em: 'desc' }
     })

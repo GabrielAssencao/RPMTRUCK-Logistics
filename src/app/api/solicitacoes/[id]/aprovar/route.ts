@@ -67,6 +67,30 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       if (!planoComercial?.ativo) {
         throw new Error('O plano comercial solicitado não está disponível.');
       }
+      if (solicitacao.promocaoId) {
+        // Reserva a vaga no próprio banco. A condição é atômica e impede que
+        // aprovações concorrentes ultrapassem o limite comercial da promoção.
+        const ocupada = await tx.$executeRaw`
+          UPDATE "promocoes_comerciais"
+          SET "adesoes_confirmadas" = "adesoes_confirmadas" + 1
+          WHERE "id" = ${solicitacao.promocaoId}
+            AND "ativa" = true
+            AND (
+              "limite_adesoes" IS NULL
+              OR (
+                "grupo" IS NULL AND "adesoes_confirmadas" < "limite_adesoes"
+              )
+              OR (
+                "grupo" IS NOT NULL AND (
+                  SELECT COALESCE(SUM(outros."adesoes_confirmadas"), 0)
+                  FROM "promocoes_comerciais" outros
+                  WHERE outros."grupo" = "promocoes_comerciais"."grupo" AND outros."ativa" = true
+                ) < "limite_adesoes"
+              )
+            )
+        `
+        if (ocupada !== 1) throw new Error('PROMOCAO_INDISPONIVEL')
+      }
       
       // Passo B: Criar a Instância da Empresa (Tenant)
       const novaEmpresa = await tx.empresa.create({
@@ -81,7 +105,13 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
           pagamentoInicialVenceEm: prazoInicial,
           modulos: [...configPlano.modulosPadrao],
           usuarios_adicionais: 0,
-          veiculos_adicionais: 0
+          veiculos_adicionais: 0,
+          promocaoId: solicitacao.promocaoId,
+          precoBasePromocional: solicitacao.precoBasePromocional,
+          precoBaseRenovacao: solicitacao.precoBaseRenovacao,
+          promocaoMesesIniciais: solicitacao.promocaoMesesIniciais,
+          promocaoAtivadaEm: solicitacao.promocaoId ? dataAtual : null,
+          taxaImplantacaoContratada: solicitacao.taxaImplantacaoPromocional,
         }
       });
 
@@ -114,31 +144,33 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       });
 
       // Passo D: Gerar Fatura de Implementação (Setup) - se houver custo
-      if (planoComercial.taxaImplantacao > 0) {
+      const taxaImplantacao = Number(solicitacao.taxaImplantacaoPromocional ?? planoComercial.taxaImplantacao)
+      const mensalidadeInicial = Number(solicitacao.precoBasePromocional ?? planoComercial.precoBase)
+      if (taxaImplantacao > 0) {
         await tx.fatura.create({
           data: {
             mes: mesReferencia,
             ano: anoReferencia,
             tipo: 'IMPLEMENTACAO',
             vencimento: prazoInicial,
-            valor: planoComercial.taxaImplantacao,
+            valor: taxaImplantacao,
             status: StatusFatura.PENDENTE,
-            empresaId: novaEmpresa.id
+            empresaId: novaEmpresa.id,
           }
         });
       }
 
       // Passo E: Gerar primeira Fatura de Mensalidade recorrente em aberto
-      if (planoComercial.precoBase > 0) {
+      if (mensalidadeInicial > 0) {
         await tx.fatura.create({
           data: {
             mes: mesReferencia,
             ano: anoReferencia,
             tipo: 'MENSALIDADE',
             vencimento: prazoInicial,
-            valor: planoComercial.precoBase,
+            valor: mensalidadeInicial,
             status: StatusFatura.PENDENTE,
-            empresaId: novaEmpresa.id
+            empresaId: novaEmpresa.id,
           }
         });
       }
@@ -160,6 +192,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
   } catch (error) {
     if (error instanceof SolicitacaoJaProcessadaError) {
       return NextResponse.json({ erro: 'Esta solicitação já foi processada anteriormente.' }, { status: 409 });
+    }
+    if (error instanceof Error && error.message === 'PROMOCAO_INDISPONIVEL') {
+      return NextResponse.json({ erro: 'A promoção selecionada não possui mais vagas.' }, { status: 409 });
     }
     console.error('Erro crítico ao aprovar e implantar tenant:', error);
     return NextResponse.json({ erro: 'Falha na transação técnica de implantação da infraestrutura.' }, { status: 500 });

@@ -14,7 +14,7 @@ test('aprovação vincula a solicitação ao tenant criado na mesma transação'
 })
 
 test('exclusão remove a solicitação vinculada antes de anonimizar a empresa', () => {
-  const deletion = read('src/app/api/empresa/exclusao-conta/route.ts')
+  const deletion = read('src/lib/empresaExclusao.ts')
   const removeRequest = deletion.indexOf('solicitacaoAcesso.deleteMany({ where: { empresaId } })')
   const anonymizeCompany = deletion.indexOf('empresa.update({')
 

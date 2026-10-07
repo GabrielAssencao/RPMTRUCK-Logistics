@@ -11,6 +11,7 @@ import LoginVisual from './_componentes/LoginVisual'
 import LoginEntry from './_componentes/LoginEntry'
 import { getExperience3DReady, getServerExperience3DReady, subscribeExperience3D } from '@/lib/experience3d'
 import TurnstileWidget from '@/components/security/TurnstileWidget'
+import AdminMfaForm, { type AdminMfaChallenge } from './_componentes/AdminMfaForm'
 
 export default function LoginPage() {
   return <MotionConfig reducedMotion="user"><LoginContent /></MotionConfig>
@@ -34,6 +35,7 @@ function LoginContent() {
   const [destination, setDestination] = useState<string | null>(null)
   const [authenticatedRole, setAuthenticatedRole] = useState<string>()
   const authenticating = useRef(false)
+  const [mfaChallenge, setMfaChallenge] = useState<AdminMfaChallenge | null>(null)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -91,6 +93,11 @@ function LoginContent() {
           setStep(3)
           return
         }
+        if (data.mfaObrigatorio && res.ok) {
+          setMfaChallenge(data)
+          setSenha(''); setNewPassword(''); setConfirmPassword('')
+          return
+        }
 
         if (!res.ok) {
           setError(data.erro || 'Falha na autenticação.')
@@ -124,6 +131,7 @@ function LoginContent() {
   }
 
   const resetLogin = () => {
+    setMfaChallenge(null)
     setStep(0)
     setEmail('')
     setSenha('')
@@ -137,7 +145,10 @@ function LoginContent() {
 
   // ─── Conteúdo do painel direito ───────────────────────────────────────────────
   const panelContent = (
-    <LoginForm
+    mfaChallenge ? <AdminMfaForm challenge={mfaChallenge} onChallenge={setMfaChallenge} onBack={resetLogin} onSuccess={user => {
+      try { localStorage.setItem('@rpmtruck:user', JSON.stringify(user)) } catch { /* Display cache only. */ }
+      setAuthenticatedRole(user.role); setDestination(user.role === 'ADMIN_RPM' || user.role === 'ADMIN' ? '/dashboard/admin' : user.acessoSomentePlano ? '/dashboard/plano' : '/dashboard/empresa')
+    }} /> : <LoginForm
       step={step}
       email={email} setEmail={setEmail}
       senha={senha} setSenha={setSenha}

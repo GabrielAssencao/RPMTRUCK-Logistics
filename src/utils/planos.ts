@@ -2,9 +2,13 @@ export const PLANOS = ['PREVIEW', 'ESSENCIAL', 'AVANCADO', 'ENTERPRISE'] as cons
 
 export type PlanoTipo = (typeof PLANOS)[number]
 
-export const MODULOS = ['FROTA', 'GESTAO', 'CONTAS_PAGAR', 'NOTIFICACOES', 'TAREFAS', 'RELATORIOS'] as const
+export const MODULOS = ['FROTA', 'GESTAO', 'INTELIGENCIA', 'CONTAS_PAGAR', 'NOTIFICACOES', 'TAREFAS', 'RELATORIOS'] as const
 
 export type ModuloCodigo = (typeof MODULOS)[number]
+
+export function moduloDelegavelParaOperador(modulo: ModuloCodigo) {
+  return modulo !== 'INTELIGENCIA'
+}
 
 export const STATUS_EMPRESA = ['ATIVO', 'INADIMPLENTE', 'INATIVO'] as const
 
@@ -23,6 +27,13 @@ export interface PlanoConfig {
   delegacaoTarefas: boolean
   telaTarefas: boolean
   relatoriosPersonalizados: boolean
+  inteligencia: {
+    nivel: 'BASICA' | 'AVANCADA' | 'COMPLETA'
+    mesesMaximos: 3 | 12 | 36
+    previsaoManutencao: boolean
+    despesasForaPadrao: boolean
+    rentabilidadeOperacao: boolean
+  }
   ticketsSuporteMes: number
   prazoRespostaSuporteHoras: number
   modulosPadrao: readonly ModuloCodigo[]
@@ -36,6 +47,10 @@ export const MODULOS_CONFIG: Record<ModuloCodigo, { nome: string; descricao: str
   GESTAO: {
     nome: 'Controle e gestão',
     descricao: 'Custos, despesas e indicadores operacionais.',
+  },
+  INTELIGENCIA: {
+    nome: 'Inteligência da frota',
+    descricao: 'Análises e recomendações; não substitui a geração de relatórios.',
   },
   CONTAS_PAGAR: {
     nome: 'Contas a pagar / boletos',
@@ -55,7 +70,7 @@ export const MODULOS_CONFIG: Record<ModuloCodigo, { nome: string; descricao: str
   },
 }
 
-const MODULOS_OPERACIONAIS: readonly ModuloCodigo[] = ['FROTA', 'GESTAO', 'CONTAS_PAGAR', 'NOTIFICACOES']
+const MODULOS_OPERACIONAIS: readonly ModuloCodigo[] = ['FROTA', 'GESTAO', 'INTELIGENCIA', 'CONTAS_PAGAR', 'NOTIFICACOES']
 const MODULOS_COM_TAREFAS: readonly ModuloCodigo[] = [...MODULOS_OPERACIONAIS, 'TAREFAS']
 const TODOS_OS_MODULOS: readonly ModuloCodigo[] = [...MODULOS_COM_TAREFAS, 'RELATORIOS']
 
@@ -73,6 +88,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
       'Cronograma com lembretes pessoais e calendário mensal',
       '1 ano de histórico e auditoria operacional',
       'Dashboard de custos, combustível e manutenção',
+      'Inteligência básica da frota com análise de 3 meses',
       'Até 4 usuários e 10 veículos na franquia base',
       '25 tickets de suporte por mês, resposta em até 48h úteis',
     ],
@@ -83,6 +99,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
     delegacaoTarefas: false,
     telaTarefas: false,
     relatoriosPersonalizados: false,
+    inteligencia: { nivel: 'BASICA', mesesMaximos: 3, previsaoManutencao: false, despesasForaPadrao: false, rentabilidadeOperacao: false },
     ticketsSuporteMes: 25,
     prazoRespostaSuporteHoras: 48,
     modulosPadrao: MODULOS_COM_TAREFAS,
@@ -94,6 +111,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
       'Tudo do plano Essencial',
       '2 anos de histórico analítico',
       'Delegação direta de tarefas e alertas',
+      'Inteligência operacional, previsões e rentabilidade em até 12 meses',
       'Leitura local de boletos por PDF, imagem e câmera',
       'Até 10 usuários e 25 veículos na franquia base',
       '35 tickets de suporte por mês, resposta em até 24h úteis',
@@ -105,6 +123,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
     delegacaoTarefas: true,
     telaTarefas: true,
     relatoriosPersonalizados: false,
+    inteligencia: { nivel: 'AVANCADA', mesesMaximos: 12, previsaoManutencao: true, despesasForaPadrao: true, rentabilidadeOperacao: true },
     ticketsSuporteMes: 35,
     prazoRespostaSuporteHoras: 24,
     modulosPadrao: MODULOS_COM_TAREFAS,
@@ -116,6 +135,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
       'Tudo do plano Avançado',
       '3 anos de histórico operacional',
       'Relatórios e filtros personalizados',
+      'Inteligência completa com comparações de até 36 meses',
       'Até 25 usuários e 80 veículos na franquia base',
       '50 tickets de suporte por mês, resposta prioritária em até 4h úteis',
     ],
@@ -126,6 +146,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
     delegacaoTarefas: true,
     telaTarefas: true,
     relatoriosPersonalizados: true,
+    inteligencia: { nivel: 'COMPLETA', mesesMaximos: 36, previsaoManutencao: true, despesasForaPadrao: true, rentabilidadeOperacao: true },
     ticketsSuporteMes: 50,
     prazoRespostaSuporteHoras: 4,
     modulosPadrao: TODOS_OS_MODULOS,
@@ -136,6 +157,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
     beneficios: [
       'Todos os módulos disponíveis para homologação',
       'Acesso antecipado a recursos beta',
+      'Inteligência completa para homologação',
       'Liberação e remoção de módulos pelo SuperAdmin',
       '50 tickets de suporte por mês para homologação',
     ],
@@ -148,6 +170,7 @@ export const PLANOS_CONFIG: Record<PlanoTipo, PlanoConfig> = {
     delegacaoTarefas: true,
     telaTarefas: true,
     relatoriosPersonalizados: true,
+    inteligencia: { nivel: 'COMPLETA', mesesMaximos: 36, previsaoManutencao: true, despesasForaPadrao: true, rentabilidadeOperacao: true },
     ticketsSuporteMes: 50,
     prazoRespostaSuporteHoras: 24,
     modulosPadrao: TODOS_OS_MODULOS,
@@ -162,6 +185,10 @@ const MODULOS_LEGADOS: Record<string, ModuloCodigo> = {
   'controle & gestão': 'GESTAO',
   'controle & gestao': 'GESTAO',
   controle_gestao: 'GESTAO',
+  inteligencia: 'INTELIGENCIA',
+  'inteligência': 'INTELIGENCIA',
+  'inteligência da frota': 'INTELIGENCIA',
+  'inteligencia da frota': 'INTELIGENCIA',
   contas_pagar: 'CONTAS_PAGAR',
   boletos: 'CONTAS_PAGAR',
   'contas a pagar': 'CONTAS_PAGAR',

@@ -6,6 +6,7 @@ import { Mail, Phone, User, Truck, CheckCircle, XCircle, Copy, KeyRound, Clock3,
 import { useTheme } from '@/contexts/ThemeContext';
 import { criarMensagensPrimeiroAcesso } from '@/lib/accessMessages';
 import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog';
+import PaymentDateRequests from './PaymentDateRequests';
 
 export default function AdminRequests() {
   const { primary } = useTheme();
@@ -143,6 +144,8 @@ export default function AdminRequests() {
 
       {erroAcao && <p role="alert" className="border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-500">{erroAcao}</p>}
 
+      <PaymentDateRequests />
+
       {/* FILTROS CIBER-INDUSTRIAS */}
       <div className="flex gap-1 overflow-x-auto custom-scrollbar border-b pb-2" style={{ borderColor: 'var(--border)' }}>
         {['pendente', 'aprovado', 'rejeitado', 'all'].map(f => {
@@ -216,6 +219,11 @@ export default function AdminRequests() {
                         <Truck size={12} style={{ color: primary }} />
                         <span className="uppercase">FROTA: {req.veiculos || '0'} TRUCKS</span>
                       </div>
+                    </div>
+
+                    <div className="mt-3 inline-flex max-w-full items-center gap-2 border px-3 py-2 text-[10px] font-bold uppercase tracking-wide" style={{ borderColor: `${primary}55`, color: primary }}>
+                      {req.contatoPref === 'whatsapp' ? <Phone size={13} className="shrink-0" aria-hidden="true" /> : <Mail size={13} className="shrink-0" aria-hidden="true" />}
+                      <span>Preferência de entrega: {req.contatoPref === 'whatsapp' ? 'WhatsApp' : 'e-mail'}</span>
                     </div>
 
                     {req.mensagem && (

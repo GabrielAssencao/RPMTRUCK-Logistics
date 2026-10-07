@@ -12,7 +12,8 @@ const atualizarTicketSchema = z.object({
   status: z.enum(['ABERTO', 'EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE', 'RESOLVIDO', 'FECHADO']).optional(),
   prioridade: z.enum(['BAIXA', 'NORMAL', 'ALTA', 'URGENTE']).optional(),
   classificacaoCobranca: z.enum(['ATENDIMENTO', 'BUG_SISTEMA_CONFIRMADO']).optional(),
-}).strict().refine((valor) => valor.status || valor.prioridade || valor.classificacaoCobranca, 'Nenhuma alteração informada.')
+  respostasEmpresaHabilitadas: z.boolean().optional(),
+}).strict().refine((valor) => valor.status || valor.prioridade || valor.classificacaoCobranca || valor.respostasEmpresaHabilitadas !== undefined, 'Nenhuma alteração informada.')
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminAuth(request)
@@ -38,9 +39,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       prioridade: true,
       competencia: true,
       classificacaoCobranca: true,
+      origem: true,
+      respostasEmpresaHabilitadas: true,
     },
   })
   if (!atual) return NextResponse.json({ erro: 'Ticket não encontrado.' }, { status: 404 })
+  if (atual.origem === 'SUPERADMIN' && parsed.data.classificacaoCobranca) {
+    return NextResponse.json({ erro: 'Conversas administrativas não participam da franquia de suporte.' }, { status: 409 })
+  }
 
   const mudancas: string[] = []
   if (parsed.data.status && parsed.data.status !== atual.status) {
@@ -56,16 +62,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       ? 'Bug do sistema confirmado pelo Superadmin. Este chamado não consumirá a franquia mensal.'
       : 'Classificação alterada para atendimento contabilizado. Este chamado voltou a consumir a franquia mensal.')
   }
+  if (parsed.data.respostasEmpresaHabilitadas !== undefined && parsed.data.respostasEmpresaHabilitadas !== atual.respostasEmpresaHabilitadas) {
+    mudancas.push(parsed.data.respostasEmpresaHabilitadas
+      ? 'As respostas da empresa foram habilitadas pelo Superadmin.'
+      : 'As respostas da empresa foram pausadas pelo Superadmin.')
+  }
 
   const encerrado = parsed.data.status === 'RESOLVIDO' || parsed.data.status === 'FECHADO'
   const reaberto = parsed.data.status && !encerrado
-  const ticket = await prisma.$transaction(async (tx) => {
+  const ticket = await executarComAuditoria({ usuarioId: auth.session.userId, origem: 'SUPERADMIN' }, async (tx) => {
     const atualizado = await tx.conversaSuporte.update({
       where: { id: atual.id },
       data: {
         status: parsed.data.status,
         prioridade: parsed.data.prioridade,
         classificacaoCobranca: parsed.data.classificacaoCobranca,
+        respostasEmpresaHabilitadas: parsed.data.respostasEmpresaHabilitadas,
         classificadoEm: classificacaoMudou
           ? parsed.data.classificacaoCobranca === 'BUG_SISTEMA_CONFIRMADO' ? new Date() : null
           : undefined,
@@ -112,6 +124,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const { id } = await params
   if (!z.string().uuid().safeParse(id).success) {
     return NextResponse.json({ erro: 'Identificador de ticket inválido.' }, { status: 400 })
+  }
+
+  const conversaProtegida = await prisma.conversaSuporte.findUnique({
+    where: { id },
+    select: { origem: true },
+  })
+  if (conversaProtegida?.origem === 'SUPERADMIN') {
+    return NextResponse.json({ erro: 'Conversas administrativas devem ser encerradas ou arquivadas; o histórico não pode ser excluído.' }, { status: 409 })
   }
 
   const resultado = await executarComAuditoria(

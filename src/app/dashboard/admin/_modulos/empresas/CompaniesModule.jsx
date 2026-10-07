@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react';
 import { Search, ArrowLeft } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useAdminData } from '../../_hooks/useAdminData';
 import { useTheme } from '@/contexts/ThemeContext';
 import CompanyFinancialControl from './CompanyFinancialControl';
@@ -13,6 +13,7 @@ export default function CompaniesModule() {
   const [filtroBusca, setFiltroBusca] = useState('');
   const [empresaSelecionada, setEmpresaSelecionada] = useState(null);
   const [filtroFinanceiro, setFiltroFinanceiro] = useState('TODAS');
+  const [feedbackEncerramento, setFeedbackEncerramento] = useState('');
 
   if (loading) return <div className="h-64 flex items-center justify-center font-bold animate-pulse tracking-widest">SINCRONIZANDO OPERAÇÕES...</div>;
 
@@ -24,9 +25,9 @@ export default function CompaniesModule() {
 
   return (
     <div className="space-y-6 max-w-full overflow-hidden">
-      <AnimatePresence mode="wait">
-        {!empresaSelecionada ? (
-          <motion.div key="lista-view" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-6">
+      {!empresaSelecionada ? (
+          <motion.div key="lista-view" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+            {feedbackEncerramento && <p role="status" className="border border-green-500/30 bg-green-500/5 p-3 text-xs text-green-500">{feedbackEncerramento}</p>}
             <div>
               <p className="text-primary font-bold tracking-[0.3em] text-[10px] mb-1">MÓDULO DE CONTROLE</p>
               <h1 className="text-2xl font-black sm:text-3xl" style={{ fontFamily: 'Rajdhani, sans-serif' }}>GESTÃO DE <span className="text-primary">EMPRESAS</span></h1>
@@ -66,7 +67,7 @@ export default function CompaniesModule() {
               <table className="min-w-[760px] w-full text-left border-collapse relative">
                 <thead className="sticky top-0 bg-[var(--background-secondary)] z-10 shadow-[0_1px_0_0_var(--border)]">
                   <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
-                    {['TRANSPORTADORA', 'PLANO', 'MENSALIDADE', 'STATUS FINANCEIRO', 'AÇÃO'].map(h => (
+                    {['TRANSPORTADORA', 'PLANO', 'MENSALIDADE VIGENTE', 'STATUS FINANCEIRO', 'AÇÃO'].map(h => (
                       <th key={h} className="px-5 py-4 text-[10px] font-black tracking-widest opacity-60 bg-[var(--background-secondary)]">{h}</th>
                     ))}
                   </tr>
@@ -104,18 +105,22 @@ export default function CompaniesModule() {
             </div>
           </motion.div>
         ) : (
-          <motion.div key="detalhe-view" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
-            <button onClick={() => setEmpresaSelecionada(null)} className="mb-4 flex items-center gap-2 text-xs font-black opacity-50"><ArrowLeft size={14}/> VOLTAR</button>
+          <motion.div key="detalhe-view" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}>
+            <button type="button" onClick={() => setEmpresaSelecionada(null)} className="mb-4 flex items-center gap-2 text-xs font-black opacity-50"><ArrowLeft size={14}/> VOLTAR</button>
             <CompanyFinancialControl
               empresa={empresaSelecionada}
               onUpdate={(empresaAtualizada) => {
                 if (empresaAtualizada) setEmpresaSelecionada(atual => ({ ...atual, ...empresaAtualizada }));
                 void refresh();
               }}
+              onDeleted={(resultado) => {
+                setFeedbackEncerramento(`${resultado?.mensagem || 'Conta encerrada e dados removidos.'}${resultado?.protocolo ? ` Protocolo: ${resultado.protocolo}.` : ''}`);
+                setEmpresaSelecionada(null);
+                void refresh();
+              }}
             />
           </motion.div>
-        )}
-      </AnimatePresence>
+      )}
     </div>
   );
 }

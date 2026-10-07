@@ -80,6 +80,14 @@ if (!existsSync(localPath)) {
 
     if (mesmaBase || mesmoSupabase) {
       fail('as credenciais locais apontam para o mesmo projeto configurado em produção.')
+    } else if (local.get('ASAAS_ENABLED') === 'true' && local.get('ASAAS_ENVIRONMENT') !== 'sandbox') {
+      fail('a integração Asaas local só pode ser ativada no ambiente sandbox.')
+    } else if (local.get('ASAAS_ENABLED') === 'true' && local.get('ASAAS_API_KEY')?.startsWith('$')) {
+      fail('escape o $ inicial de ASAAS_API_KEY como \\$ para que o Next.js não apague a chave ao carregar .env.local.')
+    } else if (local.get('ASAAS_ENABLED') === 'true' && !local.get('ASAAS_API_KEY')) {
+      fail('defina ASAAS_API_KEY para ativar a integração Asaas local.')
+    } else if (local.get('ASAAS_ENABLED') === 'true' && (local.get('ASAAS_WEBHOOK_TOKEN')?.length ?? 0) < 32) {
+      fail('ASAAS_WEBHOOK_TOKEN deve ter ao menos 32 caracteres quando o Asaas estiver ativo.')
     } else {
       const pooledUrl = connectionUrl(local.get('DATABASE_URL'))
       const directUrl = connectionUrl(local.get('DIRECT_URL'))

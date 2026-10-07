@@ -7,7 +7,8 @@ export class RequestBodyError extends Error {
 
 export function limiteCorpoRequisicao(pathname: string) {
   if (pathname === '/api/relatorios/arquivos') return 11 * 1024 * 1024
-  if (/^\/api\/motoristas\/[^/]+\/foto$/.test(pathname) || /^\/api\/contas-pagar(?:\/[^/]+)?$/.test(pathname)) return 6 * 1024 * 1024
+  if (pathname === '/api/admin/promocoes') return 3 * 1024 * 1024
+  if (/^\/api\/motoristas\/[^/]+\/foto$/.test(pathname) || /^\/api\/contas-pagar(?:\/[^/]+)?$/.test(pathname) || /^\/api\/empresa\/faturas\/[^/]+\/comprovante$/.test(pathname)) return 6 * 1024 * 1024
   return 2 * 1024 * 1024
 }
 
@@ -41,5 +42,12 @@ export async function lerFormularioLimitado(request: Request) {
     return await new Response(new Uint8Array(bytes), {
       headers: { 'Content-Type': request.headers.get('content-type') ?? '' },
     }).formData()
+  } catch { throw new RequestBodyError(400) }
+}
+
+export async function lerJsonLimitado(request: Request, maxBytes = 16 * 1024): Promise<unknown> {
+  const bytes = await lerCorpoLimitado(request, maxBytes)
+  try {
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
   } catch { throw new RequestBodyError(400) }
 }

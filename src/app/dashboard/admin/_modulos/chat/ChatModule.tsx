@@ -1,13 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ClassificacaoCobrancaTicket, PrioridadeTicketSuporte, StatusTicketSuporte } from '@prisma/client'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
-import { Bug, Headset, Loader2, RefreshCw, ShieldAlert, Trash2, X } from 'lucide-react'
+import { Bug, CirclePlus, Headset, Loader2, RefreshCw, ShieldAlert, Trash2, X } from 'lucide-react'
 import ChatWorkspace from '@/components/dashboard/ChatWorkspace'
 import type { SupportAdminSummary, SupportTicket } from '@/components/dashboard/supportTypes'
 import { useTheme } from '@/contexts/ThemeContext'
-import { CATEGORIA_TICKET_LABEL, PRIORIDADE_TICKET_LABEL, STATUS_TICKET_LABEL } from '@/lib/suporteConfig'
+import { CATEGORIAS_TICKET, CATEGORIA_TICKET_LABEL, PRIORIDADE_TICKET_LABEL, STATUS_TICKET_LABEL } from '@/lib/suporteConfig'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 
@@ -25,11 +25,15 @@ type AlteracaoTicket = {
   status?: StatusTicketSuporte
   prioridade?: PrioridadeTicketSuporte
   classificacaoCobranca?: ClassificacaoCobrancaTicket
+  respostasEmpresaHabilitadas?: boolean
 }
+
+type EmpresaRelacionamento = { id: string; nome: string; status: string; plano: string }
 
 export default function ChatModule({ initialTicketId = null }: { initialTicketId?: string | null }) {
   const { primary } = useTheme()
   const [tickets, setTickets] = useState<SupportTicket[]>([])
+  const [empresas, setEmpresas] = useState<EmpresaRelacionamento[]>([])
   const [resumo, setResumo] = useState<SupportAdminSummary>(RESUMO_INICIAL)
   const [selecionado, setSelecionado] = useState<SupportTicket | null>(null)
   const [filtro, setFiltro] = useState<FiltroTicket>('ATIVOS')
@@ -39,17 +43,21 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
   const [feedback, setFeedback] = useState('')
   const [confirmarExclusao, setConfirmarExclusao] = useState(false)
   const [excluindo, setExcluindo] = useState(false)
+  const [novaConversaAberta, setNovaConversaAberta] = useState(false)
+  const [criandoConversa, setCriandoConversa] = useState(false)
+  const [novaConversa, setNovaConversa] = useState({ empresaId: '', categoria: 'SOLICITACAO', assunto: '', mensagem: '', respostasEmpresaHabilitadas: true })
   const [classificacaoPendente, setClassificacaoPendente] = useState<ClassificacaoCobrancaTicket | null>(null)
   const ticketInicial = useRef<string | null>(initialTicketId)
 
   const carregar = useCallback(async (silencioso = false) => {
     if (!silencioso) setLoading(true)
     try {
-      const response = await fetch('/api/admin/chat', { cache: 'no-store' })
+      const response = await fetch(silencioso ? '/api/admin/chat' : '/api/admin/chat?empresas=true', { cache: 'no-store' })
       const body = await response.json()
       if (!response.ok) throw new Error(body.erro || 'Não foi possível carregar os tickets.')
       const lista = Array.isArray(body.tickets) ? body.tickets as SupportTicket[] : []
       setTickets(lista)
+      if (Array.isArray(body.empresas)) setEmpresas(body.empresas as EmpresaRelacionamento[])
       setResumo(body.resumo ?? RESUMO_INICIAL)
       const alvo = ticketInicial.current
       ticketInicial.current = null
@@ -63,6 +71,32 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
       if (!silencioso) setLoading(false)
     }
   }, [])
+
+  const criarConversa = async (event: FormEvent) => {
+    event.preventDefault()
+    if (criandoConversa) return
+    setCriandoConversa(true)
+    setError('')
+    setFeedback('')
+    try {
+      const response = await fetch('/api/admin/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(novaConversa),
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.erro || 'Não foi possível iniciar a conversa.')
+      ticketInicial.current = body.conversa.id
+      setNovaConversa({ empresaId: '', categoria: 'SOLICITACAO', assunto: '', mensagem: '', respostasEmpresaHabilitadas: true })
+      setNovaConversaAberta(false)
+      setFeedback('Conversa iniciada e gestores notificados.')
+      await carregar(true)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível iniciar a conversa.')
+    } finally {
+      setCriandoConversa(false)
+    }
+  }
 
   useEffect(() => {
     ticketInicial.current = new URLSearchParams(window.location.search).get('ticket') ?? ticketInicial.current
@@ -140,14 +174,22 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
     <div className="space-y-5">
       <header className="flex flex-col justify-between gap-4 border-b pb-5 sm:flex-row sm:items-end" style={{ borderColor: 'var(--border)' }}>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: primary }}>Central de atendimento</p>
-          <h1 className="mt-1 font-rajdhani text-2xl font-black sm:text-3xl">TICKETS DAS EMPRESAS</h1>
-          <p className="mt-1 text-sm text-foreground-muted">Triagem, respostas, prioridade, franquia e confirmação de bugs do sistema.</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: primary }}>Central de relacionamento</p>
+          <h1 className="mt-1 font-rajdhani text-2xl font-black sm:text-3xl">CONVERSAS DAS EMPRESAS</h1>
+          <p className="mt-1 text-sm text-foreground-muted">Atenda tickets ou inicie contatos de feedback, onboarding e acompanhamento financeiro.</p>
         </div>
-        <button type="button" onClick={() => void carregar()} disabled={loading} aria-label="Atualizar tickets" className="min-h-11 min-w-11 border p-3 disabled:opacity-50" style={{ borderColor: 'var(--border)' }}>
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex gap-2"><button type="button" onClick={() => setNovaConversaAberta((aberta) => !aberta)} className="inline-flex min-h-11 items-center gap-2 border px-4 text-xs font-black uppercase" style={{ borderColor: primary, color: primary }}><CirclePlus size={16} />Iniciar conversa</button><button type="button" onClick={() => void carregar()} disabled={loading} aria-label="Atualizar conversas" className="min-h-11 min-w-11 border p-3 disabled:opacity-50" style={{ borderColor: 'var(--border)' }}><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button></div>
       </header>
+
+      {novaConversaAberta && <form onSubmit={criarConversa} className="grid gap-4 border p-5 md:grid-cols-2" style={{ borderColor: primary, backgroundColor: 'var(--background-secondary)' }}>
+        <div className="md:col-span-2"><h2 className="text-sm font-black uppercase">Nova conversa administrativa</h2><p className="mt-1 text-xs text-foreground-muted">Somente gestores da empresa receberão a notificação. Este contato não consome a franquia de suporte.</p></div>
+        <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-foreground-muted">Empresa</span><select required value={novaConversa.empresaId} onChange={(event) => setNovaConversa((atual) => ({ ...atual, empresaId: event.target.value }))} className="w-full border bg-background p-3 text-sm" style={{ borderColor: 'var(--border)' }}><option value="">Selecione uma empresa</option>{empresas.map((empresa) => <option key={empresa.id} value={empresa.id}>{empresa.nome} · {empresa.plano} · {empresa.status}</option>)}</select></label>
+        <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-foreground-muted">Assunto</span><input required minLength={3} maxLength={160} value={novaConversa.assunto} onChange={(event) => setNovaConversa((atual) => ({ ...atual, assunto: event.target.value }))} placeholder="Ex.: Acompanhamento do primeiro mês" className="w-full border bg-background p-3 text-sm" style={{ borderColor: 'var(--border)' }} /></label>
+        <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-foreground-muted">Tipo de contato</span><select value={novaConversa.categoria} onChange={(event) => setNovaConversa((atual) => ({ ...atual, categoria: event.target.value }))} className="w-full border bg-background p-3 text-sm" style={{ borderColor: 'var(--border)' }}>{CATEGORIAS_TICKET.map((categoria) => <option key={categoria} value={categoria}>{CATEGORIA_TICKET_LABEL[categoria]}</option>)}</select></label>
+        <label className="flex items-start gap-3 border p-3" style={{ borderColor: 'var(--border)' }}><input type="checkbox" checked={novaConversa.respostasEmpresaHabilitadas} onChange={(event) => setNovaConversa((atual) => ({ ...atual, respostasEmpresaHabilitadas: event.target.checked }))} className="mt-1" /><span><strong className="block text-xs">Permitir resposta da empresa</strong><small className="mt-1 block text-xs text-foreground-muted">Pode ser pausada ou reativada depois, sem apagar o histórico.</small></span></label>
+        <label className="block md:col-span-2"><span className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-foreground-muted">Mensagem</span><textarea required minLength={3} maxLength={2000} rows={5} value={novaConversa.mensagem} onChange={(event) => setNovaConversa((atual) => ({ ...atual, mensagem: event.target.value }))} placeholder="Escreva uma mensagem objetiva e nunca envie dados bancários ou credenciais pelo chat." className="w-full resize-y border bg-background p-3 text-sm" style={{ borderColor: 'var(--border)' }} /></label>
+        <div className="flex justify-end gap-2 md:col-span-2"><button type="button" disabled={criandoConversa} onClick={() => setNovaConversaAberta(false)} className="min-h-11 border px-4 text-xs font-bold uppercase" style={{ borderColor: 'var(--border)' }}>Cancelar</button><button type="submit" disabled={criandoConversa} className="min-h-11 px-4 text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}>{criandoConversa ? 'Iniciando...' : 'Iniciar e notificar'}</button></div>
+      </form>}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Resumo label="Tickets ativos" value={String(resumo.ticketsAtivos)} />
@@ -185,6 +227,7 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
                 <p className="mt-1 text-[9px] uppercase text-foreground-muted">{ticket.protocolo} · {STATUS_TICKET_LABEL[ticket.status]}</p>
                 <div className="mt-2 flex flex-wrap gap-1">
                   <span className="border px-1.5 py-0.5 text-[8px] uppercase" style={{ borderColor: 'var(--border)' }}>{CATEGORIA_TICKET_LABEL[ticket.categoria]}</span>
+                  {ticket.origem === 'SUPERADMIN' && <span className="border px-1.5 py-0.5 text-[8px] font-black uppercase" style={{ borderColor: primary, color: primary }}>Iniciada pelo Admin</span>}
                   {ticket.cobravelExtra && <span className="border border-amber-500/30 px-1.5 py-0.5 text-[8px] font-black uppercase text-amber-500">Extra #{ticket.ordemNaCompetencia}</span>}
                   {ticket.classificacaoCobranca === 'BUG_SISTEMA_CONFIRMADO' && <span className="border border-blue-500/30 px-1.5 py-0.5 text-[8px] font-black uppercase text-blue-400"><Bug size={9} className="mr-1 inline" />Bug isento</span>}
                 </div>
@@ -208,29 +251,19 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
                   {PRIORIDADES.map((prioridade) => <option key={prioridade} value={prioridade}>{PRIORIDADE_TICKET_LABEL[prioridade]}</option>)}
                 </select>
               </label>
-              <label>
-                <span className="mb-1 block text-[9px] font-bold uppercase text-foreground-muted">Classificação da franquia</span>
-                <select disabled={saving} value={selecionado.classificacaoCobranca} onChange={(event) => atualizarClassificacao(event.target.value as ClassificacaoCobrancaTicket)} className="w-full border bg-background p-2 text-xs" style={{ borderColor: 'var(--border)' }}>
-                  <option value="ATENDIMENTO">Atendimento contabilizado</option>
-                  <option value="BUG_SISTEMA_CONFIRMADO">Bug do sistema confirmado</option>
-                </select>
-              </label>
-              <div>
-                <span className="mb-1 block text-[9px] font-bold uppercase text-foreground-muted">Cobertura</span>
-                {selecionado.classificacaoCobranca === 'BUG_SISTEMA_CONFIRMADO' ? (
-                  <p className="border border-blue-500/30 p-2 text-xs font-bold text-blue-400">Isento · não consome franquia</p>
-                ) : (
-                  <p className={`border p-2 text-xs font-bold ${selecionado.cobravelExtra ? 'border-amber-500/30 text-amber-500' : 'text-green-500'}`} style={!selecionado.cobravelExtra ? { borderColor: 'var(--border)' } : undefined}>
-                    {selecionado.cobravelExtra ? `Extra · ticket ${selecionado.ordemNaCompetencia}/${selecionado.franquiaNoMomento}` : `Incluso · ticket ${selecionado.ordemNaCompetencia}/${selecionado.franquiaNoMomento}`}
-                  </p>
-                )}
-              </div>
+              {selecionado.origem === 'SUPERADMIN' ? <>
+                <div><span className="mb-1 block text-[9px] font-bold uppercase text-foreground-muted">Cobertura</span><p className="border p-2 text-xs font-bold text-green-500" style={{ borderColor: 'var(--border)' }}>Administrativo · sem franquia</p></div>
+                <div><span className="mb-1 block text-[9px] font-bold uppercase text-foreground-muted">Respostas da empresa</span><button type="button" disabled={saving} onClick={() => void atualizar({ respostasEmpresaHabilitadas: !selecionado.respostasEmpresaHabilitadas })} className={`w-full border p-2 text-left text-xs font-bold disabled:opacity-50 ${selecionado.respostasEmpresaHabilitadas ? 'text-green-500' : 'text-amber-500'}`} style={{ borderColor: 'var(--border)' }}>{selecionado.respostasEmpresaHabilitadas ? 'Permitidas · pausar' : 'Pausadas · reativar'}</button></div>
+              </> : <>
+                <label><span className="mb-1 block text-[9px] font-bold uppercase text-foreground-muted">Classificação da franquia</span><select disabled={saving} value={selecionado.classificacaoCobranca} onChange={(event) => atualizarClassificacao(event.target.value as ClassificacaoCobrancaTicket)} className="w-full border bg-background p-2 text-xs" style={{ borderColor: 'var(--border)' }}><option value="ATENDIMENTO">Atendimento contabilizado</option><option value="BUG_SISTEMA_CONFIRMADO">Bug do sistema confirmado</option></select></label>
+                <div><span className="mb-1 block text-[9px] font-bold uppercase text-foreground-muted">Cobertura</span>{selecionado.classificacaoCobranca === 'BUG_SISTEMA_CONFIRMADO' ? <p className="border border-blue-500/30 p-2 text-xs font-bold text-blue-400">Isento · não consome franquia</p> : <p className={`border p-2 text-xs font-bold ${selecionado.cobravelExtra ? 'border-amber-500/30 text-amber-500' : 'text-green-500'}`} style={!selecionado.cobravelExtra ? { borderColor: 'var(--border)' } : undefined}>{selecionado.cobravelExtra ? `Extra · ticket ${selecionado.ordemNaCompetencia}/${selecionado.franquiaNoMomento}` : `Incluso · ticket ${selecionado.ordemNaCompetencia}/${selecionado.franquiaNoMomento}`}</p>}</div>
+              </>}
             </div>
-            <div className="flex justify-end">
+            {selecionado.origem !== 'SUPERADMIN' && <div className="flex justify-end">
               <button type="button" onClick={() => setConfirmarExclusao(true)} disabled={saving || excluindo} className="interactive-control flex min-h-11 items-center gap-2 border border-red-500/50 px-4 text-[10px] font-black uppercase text-red-500 hover:bg-red-500/10 disabled:opacity-40"><Trash2 size={14} /> Excluir chamado</button>
-            </div>
-            <p className="border border-blue-500/20 bg-blue-500/5 p-3 text-[10px] text-foreground-muted">Classifique como bug somente depois de reproduzir e confirmar uma falha do sistema. Dúvidas, auxílio operacional, cadastros e solicitações continuam contabilizados.</p>
-            <ChatWorkspace key={`${selecionado.id}:${selecionado.status}`} ticketId={selecionado.id} empresaId={selecionado.empresa.id} title={`${selecionado.empresa.nome} · ${selecionado.assunto}`} protocolo={selecionado.protocolo} status={selecionado.status} onMessageSent={() => void carregar(true)} />
+            </div>}
+            {selecionado.origem === 'SUPERADMIN' ? <p className="border border-green-500/20 bg-green-500/5 p-3 text-[10px] text-foreground-muted">Conversa administrativa preservada no histórico. Ela não consome franquia e pode ser encerrada ou reaberta pelo status acima.</p> : <p className="border border-blue-500/20 bg-blue-500/5 p-3 text-[10px] text-foreground-muted">Classifique como bug somente depois de reproduzir e confirmar uma falha do sistema. Dúvidas, auxílio operacional, cadastros e solicitações continuam contabilizados.</p>}
+            <ChatWorkspace key={`${selecionado.id}:${selecionado.status}:${selecionado.respostasEmpresaHabilitadas}`} ticketId={selecionado.id} empresaId={selecionado.empresa.id} title={`${selecionado.empresa.nome} · ${selecionado.assunto}`} protocolo={selecionado.protocolo} status={selecionado.status} respostasEmpresaHabilitadas={selecionado.respostasEmpresaHabilitadas} onMessageSent={() => void carregar(true)} />
           </div>
         ) : (
           <div className="flex min-h-[400px] items-center justify-center border p-8 text-center" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>

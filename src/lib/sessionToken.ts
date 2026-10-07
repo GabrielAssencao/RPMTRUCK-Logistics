@@ -12,6 +12,7 @@ export type AppRole =
   | 'GESTOR'
 
 export interface SessionPayload {
+  mfaVerified?: boolean
   sessionId?: string
   userId: string
   email: string
@@ -79,6 +80,7 @@ export async function verifySession(request: NextRequest): Promise<SessionPayloa
     }
 
     return {
+      mfaVerified: payload.mfaVerified === true,
       sessionId: typeof payload.sessionId === 'string' ? payload.sessionId : undefined,
       userId: payload.userId,
       email: payload.email,

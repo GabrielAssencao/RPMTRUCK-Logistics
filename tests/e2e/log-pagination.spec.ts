@@ -3,7 +3,7 @@ import { SignJWT } from 'jose'
 
 test('logs avançam, voltam e reiniciam a página ao filtrar empresa', async ({ page, context, isMobile }) => {
   test.skip(isMobile || !process.env.JWT_SECRET || process.env.LOCAL_ENVIRONMENT !== 'development', 'Fixture de navegação desktop no ambiente isolado.')
-  const token = await new SignJWT({ userId: 'synthetic-browser-fixture', email: 'fixture@example.invalid', role: 'ADMIN_RPM', sessionVersion: 0 }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('5m').sign(new TextEncoder().encode(process.env.JWT_SECRET))
+  const token = await new SignJWT({ userId: 'synthetic-browser-fixture', email: 'fixture@example.invalid', role: 'ADMIN_RPM', sessionVersion: 0, mfaVerified: true }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('5m').sign(new TextEncoder().encode(process.env.JWT_SECRET))
   await context.addCookies([{ name: 'rpmtruck_session', value: token, url: 'http://127.0.0.1:5500', httpOnly: true, sameSite: 'Lax' }])
   await context.route('**/api/**', route => {
     const url = new URL(route.request().url())

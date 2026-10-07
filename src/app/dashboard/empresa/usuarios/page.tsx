@@ -25,7 +25,7 @@ import {
 import GenericDrawer, { FieldConfig } from '@/components/dashboard/GenericDrawer'
 import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
-import { MODULOS_CONFIG, normalizarModulos, type ModuloCodigo } from '@/utils/planos'
+import { MODULOS_CONFIG, moduloDelegavelParaOperador, normalizarModulos, type ModuloCodigo } from '@/utils/planos'
 
 interface UsuarioLocal {
   id: string
@@ -41,6 +41,8 @@ interface UsuarioLocal {
   temaClaro: boolean | null
   rotuloEquipe: string | null
   podePersonalizarTema: boolean
+  mfaObrigatorio: boolean
+  mfaAtivo: boolean
 }
 
 type OrdenacaoOperadores = 'HIERARQUIA' | 'NOME_ASC' | 'NOME_DESC' | 'CADASTRO_RECENTE' | 'CADASTRO_ANTIGO'
@@ -134,6 +136,8 @@ export default function UsuariosPage() {
   const [salvandoAcessos, setSalvandoAcessos] = useState(false)
   const [alternandoStatusId, setAlternandoStatusId] = useState<string | null>(null)
   const [redefinindoId, setRedefinindoId] = useState<string | null>(null)
+  const [alterandoMfaId, setAlterandoMfaId] = useState<string | null>(null)
+  const [usuarioMfaParaAlterar, setUsuarioMfaParaAlterar] = useState<UsuarioLocal | null>(null)
   const [credencialTemporaria, setCredencialTemporaria] = useState<CredencialTemporaria | null>(null)
   const [confirmacaoOperador, setConfirmacaoOperador] = useState<ConfirmacaoOperador | null>(null)
   const [erroConfirmacao, setErroConfirmacao] = useState('')
@@ -164,6 +168,8 @@ export default function UsuariosPage() {
           temaClaro: u.temaClaro,
           rotuloEquipe: u.rotuloEquipe,
           podePersonalizarTema: Boolean(u.podePersonalizarTema),
+          mfaObrigatorio: Boolean(u.mfaAdmin?.obrigatorio),
+          mfaAtivo: Boolean(u.mfaAdmin?.ativadoEm),
         }))
         setUsuarios(formatados)
       }
@@ -181,7 +187,7 @@ export default function UsuariosPage() {
       if (response.ok) {
         setPerfilLogado(data.usuario.role)
         setUsuarioLogadoId(data.usuario.id)
-        setModulosDisponiveis(normalizarModulos(data.empresa.modulosContratados ?? data.empresa.modulos))
+        setModulosDisponiveis(normalizarModulos(data.empresa.modulosContratados ?? data.empresa.modulos).filter(moduloDelegavelParaOperador))
         if (data.usuario.role === 'GESTOR_EMPRESA' || data.usuario.role === 'GESTOR') await carregarUsuarios()
       } else setLoading(false)
     }).catch(() => setLoading(false))
@@ -298,6 +304,20 @@ export default function UsuariosPage() {
     setRoleEdicao(usuario.role)
     setDashboardEdicao(usuario.acessoDashboardGeral)
     setModulosEdicao(usuario.modulosAcesso.filter((modulo) => modulosDisponiveis.includes(modulo)))
+  }
+
+  const alternarMfa = async (usuario: UsuarioLocal) => {
+    if (alterandoMfaId) return
+    setAlterandoMfaId(usuario.id); setFeedbackOperador(null)
+    try {
+      const response = await fetch(`/api/empresa/usuarios/${usuario.id}/mfa`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ obrigatorio: !usuario.mfaObrigatorio }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.erro)
+      setUsuarios(current => current.map(item => item.id === usuario.id ? { ...item, mfaObrigatorio: data.obrigatorio, mfaAtivo: data.ativo } : item))
+      setFeedbackOperador({ mensagem: data.obrigatorio ? `${usuario.nome} deverá configurar o MFA no próximo login.` : `Exigência de MFA removida de ${usuario.nome}; as sessões foram encerradas.`, tom: 'success' })
+      setUsuarioMfaParaAlterar(null)
+    } catch (error) { setFeedbackOperador({ mensagem: error instanceof Error ? error.message : 'Não foi possível alterar o MFA.', tom: 'error' }) }
+    finally { setAlterandoMfaId(null) }
   }
 
   const salvarAcessos = async () => {
@@ -607,6 +627,7 @@ export default function UsuariosPage() {
                         <span className={`inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-[10px] font-bold tracking-widest ${u.ativo ? 'border-green-500/20 bg-green-500/10 text-green-500' : 'border-zinc-500/20 bg-zinc-500/10 text-zinc-400'}`}>
                           {u.ativo ? <CheckCircle2 size={10} /> : <Power size={10} />} {u.status}
                         </span>
+                        {u.mfaObrigatorio && <span className="ml-2 inline-flex border border-violet-500/30 px-2 py-1 text-[9px] font-bold uppercase text-violet-400">MFA {u.mfaAtivo ? 'ativo' : 'pendente'}</span>}
                       </td>
 
                       <td className="px-6 py-4 text-xs text-foreground-muted">
@@ -615,6 +636,18 @@ export default function UsuariosPage() {
 
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {u.id !== usuarioLogadoId && u.role !== 'GESTOR_EMPRESA' && (
+                            <button
+                              type="button"
+                              title={u.mfaObrigatorio ? 'Remover exigência de MFA' : 'Exigir MFA no próximo login'}
+                              aria-label={`${u.mfaObrigatorio ? 'Remover' : 'Exigir'} MFA de ${u.nome}`}
+                              disabled={alterandoMfaId === u.id}
+                              onClick={() => u.mfaObrigatorio ? setUsuarioMfaParaAlterar(u) : void alternarMfa(u)}
+                              className="rounded p-2 text-foreground-muted transition-colors hover:bg-white/5 hover:text-foreground disabled:opacity-50"
+                            >
+                              {alterandoMfaId === u.id ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} style={{ color: u.mfaObrigatorio ? primary : undefined }} />}
+                            </button>
+                          )}
                           {u.id !== usuarioLogadoId && u.role !== 'GESTOR_EMPRESA' && (
                             <Link
                               href={`/dashboard/empresa/usuarios/${u.id}/personalizacao`}
@@ -942,6 +975,17 @@ export default function UsuariosPage() {
         )}
       </AnimatePresence>
 
+      <ActionConfirmDialog
+        open={Boolean(usuarioMfaParaAlterar)}
+        title="Remover exigência de MFA"
+        description={usuarioMfaParaAlterar ? `O autenticador e os dispositivos confiáveis de ${usuarioMfaParaAlterar.nome} serão removidos, e todas as sessões dessa conta serão encerradas.` : ''}
+        confirmLabel="Remover MFA"
+        loadingLabel="Removendo..."
+        loading={Boolean(alterandoMfaId)}
+        onClose={() => { if (!alterandoMfaId) setUsuarioMfaParaAlterar(null) }}
+        onConfirm={() => { if (usuarioMfaParaAlterar) void alternarMfa(usuarioMfaParaAlterar) }}
+      />
+
     </div>
     </MotionConfig>
   )
@@ -983,6 +1027,7 @@ interface UsuarioApi {
   temaClaro: boolean | null
   rotuloEquipe: string | null
   podePersonalizarTema: boolean
+  mfaAdmin: { obrigatorio: boolean; ativadoEm: string | null } | null
 }
 
 const OPTION_STYLE = { backgroundColor: 'var(--background)', color: 'var(--foreground)' }

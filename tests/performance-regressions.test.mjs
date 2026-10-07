@@ -64,10 +64,13 @@ test('resumo de suporte empresarial só conta mensagens autorizadas e não busca
 })
 
 test('resumo de suporte admin mantém autenticação e consulta única', async () => {
+  const z = nativeRequire('zod').z
   let queries = 0
   const dependencies = {
     'next/server': response,
+    zod: { z },
     '@/lib/auth': { requireAdminAuth: async () => auth },
+    '@/lib/domainValidation': { textoOperacional: () => z.string() },
     '@/lib/prisma': { prisma: { mensagemSuporte: { count: async query => {
       queries++
       assert.equal(query.where.tipo, 'USUARIO')
@@ -76,6 +79,9 @@ test('resumo de suporte admin mantém autenticação e consulta única', async (
     } } } },
     '@/lib/rateLimit': { applyRateLimit: async () => null, RATE_LIMITS: { CHAT_READ: { limit: 1, windowMs: 1 } } },
     '@/lib/suporte': {},
+    '@/lib/suporteConfig': { prioridadeInicialTicket: () => 'NORMAL' },
+    '@/lib/notificacoes': {},
+    '@/lib/auditoria': {},
   }
   const { GET } = compile(readFileSync('src/app/api/admin/chat/route.ts', 'utf8'), dependencies)
   assert.deepEqual((await GET(request)).body, { resumo: { mensagensNaoLidas: 4 } })

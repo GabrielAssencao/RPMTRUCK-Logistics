@@ -37,13 +37,12 @@ export function DashboardMotion({ children, motionKey }: { children: ReactNode; 
 
       gsap.fromTo(
         target,
-        { autoAlpha: 0.88, y: 8 },
+        { autoAlpha: 0.9 },
         {
           autoAlpha: 1,
-          y: 0,
-          duration: 0.24,
+          duration: 0.2,
           ease: 'power2.out',
-          clearProps: 'transform,opacity,visibility',
+          clearProps: 'opacity,visibility',
         },
       )
     })

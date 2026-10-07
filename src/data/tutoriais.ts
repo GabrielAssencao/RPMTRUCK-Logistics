@@ -5,6 +5,7 @@ export interface TutorialModulo {
   passos: readonly string[]
   logica: string
   dica: string
+  mostrarAplicativosAutenticadores?: boolean
 }
 
 export const TUTORIAIS_MODULOS: readonly TutorialModulo[] = [
@@ -79,6 +80,13 @@ export const TUTORIAIS_MODULOS: readonly TutorialModulo[] = [
     passos: ['O gestor abre Operadores e registra uma conta individual.', 'Escolha o papel e apenas os módulos necessários à pessoa.', 'Em Ações, abra Personalização e defina rótulo da equipe, cor, modo e fundo.', 'Escolha se a pessoa poderá personalizar seu próprio tema e salve.', 'Revogue o acesso quando a pessoa deixar a equipe.'],
     logica: 'Personalização é visual e não amplia permissões. As contas ocupam vagas do plano; o gestor também conta como usuário.',
     dica: 'Use rótulos como Equipe financeira para dar significado às cores escolhidas.',
+  },
+  {
+    id: 'mfa', titulo: 'Autenticação em duas etapas (MFA)', objetivo: 'Proteja sua conta com um código temporário gerado no celular.',
+    passos: ['Instale o Google Authenticator ou o Microsoft Authenticator usando um dos links oficiais exibidos abaixo.', 'O gestor abre Configurações e, em Proteção em duas etapas, seleciona Ativar segundo fator. Quando o MFA for exigido por um administrador, a configuração será apresentada no próximo login.', 'No aplicativo escolhido, adicione uma conta e leia o QR Code. Se estiver usando o mesmo celular, abra o autenticador pelo link ou copie a chave manual.', 'Digite no RPM Truck o código de seis dígitos exibido no aplicativo antes que ele expire.', 'Baixe ou copie os códigos de recuperação e guarde-os fora do sistema, em local seguro.'],
+    logica: 'Google Authenticator e Microsoft Authenticator são alternativas compatíveis; basta escolher um. O QR Code e a chave são segredos da conta e não devem ser enviados por mensagem nem compartilhados com o suporte.',
+    dica: 'Se um código válido for recusado, ative data e hora automáticas no celular e tente com o próximo código. Cada código de recuperação funciona apenas uma vez.',
+    mostrarAplicativosAutenticadores: true,
   },
   {
     id: 'configuracoes', titulo: 'Configurações e segurança', objetivo: 'Mantenha perfil, sessão e preferências organizados.',

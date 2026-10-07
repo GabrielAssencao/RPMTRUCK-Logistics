@@ -3,7 +3,8 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { executarLimpezaRetencao } from '@/lib/retencaoDados'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
-import { atualizarCobrancasMensais } from '@/lib/financeiro/cicloCobranca'
+import { atualizarCobrancasMensais, emitirMensalidadesAutomaticas, enviarAvisosVencimentoMensalidades } from '@/lib/financeiro/cicloCobranca'
+import { processarTransicoesPromocionaisRecorrencia } from '@/lib/financeiro/transicaoPromocaoRecorrencia'
 
 import { limparLembretesConcluidos } from '@/lib/lembreteRetencao'
 
@@ -30,10 +31,14 @@ export async function GET(request: NextRequest) {
     const limited = await applyRateLimit(request, 'retention-run', RATE_LIMITS.RETENTION_RUN.limit, RATE_LIMITS.RETENTION_RUN.windowMs)
     if (limited) return limited
     const cobrancas = await atualizarCobrancasMensais()
+    const cobrancasAsaas = await emitirMensalidadesAutomaticas()
+    const avisosPagamento = await enviarAvisosVencimentoMensalidades()
+    const transicoesPromocionais = await processarTransicoesPromocionaisRecorrencia()
     const lembretesRemovidos = await limparLembretesConcluidos()
     const resultado = await executarLimpezaRetencao()
-    return NextResponse.json({ ...resultado, cobrancas, lembretesRemovidos }, {
-      status: resultado.falhasEmpresas > 0 ? 500 : 200,
+    return NextResponse.json({ ...resultado, cobrancas, cobrancasAsaas, avisosPagamento, transicoesPromocionais, lembretesRemovidos }, {
+      status: resultado.falhasEmpresas > 0 || cobrancasAsaas.falhas > 0
+        || transicoesPromocionais.falhas > 0 || transicoesPromocionais.falhasSuspensao > 0 ? 500 : 200,
       headers: { 'Cache-Control': 'private, no-store' },
     })
   } catch (error) {

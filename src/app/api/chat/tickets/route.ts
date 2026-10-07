@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     try {
       const ticket = await prisma.$transaction(async (tx) => {
         const usados = await tx.conversaSuporte.count({
-          where: { empresaId, competencia, classificacaoCobranca: 'ATENDIMENTO' },
+          where: { empresaId, competencia, origem: 'EMPRESA', classificacaoCobranca: 'ATENDIMENTO' },
         })
         const cobertura = calcularCoberturaTicket(auth.empresa!.plano, usados)
         const mensagemInicialEm = new Date()

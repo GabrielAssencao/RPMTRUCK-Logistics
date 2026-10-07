@@ -19,13 +19,15 @@ function addVersion(counts, value) {
 }
 
 try {
-  const [empresas, motoristas, contasPagar, importacoes] = await Promise.all([
+  const [empresas, motoristas, contasPagar, importacoes, mfa] = await Promise.all([
     prisma.empresa.findMany({ select: { cnpj: true, telefone: true } }),
     prisma.motorista.findMany({ select: { cpf: true, rg: true, cnh: true } }),
     prisma.contaPagar.findMany({ select: { linha_digitavel: true } }),
     prisma.importacaoInicial.findMany({ where: { status: 'PENDENTE' }, select: { dados: true } }),
+    prisma.mfaAdmin.findMany({ select: { segredo: true } }),
   ])
   const counts = {}
+  for (const item of mfa) addVersion(counts, item.segredo)
   for (const empresa of empresas) {
     addVersion(counts, empresa.cnpj)
     addVersion(counts, empresa.telefone)

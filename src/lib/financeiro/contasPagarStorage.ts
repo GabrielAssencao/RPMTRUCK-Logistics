@@ -1,4 +1,5 @@
 import 'server-only'
+import { AntimalwareError, verificarPdf, verificarPdfArmazenado } from '@/lib/antimalware'
 
 import { randomUUID } from 'node:crypto'
 import { CONTA_PAGAR_MAX_FILE_BYTES, CONTAS_PAGAR_BUCKET } from '@/lib/financeiro/contasPagar'
@@ -30,6 +31,12 @@ export async function validarArquivoContaPagar(arquivo: File) {
   if (arquivo.size <= 0 || arquivo.size > CONTA_PAGAR_MAX_FILE_BYTES) throw new ArquivoContaPagarError('O arquivo deve ter no máximo 5 MB.', 413)
   const conteudo = Buffer.from(await arquivo.arrayBuffer())
   if (!assinaturaValida(conteudo, arquivo.type)) throw new ArquivoContaPagarError('O conteúdo do arquivo não corresponde ao formato informado.', 415)
+  if (arquivo.type === 'application/pdf') {
+    try { await verificarPdf(conteudo) } catch (error) {
+      if (error instanceof AntimalwareError) throw new ArquivoContaPagarError(error.message, error.status)
+      throw error
+    }
+  }
   return conteudo
 }
 
@@ -56,6 +63,10 @@ export async function removerArquivosContaPagar(caminhos: Array<string | null | 
 }
 
 export async function criarUrlAssinadaContaPagar(caminho: string, nomeDownload?: string) {
+  try { await verificarPdfArmazenado(CONTAS_PAGAR_BUCKET, caminho) } catch (error) {
+    if (error instanceof AntimalwareError) throw new ArquivoContaPagarError(error.message, error.status)
+    throw error
+  }
   const bucket = getSupabaseAdmin().storage.from(CONTAS_PAGAR_BUCKET)
   const resultado = nomeDownload
     ? await bucket.createSignedUrl(caminho, 60, { download: nomeDownload })

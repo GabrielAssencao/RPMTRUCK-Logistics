@@ -6,7 +6,7 @@ const checksum = 'a'.repeat(64)
 const resumo = { Localizacoes: 0, Veiculos: 1, Motoristas: 0, Custos: 0, Manutencoes: 0, Containers: 0 }
 test.beforeEach(() => { test.skip(!process.env.JWT_SECRET || process.env.LOCAL_ENVIRONMENT !== 'development', 'Authenticated fixtures require the isolated local environment.') })
 async function session(context: BrowserContext, admin = false) {
-  const token = await new SignJWT({ userId: 'synthetic-browser-fixture', email: 'fixture@example.invalid', role: admin ? 'ADMIN_RPM' : 'GESTOR_EMPRESA', ...(admin ? {} : { empresaId }), sessionVersion: 0 }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('5m').sign(new TextEncoder().encode(process.env.JWT_SECRET))
+  const token = await new SignJWT({ userId: 'synthetic-browser-fixture', email: 'fixture@example.invalid', role: admin ? 'ADMIN_RPM' : 'GESTOR_EMPRESA', ...(admin ? { mfaVerified: true } : { empresaId }), sessionVersion: 0 }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('5m').sign(new TextEncoder().encode(process.env.JWT_SECRET))
   await context.addCookies([{ name: 'rpmtruck_session', value: token, url: 'http://127.0.0.1:5500', httpOnly: true, sameSite: 'Lax' }])
 }
 

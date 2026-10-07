@@ -14,7 +14,7 @@ test('superadmin recebe usuários do tenant com primeiro acesso e reset, sem cre
         return [{
           id: 'user-a', nome: 'Maria Souza', email: 'maria@example.invalid', role: 'OPERADOR', ativo: true,
           exigeTrocaSenha: true, senhaTemporariaExpiraEm: expiraEm, senhaAlteradaEm: new Date(),
-          criado_em: new Date(), atualizado_em: new Date(),
+          criado_em: new Date(), atualizado_em: new Date(), mfaAdmin: { obrigatorio: true, ativadoEm: new Date() },
         }]
       },
     },
@@ -39,10 +39,25 @@ test('superadmin recebe usuários do tenant com primeiro acesso e reset, sem cre
   assert.equal(response.status, 200)
   assert.deepEqual(consultas[0].where, { empresaId: 'company-a', excluidoEm: null })
   assert.equal(consultas[0].select.senha_hash, undefined)
+  assert.deepEqual(consultas[0].select.mfaAdmin, { select: { obrigatorio: true, ativadoEm: true } })
   assert.equal(body[0].nome, 'Maria Souza')
   assert.equal(body[0].credencialTemporariaExpirada, true)
   assert.equal(body[0].ultimoReset.status, 'PENDENTE')
+  assert.equal(body[0].mfaAdmin.obrigatorio, true)
   assert.equal(body[0].senha_hash, undefined)
+})
+
+test('SuperAdmin exibe estado do MFA sem receber segredo ou códigos de recuperação', () => {
+  const page = load('src/app/dashboard/admin/_modulos/empresas/CompanyUsersManager.jsx')
+  const route = load('src/app/api/empresas/[id]/usuarios/route.ts')
+
+  assert.match(page, /MfaStatusBadge/)
+  assert.match(page, /Configuração pendente/)
+  assert.match(page, /Não ativado/)
+  assert.match(page, /ShieldCheck/)
+  assert.match(route, /mfaAdmin: \{ select: \{ obrigatorio: true, ativadoEm: true \} \}/)
+  assert.doesNotMatch(route, /mfaAdmin: \{ select: \{[^}]*segredo/)
+  assert.doesNotMatch(route, /mfaAdmin: \{ select: \{[^}]*recuperacao/)
 })
 
 test('fila de reset associa nome e empresa sem expor dados de autenticação', async () => {

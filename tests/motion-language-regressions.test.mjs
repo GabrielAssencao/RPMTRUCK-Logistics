@@ -26,6 +26,14 @@ test('animações operacionais respeitam a preferência por movimento reduzido',
   assert.match(styles, /transition: none !important/)
 })
 
+test('módulos do admin iniciam a animação somente após o carregamento assíncrono', () => {
+  const page = read('src/app/dashboard/admin/page.tsx')
+  const layout = read('src/app/dashboard/admin/_estrutura/AdminLayout.tsx')
+
+  assert.match(page, /<Suspense[\s\S]*<DashboardMotion key=\{activeTab\}[\s\S]*\{renderModule\(\)\}[\s\S]*<\/DashboardMotion>[\s\S]*<\/Suspense>/)
+  assert.doesNotMatch(layout, /<DashboardMotion/)
+})
+
 test('geração de Excel progride pela requisição sem atraso artificial', () => {
   for (const path of [
     'src/app/dashboard/empresa/arquivos/page.tsx',
@@ -196,6 +204,7 @@ test('notificações usam confirmação e feedback integrados nos ambientes da e
 test('ações operacionais auditadas não recorrem a diálogos nativos do navegador', () => {
   for (const path of [
     'src/app/dashboard/empresa/configuracoes/_componentes/SecuritySessions.tsx',
+    'src/app/dashboard/empresa/configuracoes/_componentes/SubscriptionManagement.tsx',
     'src/app/dashboard/admin/_modulos/chat/ChatModule.tsx',
     'src/app/dashboard/admin/_modulos/alertas/AlertasModule.tsx',
     'src/app/dashboard/admin/_modulos/solicitacoes/AdminRequests.jsx',
@@ -211,6 +220,13 @@ test('ações operacionais auditadas não recorrem a diálogos nativos do navega
     const source = read(path)
     assert.doesNotMatch(source, /window\.(?:alert|confirm|prompt)|\b(?:alert|confirm|prompt)\s*\(/, path)
   }
+})
+
+test('cancelamento da recorrência usa confirmação animada e explica as faturas pendentes', () => {
+  const assinatura = read('src/app/dashboard/empresa/configuracoes/_componentes/SubscriptionManagement.tsx')
+  assert.match(assinatura, /<ActionConfirmDialog/)
+  assert.match(assinatura, /Desativar recorrência/)
+  assert.match(assinatura, /faturas já emitidas continuarão pendentes/)
 })
 
 test('ações sensíveis de operadores usam confirmação animada e feedback integrado', () => {

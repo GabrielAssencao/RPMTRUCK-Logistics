@@ -100,7 +100,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const session = await verifySession(request)
-  if (!session) {
+  if (!session || (isAdminRole(session.role) && session.mfaVerified !== true)) {
     if (pathname.startsWith('/dashboard')) {
       return withCsp(NextResponse.redirect(new URL('/auth/login', request.url)), contentSecurityPolicy)
     }

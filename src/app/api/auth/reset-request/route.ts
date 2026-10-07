@@ -1,3 +1,4 @@
+import { lerJsonLimitado, RequestBodyError } from '@/lib/requestBody'
 // src/app/api/auth/reset-request/route.ts
 import { after, NextRequest, NextResponse } from 'next/server';
 import { notificarAdmins } from '@/lib/notificacoes';
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
   try {
     const bloqueio = await applyRateLimit(request, `reset:${getClientIp(request)}`, RATE_LIMITS.PASSWORD_RESET_IP.limit, RATE_LIMITS.PASSWORD_RESET_IP.windowMs);
     if (bloqueio) return bloqueio;
-    const parsed = schema.safeParse(await request.json());
+    const parsed = schema.safeParse(await lerJsonLimitado(request));
     if (!parsed.success) return NextResponse.json({ erro: 'Informe um e-mail válido.' }, { status: 400 });
     const { email } = parsed.data;
     const bloqueioConta = await applyRateLimit(
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
     return respostaAceita();
 
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ erro: error.message }, { status: error.status });
     console.error('Erro na rota reset-request:', error);
     return NextResponse.json({ erro: 'Falha interna ao processar requisição de segurança.' }, { status: 500 });
   }

@@ -110,6 +110,8 @@ export async function GET(request: NextRequest) {
       franquiaNoMomento: true,
       ordemNaCompetencia: true,
       classificacaoCobranca: true,
+      origem: true,
+      respostasEmpresaHabilitadas: true,
       classificadoEm: true,
       criado_em: true,
       atualizado_em: true,
@@ -176,7 +178,7 @@ export async function GET(request: NextRequest) {
   const competenciaAtual = inicioCompetencia()
   const [usadosNoMes, extrasNoMes] = await Promise.all([
     prisma.conversaSuporte.count({
-      where: { empresaId: escopo.empresaId, competencia: competenciaAtual, classificacaoCobranca: 'ATENDIMENTO' },
+      where: { empresaId: escopo.empresaId, competencia: competenciaAtual, origem: 'EMPRESA', classificacaoCobranca: 'ATENDIMENTO' },
     }),
     prisma.conversaSuporte.count({ where: { empresaId: escopo.empresaId, competencia: competenciaAtual, cobravelExtra: true } }),
   ])
@@ -219,6 +221,8 @@ export async function POST(request: NextRequest) {
       primeiraRespostaEm: true,
       etapaTriagem: true,
       triagemConcluidaEm: true,
+      origem: true,
+      respostasEmpresaHabilitadas: true,
       mensagens: {
         where: {
           automatica: false,
@@ -235,9 +239,12 @@ export async function POST(request: NextRequest) {
   if (ticket.status === 'FECHADO' || ticket.status === 'RESOLVIDO') {
     return NextResponse.json({ erro: 'Este ticket está encerrado. Abra um novo chamado se precisar de ajuda.' }, { status: 409 })
   }
+  if (!escopo.admin && !ticket.respostasEmpresaHabilitadas) {
+    return NextResponse.json({ erro: 'As respostas desta conversa estão pausadas pelo atendimento.' }, { status: 409 })
+  }
 
   const agora = new Date()
-  const resultadoTriagemPlanejado = !escopo.admin && ticket.status === 'ABERTO' && !ticket.triagemConcluidaEm
+  const resultadoTriagemPlanejado = !escopo.admin && ticket.origem === 'EMPRESA' && ticket.status === 'ABERTO' && !ticket.triagemConcluidaEm
     ? montarRespostaTriagemBot({
         assunto: ticket.assunto,
         categoria: ticket.categoria,
@@ -321,7 +328,9 @@ export async function POST(request: NextRequest) {
       where: { id: ticket.id },
       data: escopo.admin
         ? {
-            status: ticket.status === 'ABERTO' || ticket.status === 'AGUARDANDO_CLIENTE' ? 'EM_ATENDIMENTO' : undefined,
+            status: ticket.origem === 'SUPERADMIN' && ticket.respostasEmpresaHabilitadas
+              ? 'AGUARDANDO_CLIENTE'
+              : ticket.status === 'ABERTO' || ticket.status === 'AGUARDANDO_CLIENTE' ? 'EM_ATENDIMENTO' : undefined,
             primeiraRespostaEm: ticket.primeiraRespostaEm ?? agora,
             atualizado_em: agora,
           }

@@ -7,6 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import SubscriptionManagement from './_componentes/SubscriptionManagement'
 import { AppearancePreferences, NavigationPreferences, NotificationPreferences } from './_componentes/PreferencePanels'
 import SecuritySessions from './_componentes/SecuritySessions'
+import CompanyMfaSettings from './_componentes/CompanyMfaSettings'
 import InitialDataImport from '@/components/dashboard/InitialDataImport'
 import { ActionFeedback } from '@/components/motion/DashboardMotion'
 import { ProfileSkeleton } from '@/components/motion/OperationalFeedback'
@@ -336,6 +337,7 @@ export default function ConfiguracoesPage() {
                   </div>
                 </div>
 
+                {identidade.role === 'GESTOR_EMPRESA' && <CompanyMfaSettings primary={primary} />}
                 <SecuritySessions primary={primary} />
 
               </motion.div>
@@ -359,7 +361,7 @@ export default function ConfiguracoesPage() {
 
             {tabAtiva === 'ASSINATURA' && (
               <motion.div key="assinatura" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                <SubscriptionManagement />
+                <SubscriptionManagement onNavigateProfile={() => setTabAtiva('PERFIL')} />
               </motion.div>
             )}
 

@@ -55,7 +55,13 @@ export default function SidebarAccountCard({ name, company, expanded, children, 
         onClick={() => setOpen(value => !value)}
         className={`flex min-w-0 items-center text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${expanded ? 'w-full gap-3 rounded-md border border-border bg-[var(--background-secondary)] p-3 shadow-sm' : 'rounded-full'}`}
       >
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center bg-[var(--background-secondary)] text-sm font-bold text-primary ${expanded ? 'rounded-md' : 'rounded-full border border-border'}`}>{initials}</span>
+        <span
+          aria-hidden="true"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black text-primary"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--primary) 18%, transparent)' }}
+        >
+          {initials}
+        </span>
         {expanded && <>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-sans text-xs font-semibold text-foreground">{name}</span>

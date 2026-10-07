@@ -25,6 +25,12 @@ export function gerarProtocoloTicket(data = new Date()) {
   return `SUP-${competencia}-${randomBytes(5).toString('hex').toUpperCase()}`
 }
 
+export function gerarProtocoloRelacionamento(data = new Date()) {
+  const { ano, mes } = anoMesSaoPaulo(data)
+  const competencia = `${ano}${String(mes).padStart(2, '0')}`
+  return `REL-${competencia}-${randomBytes(5).toString('hex').toUpperCase()}`
+}
+
 export function calcularCoberturaTicket(plano: PlanoTipo, ticketsJaAbertos: number) {
   const politica = obterPoliticaSuporte(plano)
   const ordemNaCompetencia = ticketsJaAbertos + 1
@@ -44,8 +50,9 @@ export async function recalcularCoberturaCompetencia(
     WITH ordenados AS (
       SELECT
         "id",
+        "origem",
         "classificacao_cobranca",
-        SUM(CASE WHEN "classificacao_cobranca" = 'ATENDIMENTO' THEN 1 ELSE 0 END)
+        SUM(CASE WHEN "origem" = 'EMPRESA' AND "classificacao_cobranca" = 'ATENDIMENTO' THEN 1 ELSE 0 END)
           OVER (ORDER BY "criado_em", "id")::integer AS ordem
       FROM "conversas_suporte"
       WHERE "empresaId" = ${empresaId}
@@ -54,10 +61,12 @@ export async function recalcularCoberturaCompetencia(
     UPDATE "conversas_suporte" AS conversa
     SET
       "ordem_na_competencia" = CASE
+        WHEN ordenados."origem" = 'SUPERADMIN' THEN 1
         WHEN ordenados."classificacao_cobranca" = 'BUG_SISTEMA_CONFIRMADO' THEN 0
         ELSE ordenados.ordem
       END,
       "cobravel_extra" = CASE
+        WHEN ordenados."origem" = 'SUPERADMIN' THEN false
         WHEN ordenados."classificacao_cobranca" = 'BUG_SISTEMA_CONFIRMADO' THEN false
         ELSE ordenados.ordem > conversa."franquia_no_momento"
       END

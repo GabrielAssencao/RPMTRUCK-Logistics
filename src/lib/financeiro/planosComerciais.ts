@@ -1,6 +1,7 @@
 import type { PlanoTipo, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { PLANOS_CONFIG } from '@/utils/planos'
+import { competenciaBrasil, limiteVencimentoMensal } from '@/lib/financeiro/situacaoFinanceira'
 
 type ClienteCatalogo = typeof prisma | Prisma.TransactionClient
 
@@ -116,4 +117,59 @@ export async function calcularMensalidadePersistida(
   const catalogo = await obterPlanoComercial(plano, cliente)
   if (!catalogo) throw new Error(`Plano comercial ${plano} não está configurado.`)
   return calcularMensalidadePorCatalogo(catalogo, usuariosAdicionais, veiculosAdicionais)
+}
+
+export function precoBaseVigenteEmpresa(
+  empresa: { precoBasePromocional: Prisma.Decimal | null; precoBaseRenovacao: Prisma.Decimal | null; promocaoMesesIniciais: number | null; promocaoAtivadaEm: Date | null },
+  precoBaseCatalogo: number,
+  agora = new Date(),
+) {
+  if (empresa.precoBasePromocional === null || !empresa.promocaoAtivadaEm || !empresa.promocaoMesesIniciais) return precoBaseCatalogo
+  if (agora < empresa.promocaoAtivadaEm) return precoBaseCatalogo
+  // Cada fatura mensal representa uma competência; o mês da adesão é o primeiro mês promocional.
+  const inicio = competenciaBrasil(empresa.promocaoAtivadaEm)
+  const atual = competenciaBrasil(agora)
+  const mesesDecorridos = (atual.ano - inicio.ano) * 12 + atual.mes - inicio.mes
+  if (mesesDecorridos < empresa.promocaoMesesIniciais) return Number(empresa.precoBasePromocional)
+  return Number(empresa.precoBaseRenovacao ?? precoBaseCatalogo)
+}
+
+export function calcularMensalidadeEmpresa(
+  empresa: { precoBasePromocional: Prisma.Decimal | null; precoBaseRenovacao: Prisma.Decimal | null; promocaoMesesIniciais: number | null; promocaoAtivadaEm: Date | null; usuarios_adicionais: number; veiculos_adicionais: number },
+  catalogo: PlanoComercialSerializado,
+  agora = new Date(),
+) {
+  return calcularMensalidadePorCatalogo({ ...catalogo, precoBase: precoBaseVigenteEmpresa(empresa, catalogo.precoBase, agora) }, empresa.usuarios_adicionais, empresa.veiculos_adicionais)
+}
+
+export function obterTransicaoPromocionalEmpresa(
+  empresa: {
+    precoBasePromocional: Prisma.Decimal | null
+    precoBaseRenovacao: Prisma.Decimal | null
+    promocaoMesesIniciais: number | null
+    promocaoAtivadaEm: Date | null
+    usuarios_adicionais: number
+    veiculos_adicionais: number
+    diaVencimento: number
+  },
+  catalogo: PlanoComercialSerializado,
+) {
+  if (
+    empresa.precoBasePromocional === null
+    || empresa.precoBaseRenovacao === null
+    || !empresa.promocaoAtivadaEm
+    || !empresa.promocaoMesesIniciais
+  ) return null
+
+  const inicio = competenciaBrasil(empresa.promocaoAtivadaEm)
+  const indiceRenovacao = inicio.ano * 12 + inicio.mes - 1 + empresa.promocaoMesesIniciais
+  const ano = Math.floor(indiceRenovacao / 12)
+  const mes = indiceRenovacao % 12 + 1
+  const renovacaoEm = limiteVencimentoMensal(ano, mes, empresa.diaVencimento)
+  const valorRenovacao = calcularMensalidadeEmpresa(empresa, catalogo, renovacaoEm)
+  const valorPromocional = calcularMensalidadeEmpresa(empresa, catalogo, empresa.promocaoAtivadaEm)
+
+  return Math.round(valorPromocional * 100) === Math.round(valorRenovacao * 100)
+    ? null
+    : { renovacaoEm, valorRenovacao }
 }
