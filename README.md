@@ -32,8 +32,8 @@ organizacionais aplicáveis.
 
 | Camada | Tecnologia |
 | --- | --- |
-| Aplicação | Next.js 16.3, React 19.2, TypeScript 5.6 |
-| Interface | Tailwind CSS, Framer Motion, GSAP, Lucide React |
+| Aplicação | Next.js 16.4, React 19.2, TypeScript 5.6 |
+| Interface | Tailwind CSS 4, Framer Motion, GSAP, Lucide React |
 | 3D | Three.js, React Three Fiber, Drei, Draco |
 | Backend | Next.js Route Handlers e Proxy |
 | Dados | PostgreSQL, Supabase e Prisma 6 |
@@ -266,6 +266,7 @@ A aplicação ficará disponível em `http://localhost:3000`.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | público | sim | chave pública do Supabase |
 | `SUPABASE_SECRET_KEY` | servidor | Storage | acesso privilegiado aos buckets privados |
 | `RELATORIOS_STORAGE_SOFT_LIMIT_BYTES` | servidor | não | teto preventivo; padrão de 700 MiB |
+| `DATABASE_STORAGE_SOFT_LIMIT_BYTES` | servidor | não | teto operacional para alertas de capacidade do PostgreSQL; padrão de 500 MiB |
 | `NEXT_PUBLIC_SITE_URL` | público | produção | origem canônica da aplicação |
 | `PRIVACY_CONTACT_EMAIL` | servidor | produção | canal público exibido na Política de Privacidade |
 | `ENABLE_SPEED_INSIGHTS` | servidor | opcional | use `true` somente após habilitar e revisar cobrança na Vercel |

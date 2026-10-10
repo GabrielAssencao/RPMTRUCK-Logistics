@@ -78,6 +78,48 @@ export async function notificarUsuariosDaEmpresa(
   })
 }
 
+export async function notificarParticipantesDoTicket(
+  empresaId: string,
+  ticketSuporteId: string,
+  input: Omit<CriarNotificacaoInput, 'empresaId' | 'usuarioId' | 'ticketSuporteId'>,
+  database: Prisma.TransactionClient | typeof prisma = prisma,
+) {
+  const usuarios = await database.usuario.findMany({
+    where: {
+      empresaId,
+      ativo: true,
+      excluidoEm: null,
+      OR: [
+        { role: 'GESTOR_EMPRESA' },
+        {
+          mensagens_suporte: {
+            some: {
+              conversaId: ticketSuporteId,
+              tipo: 'USUARIO',
+              automatica: false,
+            },
+          },
+        },
+      ],
+    },
+    select: { id: true },
+  })
+  if (usuarios.length === 0) return { count: 0 }
+
+  return database.notificacao.createMany({
+    data: usuarios.map(({ id }) => ({
+      titulo: input.titulo,
+      mensagem: input.mensagem,
+      modulo: input.modulo,
+      empresaId,
+      usuarioId: id,
+      veiculoId: input.veiculoId ?? null,
+      tarefaId: input.tarefaId ?? null,
+      ticketSuporteId,
+    })),
+  })
+}
+
 export async function notificarAdmins(
   input: Omit<CriarNotificacaoInput, 'empresaId' | 'usuarioId'>,
   database: Prisma.TransactionClient | typeof prisma = prisma,

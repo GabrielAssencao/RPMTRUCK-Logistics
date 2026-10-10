@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { createRequire } from 'node:module'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { loadTs } from './helpers/load-ts.mjs'
 
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(import.meta.url)
 const JSZip = require('jszip')
 const { lerCorpoLimitado, lerFormularioLimitado, RequestBodyError, limiteCorpoRequisicao } = loadTs('src/lib/requestBody.ts')
@@ -21,6 +25,14 @@ test('false Content-Length cannot bypass actual stream limits', async () => {
   await assert.rejects(lerCorpoLimitado(request, 10), RequestBodyError)
   const tooLarge = new Request('http://localhost', { method: 'POST', headers: { 'Content-Length': '999999' }, body: 'a' })
   await assert.rejects(lerCorpoLimitado(tooLarge, 10), RequestBodyError)
+})
+
+test('proxy mede os bytes reais antes de encaminhar qualquer mutação de API', () => {
+  const proxy = readFileSync(resolve(root, 'src/proxy.ts'), 'utf8')
+  assert.match(proxy, /request\.clone\(\)\.arrayBuffer\(\)/)
+  assert.match(proxy, /actualBodyBytes > maxBodyBytes/)
+  assert.match(proxy, /status: 413/)
+  assert.match(proxy, /status: 400/)
 })
 
 test('bounded multipart parsing preserves legitimate fields and binary files', async () => {

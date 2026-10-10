@@ -98,10 +98,28 @@ export async function GET(request: NextRequest) {
       })
     : undefined
 
+  const autoresAbertura = tickets.length > 0
+    ? await prisma.mensagemSuporte.findMany({
+        where: {
+          conversaId: { in: tickets.map((ticket) => ticket.id) },
+          tipo: 'USUARIO',
+          automatica: false,
+        },
+        orderBy: [{ conversaId: 'asc' }, { criado_em: 'asc' }],
+        distinct: ['conversaId'],
+        select: {
+          conversaId: true,
+          autor: { select: { id: true, nome: true, role: true } },
+        },
+      })
+    : []
+  const autorPorConversa = new Map(autoresAbertura.map((mensagem) => [mensagem.conversaId, mensagem.autor]))
+
   return NextResponse.json({
     tickets: tickets.map(({ _count, mensagens, ...ticket }) => ({
       ...ticket,
       ultimaMensagem: mensagens[0] || null,
+      abertoPor: autorPorConversa.get(ticket.id) ?? null,
       naoLidas: _count.mensagens,
     })),
     resumo: { ticketsAtivos, mensagensNaoLidas, extrasNoMes, bugsConfirmadosNoMes },

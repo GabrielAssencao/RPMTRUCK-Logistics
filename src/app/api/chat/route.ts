@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { inicioCompetencia } from '@/lib/suporte'
 import { obterPoliticaSuporte } from '@/lib/suporteConfig'
-import { notificarAdmins, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
+import { notificarAdmins, notificarParticipantesDoTicket } from '@/lib/notificacoes'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { montarRespostaTriagemBot } from '@/lib/suporteBot'
 
@@ -42,7 +42,7 @@ async function resolverEscopo(request: NextRequest, empresaIdInformada?: string 
     return { auth, empresaId, empresa, admin: true } as const
   }
 
-  const empresaAuth = await requireEmpresaAuth(request, { acao: 'GESTAO' })
+  const empresaAuth = await requireEmpresaAuth(request)
   if (empresaAuth.error || !empresaAuth.session?.empresaId || !empresaAuth.empresa) {
     return { error: empresaAuth.error, status: empresaAuth.status } as const
   }
@@ -55,7 +55,25 @@ async function resolverEscopo(request: NextRequest, empresaIdInformada?: string 
       plano: empresaAuth.empresa.plano,
     },
     admin: false,
+    gestor: empresaAuth.session.role === 'GESTOR_EMPRESA' || empresaAuth.session.role === 'GESTOR',
   } as const
+}
+
+type EscopoConversaResolvido = Extract<Awaited<ReturnType<typeof resolverEscopo>>, { admin: boolean }>
+
+function filtroConversasPermitidas(escopo: EscopoConversaResolvido) {
+  if (escopo.admin || ('gestor' in escopo && escopo.gestor)) return { empresaId: escopo.empresaId }
+  return {
+    empresaId: escopo.empresaId,
+    origem: 'EMPRESA' as const,
+    mensagens: {
+      some: {
+        autorId: escopo.auth.session!.userId,
+        tipo: 'USUARIO' as const,
+        automatica: false,
+      },
+    },
+  }
 }
 
 function filtroNaoLidas(admin: boolean) {
@@ -82,10 +100,11 @@ export async function GET(request: NextRequest) {
 
   const limited = await applyRateLimit(request, `chat-read:${escopo.auth.session!.userId}`, RATE_LIMITS.CHAT_READ.limit, RATE_LIMITS.CHAT_READ.windowMs)
   if (limited) return limited
+  const conversasPermitidas = filtroConversasPermitidas(escopo)
 
   if (request.nextUrl.searchParams.get('resumo') === 'true') {
     const mensagensNaoLidas = await prisma.mensagemSuporte.count({
-      where: { conversa: { empresaId: escopo.empresaId }, ...filtroNaoLidas(escopo.admin) },
+      where: { conversa: conversasPermitidas, ...filtroNaoLidas(escopo.admin) },
     })
     return NextResponse.json({ resumo: { mensagensNaoLidas } }, { headers: { 'Cache-Control': 'private, no-store' } })
   }
@@ -96,7 +115,7 @@ export async function GET(request: NextRequest) {
   }
 
   const tickets = await prisma.conversaSuporte.findMany({
-    where: { empresaId: escopo.empresaId },
+    where: conversasPermitidas,
     orderBy: { atualizado_em: 'desc' },
     take: 100,
     select: {
@@ -211,7 +230,7 @@ export async function POST(request: NextRequest) {
   if (limited) return limited
 
   const ticket = await prisma.conversaSuporte.findFirst({
-    where: { id: parsed.data.ticketId, empresaId: escopo.empresaId },
+    where: { id: parsed.data.ticketId, ...filtroConversasPermitidas(escopo) },
     select: {
       id: true,
       protocolo: true,
@@ -346,7 +365,7 @@ export async function POST(request: NextRequest) {
       ticketSuporteId: ticket.id,
     }
     if (escopo.admin) {
-      await notificarUsuariosDaEmpresa(escopo.empresaId, aviso, ['GESTOR_EMPRESA'], tx)
+      await notificarParticipantesDoTicket(escopo.empresaId, ticket.id, aviso, tx)
     } else if (resultadoTriagem?.acao === 'ESCALAR') {
       await notificarAdmins({
         ...aviso,

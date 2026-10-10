@@ -28,6 +28,14 @@ type AlteracaoTicket = {
   respostasEmpresaHabilitadas?: boolean
 }
 
+function rotuloPapelSolicitante(role?: string) {
+  if (role === 'OPERADOR') return 'Operador'
+  if (role === 'VISUALIZADOR') return 'Visualizador'
+  if (role === 'GESTOR_EMPRESA' || role === 'GESTOR') return 'Gestor'
+  if (role === 'ADMIN_RPM') return 'Superadmin'
+  return 'Usuário'
+}
+
 type EmpresaRelacionamento = { id: string; nome: string; status: string; plano: string }
 
 export default function ChatModule({ initialTicketId = null }: { initialTicketId?: string | null }) {
@@ -224,6 +232,7 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
                   {ticket.naoLidas > 0 && <span className="min-w-5 rounded-full px-1.5 py-0.5 text-center text-[9px] font-black text-black" style={{ backgroundColor: primary }}>{ticket.naoLidas}</span>}
                 </div>
                 <p className="mt-1 truncate text-xs font-bold">{ticket.assunto}</p>
+                <p className="mt-1 truncate text-[9px] uppercase text-foreground-muted">Aberto por {rotuloPapelSolicitante(ticket.abertoPor?.role)}{ticket.abertoPor?.nome ? ` · ${ticket.abertoPor.nome}` : ''}</p>
                 <p className="mt-1 text-[9px] uppercase text-foreground-muted">{ticket.protocolo} · {STATUS_TICKET_LABEL[ticket.status]}</p>
                 <div className="mt-2 flex flex-wrap gap-1">
                   <span className="border px-1.5 py-0.5 text-[8px] uppercase" style={{ borderColor: 'var(--border)' }}>{CATEGORIA_TICKET_LABEL[ticket.categoria]}</span>

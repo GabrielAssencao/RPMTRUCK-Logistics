@@ -27,6 +27,7 @@ export interface SupportTicket {
   encerradoEm?: string | null
   naoLidas: number
   ultimaMensagem: { conteudo: string; criado_em: string; automatica: boolean; autor: { role: string } | null } | null
+  abertoPor?: { id: string; nome: string; role: string } | null
   empresa?: { id: string; nome: string; email: string; status: string; plano: PlanoTipo }
 }
 

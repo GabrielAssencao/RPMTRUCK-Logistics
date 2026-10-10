@@ -18,6 +18,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { notificarAdmins, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { getDatabaseSoftLimitBytes } from '@/lib/storageCapacity'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -107,7 +108,7 @@ export async function GET(request: NextRequest) {
     prisma.$queryRaw<Array<{ bytes: bigint }>>`SELECT pg_database_size(current_database())::bigint AS bytes`,
   ])
 
-  const limiteBancoBytes = 500 * 1024 * 1024
+  const limiteBancoBytes = getDatabaseSoftLimitBytes()
   const bancoBytes = Number(tamanhoBanco[0]?.bytes ?? 0)
   const usoGlobalBytes = usoGlobal._sum.tamanho_bytes ?? 0
   const limiteStorageBytes = getRelatoriosSoftLimitBytes()

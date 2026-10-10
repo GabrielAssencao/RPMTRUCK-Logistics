@@ -50,7 +50,7 @@ test('logs contabilizam entradas e exibem tempo conectado em atualização cont�
   assert.match(api, /tipo: 'LOGIN_SUCESSO'/)
   assert.match(api, /loginsSucesso24h/)
   assert.match(api, /SESSION_ONLINE_WINDOW_MS/)
-  assert.match(logs, /Entradas confirmadas \/ 24h/)
+  assert.match(logs, /Logins confirmados \/ 24h/)
   assert.match(logs, /Tempo conectado/)
   assert.match(logs, /setAgora\(Date\.now\(\)\)/)
 })

@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { z } from 'zod'
 import { SESSION_ONLINE_WINDOW_MS } from '@/lib/sessionPresence'
+import { getDatabaseSoftLimitBytes } from '@/lib/storageCapacity'
+import { getRelatoriosSoftLimitBytes } from '@/lib/relatoriosStorage'
+import { Prisma } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,28 +37,85 @@ export async function GET(request: NextRequest) {
   if (!paginas.success) return NextResponse.json({ erro: 'Página inválida.' }, { status: 400 })
   const paginar = (secao: keyof typeof paginas.data) => ({ skip: (paginas.data[secao] - 1) * tamanhoPagina, take: tamanhoPagina + 1 })
 
-  const filtroInformado = request.nextUrl.searchParams.get('empresaId')
-  const filtroSchema = z.union([z.literal('SISTEMA'), z.string().uuid()]).nullable()
-  const filtro = filtroSchema.safeParse(filtroInformado)
-  if (!filtro.success) return NextResponse.json({ erro: 'Filtro de empresa inválido.' }, { status: 400 })
+  const filtros = z.object({
+    empresaId: z.union([z.literal('SISTEMA'), z.string().uuid()]).nullable(),
+    periodo: z.enum(['24H', '7D', '30D', '90D']).default('7D'),
+    tipoEvento: z.enum(['TODOS', 'LOGIN_SUCESSO', 'LOGIN_FALHA', 'LOGOUT', 'RATE_LIMIT', 'BOT_REJEITADO', 'SESSAO_REVOGADA']).default('TODOS'),
+    busca: z.string().trim().max(80).default(''),
+  }).safeParse({
+    empresaId: request.nextUrl.searchParams.get('empresaId'),
+    periodo: request.nextUrl.searchParams.get('periodo') || undefined,
+    tipoEvento: request.nextUrl.searchParams.get('tipoEvento') || undefined,
+    busca: request.nextUrl.searchParams.get('busca') || undefined,
+  })
+  if (!filtros.success) return NextResponse.json({ erro: 'Filtros de segurança inválidos.' }, { status: 400 })
 
-  if (filtro.data && filtro.data !== 'SISTEMA') {
-    const empresaExiste = await prisma.empresa.findUnique({ where: { id: filtro.data }, select: { id: true } })
+  if (filtros.data.empresaId && filtros.data.empresaId !== 'SISTEMA') {
+    const empresaExiste = await prisma.empresa.findUnique({ where: { id: filtros.data.empresaId }, select: { id: true } })
     if (!empresaExiste) return NextResponse.json({ erro: 'Empresa não encontrada.' }, { status: 404 })
   }
-  const porEmpresa = filtro.data === 'SISTEMA'
+  const porEmpresa = filtros.data.empresaId === 'SISTEMA'
     ? { empresaId: null }
-    : filtro.data
-      ? { empresaId: filtro.data }
+    : filtros.data.empresaId
+      ? { empresaId: filtros.data.empresaId }
       : {}
 
   const agora = new Date()
   const ativoDesde = new Date(agora.getTime() - SESSION_ONLINE_WINDOW_MS)
   const ultimas24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000)
+  const diasPeriodo = { '24H': 1, '7D': 7, '30D': 30, '90D': 90 }[filtros.data.periodo]
+  const desde = new Date(agora.getTime() - diasPeriodo * 24 * 60 * 60 * 1000)
+  const busca = filtros.data.busca
+  const ipBuscado = busca.replace(/^IP#/i, '').trim().toLowerCase()
+  const buscaIpValida = /^[a-f0-9]{6,64}$/.test(ipBuscado)
+  const usuariosEncontrados = busca
+    ? await prisma.usuario.findMany({
+        where: { OR: [{ nome: { contains: busca, mode: 'insensitive' } }, { email: { contains: busca, mode: 'insensitive' } }] },
+        select: { id: true },
+        take: 200,
+      })
+    : []
+  const usuarioIdsBusca = usuariosEncontrados.map((item) => item.id)
+  const filtroUsuarioRelacao: Prisma.UsuarioWhereInput = busca
+    ? { OR: [{ nome: { contains: busca, mode: 'insensitive' } }, { email: { contains: busca, mode: 'insensitive' } }] }
+    : {}
+  const filtroAuditoriaBusca: Prisma.AuditoriaLogWhereInput = busca
+    ? {
+        OR: [
+          { tabela: { contains: busca, mode: 'insensitive' } },
+          { acao: { contains: busca, mode: 'insensitive' } },
+          { origem: { contains: busca, mode: 'insensitive' } },
+          { registroId: { contains: busca, mode: 'insensitive' } },
+          ...(usuarioIdsBusca.length ? [{ usuarioId: { in: usuarioIdsBusca } }] : []),
+        ],
+      }
+    : {}
+  const filtroEventoBusca: Prisma.EventoSegurancaWhereInput = busca
+    ? {
+        OR: [
+          { usuario: { is: filtroUsuarioRelacao } },
+          ...(buscaIpValida ? [{ ipHash: { startsWith: ipBuscado } }] : []),
+        ],
+      }
+    : {}
+  const filtroSessaoBusca: Prisma.SessaoUsuarioWhereInput = busca
+    ? {
+        OR: [
+          { usuario: { is: filtroUsuarioRelacao } },
+          ...(buscaIpValida ? [{ ipHash: { startsWith: ipBuscado } }] : []),
+        ],
+      }
+    : {}
+  const tipoEvento = filtros.data.tipoEvento === 'TODOS' ? {} : { tipo: filtros.data.tipoEvento }
+  const empresaGeoSql = filtros.data.empresaId === 'SISTEMA'
+    ? Prisma.sql`AND empresa_id IS NULL`
+    : filtros.data.empresaId
+      ? Prisma.sql`AND empresa_id = ${filtros.data.empresaId}::uuid`
+      : Prisma.empty
 
-  const [sessoes, eventos, auditoria, exclusoes, falhasLogin, loginsSucesso, bloqueiosRateLimit, sessoesAtivas, empresas] = await Promise.all([
+  const [sessoes, eventos, auditoria, exclusoes, falhasLogin, loginsSucesso, bloqueiosRateLimit, sessoesAtivas, eventos24h, limitesAtivos, acessosPorUsuario, origensSuspeitas, tamanhoBanco, usoRelatorios, geoEstados, geoCobertura, empresas] = await Promise.all([
     prisma.sessaoUsuario.findMany({
-      where: { ...porEmpresa, revogadaEm: null, expiraEm: { gt: agora }, ultimaAtividade: { gte: ativoDesde } },
+      where: { ...porEmpresa, ...filtroSessaoBusca, revogadaEm: null, expiraEm: { gt: agora }, ultimaAtividade: { gte: ativoDesde } },
       orderBy: [{ ultimaAtividade: 'desc' }, { id: 'desc' }],
       ...paginar('SESSOES'),
       select: {
@@ -63,13 +123,14 @@ export async function GET(request: NextRequest) {
         criadoEm: true,
         ultimaAtividade: true,
         expiraEm: true,
+        ipHash: true,
         userAgent: true,
         usuario: { select: { id: true, nome: true, email: true, role: true } },
         empresa: { select: { id: true, nome: true } },
       },
     }),
     prisma.eventoSeguranca.findMany({
-      where: porEmpresa,
+      where: { ...porEmpresa, ...filtroEventoBusca, ...tipoEvento, criadoEm: { gte: desde } },
       orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }],
       ...paginar('EVENTOS'),
       select: {
@@ -83,7 +144,7 @@ export async function GET(request: NextRequest) {
       },
     }),
     prisma.auditoriaLog.findMany({
-      where: porEmpresa,
+      where: { ...porEmpresa, ...filtroAuditoriaBusca, criadoEm: { gte: desde } },
       orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }],
       ...paginar('AUDITORIA'),
       select: {
@@ -97,10 +158,14 @@ export async function GET(request: NextRequest) {
         criadoEm: true,
       },
     }),
-    filtro.data === 'SISTEMA'
+    filtros.data.empresaId === 'SISTEMA'
       ? Promise.resolve([])
       : prisma.exclusaoEmpresaJob.findMany({
-          where: filtro.data ? { empresaId: filtro.data } : undefined,
+          where: {
+            ...(filtros.data.empresaId ? { empresaId: filtros.data.empresaId } : {}),
+            criadoEm: { gte: desde },
+            ...(busca ? { OR: [{ protocolo: { contains: busca, mode: 'insensitive' as const } }, { status: { contains: busca, mode: 'insensitive' as const } }] } : {}),
+          },
           orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }],
           ...paginar('EXCLUSOES'),
           select: {
@@ -119,17 +184,63 @@ export async function GET(request: NextRequest) {
     prisma.eventoSeguranca.count({ where: { ...porEmpresa, tipo: 'LOGIN_SUCESSO', criadoEm: { gte: ultimas24h } } }),
     prisma.eventoSeguranca.count({ where: { ...porEmpresa, tipo: 'RATE_LIMIT', criadoEm: { gte: ultimas24h } } }),
     prisma.sessaoUsuario.count({ where: { ...porEmpresa, revogadaEm: null, expiraEm: { gt: agora }, ultimaAtividade: { gte: ativoDesde } } }),
+    prisma.eventoSeguranca.count({ where: { ...porEmpresa, criadoEm: { gte: ultimas24h } } }),
+    prisma.rateLimit.count({ where: { expiraEm: { gt: agora } } }),
+    prisma.eventoSeguranca.groupBy({
+      by: ['usuarioId'],
+      where: { ...porEmpresa, tipo: 'LOGIN_SUCESSO', usuarioId: { not: null }, criadoEm: { gte: ultimas24h } },
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
+      take: 5,
+    }),
+    prisma.eventoSeguranca.groupBy({
+      by: ['ipHash'],
+      where: { ...porEmpresa, tipo: { in: ['LOGIN_FALHA', 'RATE_LIMIT'] }, ipHash: { not: null }, criadoEm: { gte: ultimas24h } },
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
+      take: 5,
+    }),
+    prisma.$queryRaw<Array<{ bytes: bigint }>>`SELECT pg_database_size(current_database())::bigint AS bytes`,
+    prisma.relatorioArquivo.aggregate({ where: { arquivo_removido_em: null }, _sum: { tamanho_bytes: true } }),
+    prisma.$queryRaw<Array<{ uf: string; acessos: number; alertas: number }>>(Prisma.sql`
+      SELECT
+        UPPER(contexto #>> '{geo,region}') AS uf,
+        COUNT(*) FILTER (WHERE tipo = 'LOGIN_SUCESSO')::integer AS acessos,
+        COUNT(*) FILTER (WHERE tipo IN ('LOGIN_FALHA', 'RATE_LIMIT', 'BOT_REJEITADO'))::integer AS alertas
+      FROM eventos_seguranca
+      WHERE criado_em >= ${desde}
+        ${empresaGeoSql}
+        AND contexto #>> '{geo,country}' = 'BR'
+        AND UPPER(contexto #>> '{geo,region}') ~ '^[A-Z]{2}$'
+        AND tipo IN ('LOGIN_SUCESSO', 'LOGIN_FALHA', 'RATE_LIMIT', 'BOT_REJEITADO')
+      GROUP BY UPPER(contexto #>> '{geo,region}')
+    `),
+    prisma.$queryRaw<Array<{ total: number; geolocalizados: number }>>(Prisma.sql`
+      SELECT
+        COUNT(*)::integer AS total,
+        COUNT(*) FILTER (
+          WHERE contexto #>> '{geo,country}' = 'BR'
+            AND UPPER(contexto #>> '{geo,region}') ~ '^[A-Z]{2}$'
+        )::integer AS geolocalizados
+      FROM eventos_seguranca
+      WHERE criado_em >= ${desde}
+        ${empresaGeoSql}
+        AND tipo IN ('LOGIN_SUCESSO', 'LOGIN_FALHA', 'RATE_LIMIT', 'BOT_REJEITADO')
+    `),
     prisma.empresa.findMany({ orderBy: { nome: 'asc' }, select: { id: true, nome: true, excluidoEm: true } }),
   ])
 
   const userIds = [...new Set(auditoria.map((item) => item.usuarioId).filter((id): id is string => Boolean(id)))]
   const companyIds = [...new Set(auditoria.map((item) => item.empresaId).filter((id): id is string => Boolean(id)))]
-  const [usuariosAuditoria, empresasAuditoria] = await Promise.all([
+  const idsRanking = acessosPorUsuario.map((item) => item.usuarioId).filter((id): id is string => Boolean(id))
+  const [usuariosAuditoria, empresasAuditoria, usuariosRanking] = await Promise.all([
     prisma.usuario.findMany({ where: { id: { in: userIds } }, select: { id: true, nome: true, email: true } }),
     prisma.empresa.findMany({ where: { id: { in: companyIds } }, select: { id: true, nome: true } }),
+    prisma.usuario.findMany({ where: { id: { in: idsRanking } }, select: { id: true, nome: true, email: true, empresa: { select: { nome: true } } } }),
   ])
   const usuariosPorId = new Map(usuariosAuditoria.map((item) => [item.id, item]))
   const empresasPorId = new Map(empresasAuditoria.map((item) => [item.id, item]))
+  const usuariosRankingPorId = new Map(usuariosRanking.map((item) => [item.id, item]))
   const exclusaoPorEmpresa = new Map<string, (typeof exclusoes)[number]>()
   for (const exclusao of exclusoes) {
     if (!exclusaoPorEmpresa.has(exclusao.empresaId)) exclusaoPorEmpresa.set(exclusao.empresaId, exclusao)
@@ -145,7 +256,36 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(
     {
-      resumo: { sessoesAtivas, loginsSucesso24h: loginsSucesso, falhasLogin24h: falhasLogin, bloqueiosRateLimit24h: bloqueiosRateLimit },
+      resumo: {
+        sessoesAtivas,
+        loginsSucesso24h: loginsSucesso,
+        falhasLogin24h: falhasLogin,
+        bloqueiosRateLimit24h: bloqueiosRateLimit,
+        eventosSeguranca24h: eventos24h,
+        mediaEventosHora24h: Math.round((eventos24h / 24) * 10) / 10,
+        taxaSucessoLogin24h: loginsSucesso + falhasLogin > 0 ? Math.round((loginsSucesso / (loginsSucesso + falhasLogin)) * 1000) / 10 : null,
+        limitesAtivos,
+      },
+      capacidade: {
+        bancoUsoBytes: Number(tamanhoBanco[0]?.bytes ?? 0),
+        bancoLimiteBytes: getDatabaseSoftLimitBytes(),
+        relatoriosUsoBytes: usoRelatorios._sum.tamanho_bytes ?? 0,
+        relatoriosLimiteBytes: getRelatoriosSoftLimitBytes(),
+      },
+      rankings: {
+        acessos: acessosPorUsuario.map((item) => {
+          const usuario = item.usuarioId ? usuariosRankingPorId.get(item.usuarioId) : null
+          return { usuarioId: item.usuarioId, nome: usuario?.nome || 'Usuário removido', email: usuario?.email || null, empresa: usuario?.empresa?.nome || 'RPMTruck', total: item._count.id }
+        }),
+        origensSuspeitas: origensSuspeitas.map((item) => ({ ipCorrelacao: item.ipHash?.slice(0, 12) || 'desconhecido', total: item._count.id })),
+      },
+      geografia: {
+        estados: geoEstados,
+        total: geoCobertura[0]?.total ?? 0,
+        geolocalizados: geoCobertura[0]?.geolocalizados ?? 0,
+        fonte: 'VERCEL_GEOIP_UF',
+      },
+      filtros: { periodo: filtros.data.periodo, tipoEvento: filtros.data.tipoEvento, busca },
       presenca: { verificadoEm: agora, onlineWindowMs: SESSION_ONLINE_WINDOW_MS },
       empresas: empresas.map(identificarEmpresa),
       paginacao: {
@@ -154,7 +294,12 @@ export async function GET(request: NextRequest) {
         AUDITORIA: { pagina: paginas.data.AUDITORIA, temProxima: auditoria.length > tamanhoPagina },
         EXCLUSOES: { pagina: paginas.data.EXCLUSOES, temProxima: exclusoes.length > tamanhoPagina },
       },
-      sessoes: sessoes.slice(0, tamanhoPagina),
+      sessoes: sessoes.slice(0, tamanhoPagina).map((sessao) => ({
+        ...sessao,
+        atual: sessao.id === auth.session?.sessionId,
+        ipCorrelacao: sessao.ipHash?.slice(0, 12) || null,
+        ipHash: undefined,
+      })),
       eventos: eventos.slice(0, tamanhoPagina).map((evento) => ({
         ...evento,
         ipCorrelacao: evento.ipHash?.slice(0, 12) || null,

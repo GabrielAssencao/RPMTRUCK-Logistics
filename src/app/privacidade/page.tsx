@@ -48,7 +48,7 @@ export default function PrivacyPage() {
           <li>dados de motoristas: nome, CPF, RG, CNH, categoria, validade, fotografia, situação operacional e veículo associado;</li>
           <li>dados operacionais: veículos, placas, localizações ou bases informadas, quilometragem, manutenção, custos, tarefas, containers, relatórios e arquivos enviados;</li>
           <li>dados financeiros mínimos para cobrança contratual: plano, valor, vencimento, situação da fatura e comprovante de pagamento enviado pelo gestor;</li>
-          <li>dados técnicos e de segurança: endereço IP pseudonimizado, navegador, dispositivo, horários, identificadores de sessão, tentativas de acesso e registros de auditoria;</li>
+          <li>dados técnicos e de segurança: endereço IP pseudonimizado, UF aproximada derivada do IP, navegador, dispositivo, horários, identificadores de sessão, tentativas de acesso e registros de auditoria;</li>
           <li>métricas agregadas de audiência e desempenho: página acessada, país ou região aproximada, navegador, dispositivo e indicadores Core Web Vitals, sem envio intencional de nomes, e-mails ou identificadores de conta;</li>
           <li>informações fornecidas em mensagens, solicitações de suporte, acesso, plano ou redefinição de senha.</li>
         </ul>

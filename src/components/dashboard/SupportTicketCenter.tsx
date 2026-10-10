@@ -90,7 +90,7 @@ export default function SupportTicketCenter() {
 
   return <div className="space-y-5">
     <header className="flex flex-col justify-between gap-4 border-b pb-5 sm:flex-row sm:items-end" style={{ borderColor: 'var(--border)' }}>
-      <div><p className="text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: primary }}>Central do gestor</p><h1 className="mt-1 text-2xl font-black font-rajdhani sm:text-3xl">SUPORTE E MENSAGENS</h1><p className="mt-1 text-sm text-foreground-muted">Solicite suporte e acompanhe também as conversas iniciadas pela administração.</p></div>
+      <div><p className="text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: primary }}>Central de atendimento</p><h1 className="mt-1 text-2xl font-black font-rajdhani sm:text-3xl">SUPORTE E MENSAGENS</h1><p className="mt-1 text-sm text-foreground-muted">Abra e acompanhe seus chamados. Os atendimentos utilizam a franquia mensal da empresa.</p></div>
       <button type="button" onClick={() => setNovoAberto((valor) => !valor)} className="flex min-h-11 items-center justify-center gap-2 px-4 text-xs font-black uppercase text-black" style={{ backgroundColor: primary }}><CirclePlus size={16} />Novo ticket</button>
     </header>
 

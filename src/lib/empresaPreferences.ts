@@ -15,7 +15,7 @@ export const EMPRESA_NAVIGATION_ITEMS: EmpresaNavigationPreferenceItem[] = [
   { path: '/dashboard/empresa/containers', label: 'Containers', modulo: 'FROTA' },
   { path: '/dashboard/empresa/custos', label: 'Custos / despesas', modulo: 'GESTAO' },
   { path: '/dashboard/empresa/inteligencia', label: 'Inteligência da frota', modulo: 'INTELIGENCIA', somenteGestor: true },
-  { path: '/dashboard/empresa/contas-pagar', label: 'Contas a pagar', modulo: 'CONTAS_PAGAR', somenteGestor: true },
+  { path: '/dashboard/empresa/contas-pagar', label: 'Contas a pagar', modulo: 'CONTAS_PAGAR' },
   { path: '/dashboard/empresa/cronograma', label: 'Cronograma', modulo: 'TAREFAS' },
   { path: '/dashboard/empresa/arquivos', label: 'Arquivo operacional', modulo: null, somenteGestor: true },
   { path: '/dashboard/empresa/relatorios', label: 'Relatórios', modulo: 'RELATORIOS', somenteGestor: true },

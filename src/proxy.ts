@@ -88,6 +88,20 @@ export async function proxy(request: NextRequest) {
       if (Number.isFinite(contentLength) && contentLength > maxBodyBytes) {
         return withCsp(NextResponse.json({ erro: 'Corpo da requisição excede o limite permitido.' }, { status: 413 }), contentSecurityPolicy)
       }
+
+      // O Content-Length pode estar ausente em uploads segmentados ou ser
+      // falsificado. O Next preserva uma cópia do corpo para o proxy, então
+      // contamos os bytes reais sem consumir o stream entregue à rota.
+      if (request.body) {
+        try {
+          const actualBodyBytes = (await request.clone().arrayBuffer()).byteLength
+          if (actualBodyBytes > maxBodyBytes) {
+            return withCsp(NextResponse.json({ erro: 'Corpo da requisição excede o limite permitido.' }, { status: 413 }), contentSecurityPolicy)
+          }
+        } catch {
+          return withCsp(NextResponse.json({ erro: 'Não foi possível ler o corpo da requisição.' }, { status: 400 }), contentSecurityPolicy)
+        }
+      }
     }
   }
 
@@ -118,7 +132,6 @@ export async function proxy(request: NextRequest) {
     '/dashboard/empresa/relatorios',
     '/dashboard/empresa/usuarios',
     '/dashboard/empresa/configuracoes',
-    '/dashboard/empresa/chat',
   ]
   if (
     rotasSomenteGestor.some((rota) => pathname.startsWith(rota)) &&
