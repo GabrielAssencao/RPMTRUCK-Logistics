@@ -93,6 +93,26 @@ test('upload é limitado no cliente e no servidor e valida assinatura do conteú
   assert.match(storage, /upsert: false/)
 })
 
+test('operações em lote não consomem a franquia de upload e informam o tempo de espera', () => {
+  const limits = read('src/lib/rateLimit.ts')
+  const collection = read('src/app/api/contas-pagar/route.ts')
+  const item = read('src/app/api/contas-pagar/[id]/route.ts')
+  const exportRoute = read('src/app/api/contas-pagar/exportar/route.ts')
+  const page = read('src/app/dashboard/empresa/contas-pagar/page.tsx')
+
+  assert.match(limits, /ACCOUNT_PAYABLE_MUTATION: \{ limit: 120, windowMs: 60 \* 60 \* 1000 \}/)
+  assert.match(limits, /ACCOUNT_PAYABLE_EXPORT: \{ limit: 12, windowMs: 60 \* 60 \* 1000 \}/)
+  assert.match(collection, /contas-pagar-create:[\s\S]*RATE_LIMITS\.ACCOUNT_PAYABLE_MUTATION/)
+  assert.match(item, /contas-pagar-write:[\s\S]*RATE_LIMITS\.ACCOUNT_PAYABLE_MUTATION/)
+  assert.match(collection, /arquivo instanceof File && arquivo\.size > 0[\s\S]*contas-pagar-file:[\s\S]*RATE_LIMITS\.FILE_UPLOAD/)
+  assert.match(item, /acao === 'PAGAR' && arquivo instanceof File && arquivo\.size > 0[\s\S]*contas-pagar-file:[\s\S]*RATE_LIMITS\.FILE_UPLOAD/)
+  assert.match(exportRoute, /RATE_LIMITS\.ACCOUNT_PAYABLE_EXPORT/)
+  assert.match(page, /data\.retryAfter/)
+  assert.match(page, /Limite temporário atingido\. Tente novamente em/)
+  assert.match(page, /aria-busy=\{exportando\}/)
+  assert.doesNotMatch(page, /<Link href="\/api\/contas-pagar\/exportar"/)
+})
+
 test('baixa aceita comprovante opcional e possui claim atômico contra concorrência', () => {
   const route = read('src/app/api/contas-pagar/[id]/route.ts')
   const page = read('src/app/dashboard/empresa/contas-pagar/page.tsx')

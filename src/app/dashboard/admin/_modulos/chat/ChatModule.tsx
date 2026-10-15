@@ -3,7 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ClassificacaoCobrancaTicket, PrioridadeTicketSuporte, StatusTicketSuporte } from '@prisma/client'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
-import { Bug, CirclePlus, Headset, Loader2, RefreshCw, ShieldAlert, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Bug, CirclePlus, Headset, Loader2, RefreshCw, ShieldAlert, Trash2, X } from 'lucide-react'
 import ChatWorkspace from '@/components/dashboard/ChatWorkspace'
 import type { SupportAdminSummary, SupportTicket } from '@/components/dashboard/supportTypes'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -56,6 +56,23 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
   const [novaConversa, setNovaConversa] = useState({ empresaId: '', categoria: 'SOLICITACAO', assunto: '', mensagem: '', respostasEmpresaHabilitadas: true })
   const [classificacaoPendente, setClassificacaoPendente] = useState<ClassificacaoCobrancaTicket | null>(null)
   const ticketInicial = useRef<string | null>(initialTicketId)
+  const detalheRef = useRef<HTMLDivElement>(null)
+  const voltarFilaRef = useRef<HTMLButtonElement>(null)
+
+  const abrirTicket = (ticket: SupportTicket) => {
+    setSelecionado(ticket)
+    window.requestAnimationFrame(() => {
+      detalheRef.current?.scrollIntoView({ block: 'start' })
+      voltarFilaRef.current?.focus({ preventScroll: true })
+    })
+  }
+
+  const voltarParaFila = () => {
+    setSelecionado(null)
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('[data-admin-ticket-queue]')?.scrollIntoView({ block: 'start' })
+    })
+  }
 
   const carregar = useCallback(async (silencioso = false) => {
     if (!silencioso) setLoading(true)
@@ -186,7 +203,7 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
           <h1 className="mt-1 font-rajdhani text-2xl font-black sm:text-3xl">CONVERSAS DAS EMPRESAS</h1>
           <p className="mt-1 text-sm text-foreground-muted">Atenda tickets ou inicie contatos de feedback, onboarding e acompanhamento financeiro.</p>
         </div>
-        <div className="flex gap-2"><button type="button" onClick={() => setNovaConversaAberta((aberta) => !aberta)} className="inline-flex min-h-11 items-center gap-2 border px-4 text-xs font-black uppercase" style={{ borderColor: primary, color: primary }}><CirclePlus size={16} />Iniciar conversa</button><button type="button" onClick={() => void carregar()} disabled={loading} aria-label="Atualizar conversas" className="min-h-11 min-w-11 border p-3 disabled:opacity-50" style={{ borderColor: 'var(--border)' }}><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button></div>
+        <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2 sm:flex"><button type="button" onClick={() => setNovaConversaAberta((aberta) => !aberta)} className="inline-flex min-h-11 items-center justify-center gap-2 border px-4 text-xs font-black uppercase" style={{ borderColor: primary, color: primary }}><CirclePlus size={16} />Iniciar conversa</button><button type="button" onClick={() => void carregar()} disabled={loading} aria-label="Atualizar conversas" className="flex min-h-11 min-w-11 items-center justify-center border p-3 disabled:opacity-50" style={{ borderColor: 'var(--border)' }}><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button></div>
       </header>
 
       {novaConversaAberta && <form onSubmit={criarConversa} className="grid gap-4 border p-5 md:grid-cols-2" style={{ borderColor: primary, backgroundColor: 'var(--background-secondary)' }}>
@@ -199,7 +216,7 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
         <div className="flex justify-end gap-2 md:col-span-2"><button type="button" disabled={criandoConversa} onClick={() => setNovaConversaAberta(false)} className="min-h-11 border px-4 text-xs font-bold uppercase" style={{ borderColor: 'var(--border)' }}>Cancelar</button><button type="submit" disabled={criandoConversa} className="min-h-11 px-4 text-xs font-black uppercase text-black disabled:opacity-50" style={{ backgroundColor: primary }}>{criandoConversa ? 'Iniciando...' : 'Iniciar e notificar'}</button></div>
       </form>}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <Resumo label="Tickets ativos" value={String(resumo.ticketsAtivos)} />
         <Resumo label="Mensagens não lidas" value={String(resumo.mensagensNaoLidas)} />
         <Resumo label="Extras no mês" value={String(resumo.extrasNoMes)} />
@@ -209,16 +226,16 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
       {error && <p role="alert" className="border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-500">{error}</p>}
       {feedback && <ActionFeedback message={feedback} tone="success" />}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-4 gap-2" aria-label="Filtros de chamados">
         {(['ATIVOS', 'TODOS', 'EXTRAS', 'BUGS'] as const).map((item) => (
-          <button key={item} type="button" onClick={() => setFiltro(item)} className="border px-3 py-2 text-[10px] font-black uppercase" style={{ borderColor: filtro === item ? primary : 'var(--border)', color: filtro === item ? primary : 'var(--foreground-muted)' }}>
+          <button key={item} type="button" onClick={() => setFiltro(item)} className="min-h-11 border px-2 py-2 text-[9px] font-black uppercase sm:px-3 sm:text-[10px]" style={{ borderColor: filtro === item ? primary : 'var(--border)', color: filtro === item ? primary : 'var(--foreground-muted)' }}>
             {item}
           </button>
         ))}
       </div>
 
       <div className="grid min-h-[600px] gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <aside className="border" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+        <aside data-admin-ticket-queue className={`${selecionado ? 'hidden xl:block' : 'block'} min-w-0 border`} style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }} aria-label="Fila de chamados">
           <div className="border-b px-4 py-3 text-[10px] font-black uppercase tracking-widest text-foreground-muted" style={{ borderColor: 'var(--border)' }}>Fila ({exibidos.length})</div>
           <div className="max-h-[680px] overflow-y-auto custom-scrollbar">
             {loading && tickets.length === 0 ? (
@@ -226,7 +243,7 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
             ) : exibidos.length === 0 ? (
               <div className="p-8 text-center"><Headset className="mx-auto mb-2 opacity-30"/><p className="text-xs text-foreground-muted">Nenhum ticket neste filtro.</p></div>
             ) : exibidos.map((ticket) => (
-              <button key={ticket.id} type="button" onClick={() => setSelecionado(ticket)} className="w-full border-b p-4 text-left transition-colors hover:bg-black/5" style={{ borderColor: 'var(--border)', backgroundColor: selecionado?.id === ticket.id ? `${primary}12` : undefined }}>
+              <button key={ticket.id} type="button" onClick={() => abrirTicket(ticket)} aria-pressed={selecionado?.id === ticket.id} className="w-full border-b p-4 text-left transition-colors hover:bg-black/5" style={{ borderColor: 'var(--border)', backgroundColor: selecionado?.id === ticket.id ? `${primary}12` : undefined }}>
                 <div className="flex items-start justify-between gap-2">
                   <span className="truncate text-sm font-black uppercase">{ticket.empresa?.nome}</span>
                   {ticket.naoLidas > 0 && <span className="min-w-5 rounded-full px-1.5 py-0.5 text-center text-[9px] font-black text-black" style={{ backgroundColor: primary }}>{ticket.naoLidas}</span>}
@@ -246,8 +263,12 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
         </aside>
 
         {selecionado && selecionado.empresa ? (
-          <div className="space-y-3">
-            <div className="grid gap-3 border p-4 sm:grid-cols-2 xl:grid-cols-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+          <div ref={detalheRef} data-testid="admin-ticket-detail" className="min-w-0 scroll-mt-3 space-y-3">
+            <div className="sticky top-0 z-20 flex items-center gap-3 border p-3 xl:hidden" style={{ borderColor: primary, backgroundColor: 'var(--background)' }}>
+              <button ref={voltarFilaRef} type="button" onClick={voltarParaFila} className="inline-flex min-h-11 shrink-0 items-center gap-2 border px-3 text-[10px] font-black uppercase" style={{ borderColor: primary, color: primary }}><ArrowLeft size={15} />Fila</button>
+              <div className="min-w-0"><p className="truncate text-xs font-black uppercase">{selecionado.empresa.nome}</p><p className="truncate text-[10px] text-foreground-muted">{selecionado.assunto}</p></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 border p-3 sm:p-4 xl:grid-cols-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
               <label>
                 <span className="mb-1 block text-[9px] font-bold uppercase text-foreground-muted">Status</span>
                 <select disabled={saving} value={selecionado.status} onChange={(event) => void atualizar({ status: event.target.value as StatusTicketSuporte })} className="w-full border bg-background p-2 text-xs" style={{ borderColor: 'var(--border)' }}>
@@ -275,7 +296,7 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
             <ChatWorkspace key={`${selecionado.id}:${selecionado.status}:${selecionado.respostasEmpresaHabilitadas}`} ticketId={selecionado.id} empresaId={selecionado.empresa.id} title={`${selecionado.empresa.nome} · ${selecionado.assunto}`} protocolo={selecionado.protocolo} status={selecionado.status} respostasEmpresaHabilitadas={selecionado.respostasEmpresaHabilitadas} onMessageSent={() => void carregar(true)} />
           </div>
         ) : (
-          <div className="flex min-h-[400px] items-center justify-center border p-8 text-center" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+          <div className="hidden min-h-[400px] items-center justify-center border p-8 text-center xl:flex" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
             <div><Headset className="mx-auto mb-3 opacity-30"/><p className="text-sm font-bold">Selecione um ticket</p><p className="mt-1 text-xs text-foreground-muted">A fila prioriza os atendimentos atualizados recentemente.</p></div>
           </div>
         )}
@@ -319,9 +340,9 @@ export default function ChatModule({ initialTicketId = null }: { initialTicketId
 
 function Resumo({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border p-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
+    <div className="min-w-0 border p-3 sm:p-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}>
       <p className="text-[9px] font-bold uppercase tracking-widest text-foreground-muted">{label}</p>
-      <p className="mt-1 text-2xl font-black">{value}</p>
+      <p className="mt-1 text-xl font-black sm:text-2xl">{value}</p>
     </div>
   )
 }
