@@ -1,6 +1,5 @@
 // src/app/admin/modules/dashboard/DashboardModule.jsx
 'use client'
-import { useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import {
@@ -19,11 +18,15 @@ import DashboardStats from './DashboardStats';
 import DashboardChart from './DashboardChart';
 import { useAdminData } from '../../_hooks/useAdminData';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAnoFinanceiro } from '@/hooks/useAnoFinanceiro';
+import { competenciaBrasil } from '@/lib/financeiro/situacaoFinanceira';
+
+const moedaCompacta = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 });
 
 export default function DashboardModule() {
   const { primary } = useTheme();
-  const { empresas, stats, loading, erro } = useAdminData();
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const { anoAtual, anoSelecionado: selectedYear, selecionarAno: setSelectedYear } = useAnoFinanceiro();
+  const { empresas, stats, loading, erro } = useAdminData(selectedYear);
   
   if (loading) {
     return <div className="h-64 flex items-center justify-center font-bold animate-pulse tracking-widest">CARREGANDO ENGINE...</div>;
@@ -43,9 +46,9 @@ export default function DashboardModule() {
     listaEmpresas.forEach(c => {
       if (c.criado_em) {
         const data = new Date(c.criado_em);
-        if (data.getFullYear() === selectedYear) {
-          const mes = data.getMonth();
-          if (mes >= 0 && mes < 12) contagem[mes]++;
+        if (!Number.isNaN(data.getTime())) {
+          const competencia = competenciaBrasil(data);
+          if (competencia.ano === selectedYear) contagem[competencia.mes - 1]++;
         }
       }
     });
@@ -60,10 +63,13 @@ export default function DashboardModule() {
     { name: 'Preview', value: listaEmpresas.filter(c => c.plano === 'PREVIEW').length || 0 },
   ];
 
-  const receitaMensal = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((mes, indice) => ({
-    mes,
-    receita: listaEmpresas.filter(empresa => empresa.status === 'ATIVO' && new Date(empresa.criado_em).getFullYear() <= selectedYear && (new Date(empresa.criado_em).getFullYear() < selectedYear || new Date(empresa.criado_em).getMonth() <= indice)).reduce((total, empresa) => total + Number(empresa.mensalidade || 0), 0),
-  }));
+  const financeiroAno = stats?.financeiro?.ano === selectedYear ? stats.financeiro : null;
+  const receitaMensal = financeiroAno?.meses.map((item, indice) => ({
+    mes: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][indice],
+    receita: item.recebido,
+    custos: item.despesas + item.taxasAsaas,
+  })) || [];
+  const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
   return (
     <div className="space-y-6 max-w-full overflow-hidden pb-10">
@@ -90,6 +96,7 @@ export default function DashboardModule() {
       <DashboardChart 
         data={processarDadosGrafico()} 
         selectedYear={selectedYear} 
+        currentYear={anoAtual}
         onYearChange={setSelectedYear} 
       />
 
@@ -101,24 +108,30 @@ export default function DashboardModule() {
               <h3 className="text-sm font-black tracking-widest mt-1">MENSAL</h3>
             </div>
             <div className="px-2.5 py-1.5 rounded-lg border" style={{ borderColor: 'var(--border)' }}>
-              <span className="text-[10px] uppercase tracking-[0.18em] opacity-70">6M</span>
+              <span className="text-[10px] uppercase tracking-[0.18em] opacity-70">{selectedYear}</span>
             </div>
           </div>
 
+          <div className="mb-2 flex gap-4 text-[10px] uppercase tracking-wide text-foreground-muted"><span><span className="mr-1 text-primary">■</span>Recebido</span><span><span className="mr-1 text-foreground-muted">■</span>Custos</span></div>
           <div className="h-64">
+            {financeiroAno ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={receitaMensal} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="4 6" stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="mes" stroke="var(--foreground-muted)" tickLine={false} axisLine={false} fontSize={11} />
-                <YAxis stroke="var(--foreground-muted)" tickLine={false} axisLine={false} fontSize={11} />
+                <YAxis stroke="var(--foreground-muted)" tickLine={false} axisLine={false} fontSize={11} tickFormatter={(value) => `R$ ${moedaCompacta.format(value)}`} width={82} />
                 <Tooltip
-                  formatter={(value) => [`R$ ${Number(value).toLocaleString('pt-BR')}`, 'Receita']}
+                  formatter={(value, name) => [moeda.format(Number(value)), name === 'receita' ? 'Recebido' : 'Custos']}
                   contentStyle={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)', borderRadius: '12px' }}
                 />
-                <Bar dataKey="receita" radius={[8, 8, 0, 0]} fill="var(--primary)" />
+                <Bar dataKey="receita" radius={[4, 4, 0, 0]} fill="var(--primary)" maxBarSize={24} />
+                <Bar dataKey="custos" radius={[4, 4, 0, 0]} fill="var(--foreground-muted)" maxBarSize={24} />
               </BarChart>
             </ResponsiveContainer>
+            ) : <p role="status" className="flex h-full items-center justify-center text-xs text-foreground-muted">Carregando dados financeiros...</p>}
           </div>
+          {financeiroAno && <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t pt-3 text-[10px] uppercase tracking-wide" style={{ borderColor: 'var(--border)' }}><span>Recebido <strong>{moeda.format(financeiroAno.recebido)}</strong></span><span>Custos <strong>{moeda.format(financeiroAno.despesas + financeiroAno.taxasAsaas)}</strong></span><span>Saldo <strong>{moeda.format(financeiroAno.saldo)}</strong></span></div>}
+          <p className="mt-2 text-[10px] text-foreground-muted">Custos = despesas lançadas + taxas Asaas conhecidas. O saldo não inclui custos ainda não registrados.</p>
         </div>
 
         <div className="border rounded-2xl p-5" style={{ backgroundColor: 'var(--background-secondary)', borderColor: 'var(--border)' }}>
@@ -133,6 +146,7 @@ export default function DashboardModule() {
           </div>
 
           <div className="h-64">
+            {distribuicaoPlanos.every(item => item.value === 0) ? <p className="flex h-full items-center justify-center text-xs text-foreground-muted">Nenhuma empresa cadastrada.</p> : (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={distribuicaoPlanos} dataKey="value" nameKey="name" innerRadius={52} outerRadius={80} paddingAngle={4} stroke="var(--background-secondary)" strokeWidth={3}>
@@ -151,6 +165,7 @@ export default function DashboardModule() {
                 />
               </PieChart>
             </ResponsiveContainer>
+            )}
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] uppercase tracking-[0.12em]">
@@ -175,7 +190,7 @@ export default function DashboardModule() {
           <table className="min-w-[620px] w-full text-left border-collapse relative">
             <thead className="sticky top-0 bg-[var(--background-secondary)] z-10 shadow-[0_1px_0_0_var(--border)]">
               <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
-                {['EMPRESA', 'PLANO', 'MENSALIDADE', 'STATUS FINANCEIRO'].map(h => (
+                {['EMPRESA', 'PLANO', 'MENSALIDADE VIGENTE', 'STATUS FINANCEIRO'].map(h => (
                   <th key={h} className="px-4 py-3 text-[10px] font-black tracking-widest opacity-60 bg-[var(--background-secondary)]">{h}</th>
                 ))}
               </tr>
@@ -212,10 +227,13 @@ export default function DashboardModule() {
                         if (empresa.status === 'AGUARDANDO_APROVACAO') {
                           return <span className="text-[10px] px-2 py-1 uppercase font-mono border font-black bg-yellow-500/10 text-yellow-500 border-yellow-500/20 tracking-wider animate-pulse">⏳ AGUARDANDO</span>;
                         }
-                        if (empresa.status === 'INADIMPLENTE') {
-                          return <span className="text-[10px] px-2 py-1 uppercase font-mono border font-black bg-red-500/10 text-red-500 border-red-500/20 tracking-wider">⚠️ INADIMPLENTE</span>;
+                        if (empresa.financeiro?.bloqueado) {
+                          return <span className="text-[10px] px-2 py-1 uppercase font-mono border font-black bg-red-500/10 text-red-500 border-red-500/20 tracking-wider">{empresa.financeiro?.situacao?.replaceAll('_', ' ') || 'BLOQUEADA'}</span>;
                         }
-                        return <span className="text-[10px] px-2 py-1 uppercase font-mono border font-black bg-green-500/10 text-green-500 border-green-500/20 tracking-wider">✓ PAGO</span>;
+                        if (empresa.financeiro?.situacao === 'AGUARDANDO_PAGAMENTO_INICIAL') {
+                          return <span className="text-[10px] px-2 py-1 uppercase font-mono border font-black bg-yellow-500/10 text-yellow-500 border-yellow-500/20 tracking-wider">AGUARDANDO PRIMEIRO PAGAMENTO</span>;
+                        }
+                        return <span className="text-[10px] px-2 py-1 uppercase font-mono border font-black bg-green-500/10 text-green-500 border-green-500/20 tracking-wider">{empresa.financeiro?.situacao?.replaceAll('_', ' ') || 'ATIVO'}</span>;
                       })()}
                     </td>
                   </motion.tr>

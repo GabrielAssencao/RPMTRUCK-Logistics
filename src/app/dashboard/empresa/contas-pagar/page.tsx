@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import Link from 'next/link'
 import { AlertTriangle, Building2, Camera, Check, Copy, Download, ExternalLink, FileText, Pencil, Plus, ReceiptText, RotateCcw, Trash2, Upload, X } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { CONTA_PAGAR_MAX_FILE_BYTES, formatarLinhaDigitavel, identificarCodigoBoleto, linhaDigitavelDoCodigoBarras, linhaDigitavelEstruturalmenteValida, linhaDigitavelValida, somenteDigitosBoleto } from '@/lib/financeiro/contasPagar'
@@ -29,6 +28,17 @@ type OrigemLeituraFormulario = 'MANUAL' | 'PDF_TEXTO' | 'CODIGO_BARRAS'
 const criarEstadoInicial = () => ({ descricao: '', fornecedor: '', vencimento: new Date().toISOString().slice(0, 10), valor: '', linhaDigitavel: '', origemLeitura: 'MANUAL' as OrigemLeituraFormulario, revisado: false, categoria: '', veiculoId: '' })
 type EstadoFormulario = ReturnType<typeof criarEstadoInicial>
 type EstadoEdicao = Pick<EstadoFormulario, 'descricao' | 'fornecedor' | 'vencimento' | 'valor' | 'linhaDigitavel'>
+
+function mensagemErroApi(data: { erro?: unknown; retryAfter?: unknown }, fallback: string) {
+  const segundos = Number(data.retryAfter)
+  if (Number.isFinite(segundos) && segundos > 0) {
+    const espera = segundos < 60
+      ? `${Math.ceil(segundos)} segundo(s)`
+      : `${Math.ceil(segundos / 60)} minuto(s)`
+    return `Limite temporário atingido. Tente novamente em ${espera}.`
+  }
+  return typeof data.erro === 'string' && data.erro ? data.erro : fallback
+}
 
 const CONSULTA_CELULAR = '(max-width: 767px) and (pointer: coarse)'
 
@@ -59,7 +69,7 @@ export default function ContasPagarPage() {
   const [carregando, setCarregando] = useState(true)
   const [feedback, setFeedback] = useState('')
   const feedbackTone = useMemo(() => {
-    if (/cadastrada|baixado|confirmado|atualizado|copiada|cancelado|revertida/i.test(feedback)) return 'success' as const
+    if (/cadastrada|baixado|confirmado|atualizado|copiada|cancelado|revertida|exportado/i.test(feedback)) return 'success' as const
     if (/lido|leitura|reconhecido|confira|compare/i.test(feedback)) return 'warning' as const
     return 'error' as const
   }, [feedback])
@@ -71,6 +81,7 @@ export default function ContasPagarPage() {
   const [veiculos, setVeiculos] = useState<VeiculoResumo[]>([])
   const [lendoArquivo, setLendoArquivo] = useState(false)
   const [enviando, setEnviando] = useState(false)
+  const [exportando, setExportando] = useState(false)
   const [baixando, setBaixando] = useState<Conta | null>(null)
   const [cancelando, setCancelando] = useState<Conta | null>(null)
   const [reabrindo, setReabrindo] = useState<Conta | null>(null)
@@ -246,7 +257,7 @@ export default function ContasPagarPage() {
       if (boleto) body.set('boleto', boleto)
       const response = await fetch('/api/contas-pagar', { method: 'POST', body })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.erro || 'Não foi possível cadastrar a conta.')
+      if (!response.ok) throw new Error(mensagemErroApi(data, 'Não foi possível cadastrar a conta.'))
       limparCadastro(); setAbrirCadastro(false); setFeedback('Conta cadastrada com segurança.')
       sinalizarAtualizacaoDashboardEmpresa()
       await carregar()
@@ -277,7 +288,7 @@ export default function ContasPagarPage() {
       if (comprovante) body.set('comprovante', comprovante)
       const response = await fetch(`/api/contas-pagar/${baixando.id}`, { method: 'PATCH', body })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.erro || 'Não foi possível confirmar a baixa.')
+      if (!response.ok) throw new Error(mensagemErroApi(data, 'Não foi possível confirmar a baixa.'))
       setBaixando(null); setComprovante(null)
       setFeedback(comprovante ? 'Pagamento confirmado e comprovante protegido no bucket privado.' : 'Pagamento confirmado sem comprovante anexado.')
       sinalizarAtualizacaoDashboardEmpresa()
@@ -293,7 +304,7 @@ export default function ContasPagarPage() {
       const body = new FormData(); body.set('acao', 'CANCELAR')
       const response = await fetch(`/api/contas-pagar/${cancelando.id}`, { method: 'PATCH', body })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.erro || 'Não foi possível cancelar o lançamento.')
+      if (!response.ok) throw new Error(mensagemErroApi(data, 'Não foi possível cancelar o lançamento.'))
       setCancelando(null); setFeedback('Lançamento cancelado e retirado dos custos operacionais.'); sinalizarAtualizacaoDashboardEmpresa(); await carregar()
     } catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível cancelar o lançamento.') }
     finally { submitRef.current = false; setEnviando(false) }
@@ -306,7 +317,7 @@ export default function ContasPagarPage() {
       const body = new FormData(); body.set('acao', 'REABRIR')
       const response = await fetch(`/api/contas-pagar/${reabrindo.id}`, { method: 'PATCH', body })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.erro || 'Não foi possível reverter a baixa.')
+      if (!response.ok) throw new Error(mensagemErroApi(data, 'Não foi possível reverter a baixa.'))
       setReabrindo(null); setFeedback('Baixa revertida. A conta voltou para pendente.'); sinalizarAtualizacaoDashboardEmpresa(); await carregar()
     } catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível reverter a baixa.') }
     finally { submitRef.current = false; setEnviando(false) }
@@ -334,7 +345,7 @@ export default function ContasPagarPage() {
       Object.entries(formEdicao).forEach(([chave, valor]) => body.set(chave, valor))
       const response = await fetch(`/api/contas-pagar/${editando.id}`, { method: 'PATCH', body })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.erro || 'Não foi possível atualizar a conta.')
+      if (!response.ok) throw new Error(mensagemErroApi(data, 'Não foi possível atualizar a conta.'))
       setEditando(null)
       setFeedback('Conta atualizada com segurança.')
       sinalizarAtualizacaoDashboardEmpresa()
@@ -368,6 +379,32 @@ export default function ContasPagarPage() {
     finally { setEnviando(false) }
   }
 
+  const exportarExcel = async () => {
+    if (exportando) return
+    setExportando(true)
+    setFeedback('')
+    try {
+      const response = await fetch('/api/contas-pagar/exportar', { cache: 'no-store' })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(mensagemErroApi(data, 'Não foi possível exportar as contas.'))
+      }
+      const url = URL.createObjectURL(await response.blob())
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'contas-a-pagar.xlsx'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      setFeedback('Arquivo Excel exportado com sucesso.')
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : 'Não foi possível exportar as contas.')
+    } finally {
+      setExportando(false)
+    }
+  }
+
   return (
     <div className="mx-auto max-w-[1500px] space-y-5 overflow-hidden">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -386,7 +423,7 @@ export default function ContasPagarPage() {
 
       <div className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)' }}>
         <div className="flex overflow-x-auto">{(['PENDENTE', 'PAGO', 'CANCELADO', 'TODOS'] as const).map((item) => <button key={item} type="button" onClick={() => setFiltro(item)} className="min-h-10 whitespace-nowrap border px-4 text-[10px] font-black uppercase" style={{ color: filtro === item ? '#000' : 'var(--foreground-muted)', backgroundColor: filtro === item ? primary : 'transparent', borderColor: filtro === item ? primary : 'var(--border)' }}>{item}</button>)}</div>
-        {capacidades?.exportacaoLote && <Link href="/api/contas-pagar/exportar" download className="flex min-h-10 items-center justify-center border px-4 text-[10px] font-black uppercase" style={{ borderColor: 'var(--border)' }}><Download size={14} className="mr-2" />Exportar Excel</Link>}
+        {capacidades?.exportacaoLote && <button type="button" onClick={() => void exportarExcel()} disabled={exportando} aria-busy={exportando} className="flex min-h-10 items-center justify-center border px-4 text-[10px] font-black uppercase disabled:cursor-wait disabled:opacity-60" style={{ borderColor: 'var(--border)' }}><Download size={14} className="mr-2" />{exportando ? 'Gerando Excel...' : 'Exportar Excel'}</button>}
       </div>
 
       {carregando ? <DominoLoader label="Carregando contas a pagar" /> : exibidas.length === 0 ? <div className="border border-dashed py-16 text-center" style={{ borderColor: 'var(--border)' }}><ReceiptText className="mx-auto mb-3 text-foreground-muted" /><p className="text-sm font-bold">Nenhuma conta nesta categoria.</p><p className="mt-1 text-xs text-foreground-muted">Cadastre o primeiro vencimento para iniciar a organização.</p></div> : (

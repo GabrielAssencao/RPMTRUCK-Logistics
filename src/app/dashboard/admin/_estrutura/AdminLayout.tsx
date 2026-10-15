@@ -19,6 +19,7 @@ import {
   Megaphone,
   Bell,
   CalendarDays,
+  ReceiptText,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
@@ -26,17 +27,17 @@ import SidebarBrandMark, { SidebarBrandIdentity } from '@/components/dashboard/S
 import SidebarAccountCard from '@/components/dashboard/SidebarAccountCard'
 import DashboardEnvironmentBackground from '@/components/dashboard/DashboardEnvironmentBackground'
 import { useSessionActivity } from '@/hooks/useSessionActivity'
-import { DashboardMotion } from '@/components/motion/DashboardMotion'
 import { ADMIN_BACKGROUND_PREFERENCES_EVENT, lerEstiloFundoAdmin } from '@/lib/adminSidebarPreferences'
 import { estiloFundoEmpresaValido, type EstiloFundoEmpresa } from '@/lib/empresaPreferences'
 
 // ─── Marcadores Operacionais do Super Admin ─────────────────────────────────
 const NAV_ADMIN = [
   { id: 'dashboard', icon: LayoutDashboard, label: 'PAINEL MASTER' },
+  { id: 'expenses', icon: ReceiptText, label: 'DESPESAS DO SISTEMA' },
   { id: 'cronograma', icon: CalendarDays, label: 'CRONOGRAMA' },
   { id: 'companies', icon: Building2, label: 'EMPRESAS / CLIENTES' },
-  { id: 'requests', icon: ShieldAlert, label: 'SOLICITAÇÕES DE ACESSO' },
-  { id: 'subscriptions', icon: CreditCard, label: 'PLANOS / ASSINATURAS' },
+  { id: 'requests', icon: ShieldAlert, label: 'SOLICITAÇÕES' },
+  { id: 'subscriptions', icon: CreditCard, label: 'PLANOS' },
   { id: 'resets', icon: ShieldAlert, label: 'REDEFINIÇÕES DE SENHA' },
   { id: 'security', icon: ShieldCheck, label: 'LOGS / SEGURANÇA' },
   { id: 'alerts', icon: Megaphone, label: 'ALERTAS DO SISTEMA' },
@@ -47,7 +48,7 @@ const NOTIFICATIONS_ITEM = { id: 'notifications', icon: Bell, label: 'CENTRAL DE
 
 const LARGURA_RECOLHIDA = '72px'
 const LARGURA_EXPANDIDA = '16rem'
-export type AdminTab = 'cronograma' | 'dashboard' | 'companies' | 'requests' | 'subscriptions' | 'resets' | 'security' | 'chat' | 'alerts' | 'notifications' | 'settings'
+export type AdminTab = 'cronograma' | 'dashboard' | 'expenses' | 'companies' | 'requests' | 'subscriptions' | 'resets' | 'security' | 'chat' | 'alerts' | 'notifications' | 'settings'
 
 // Dicionário para traduzir o activeTab no Header
 const TAB_LABELS: Record<AdminTab, string> = {
@@ -55,9 +56,10 @@ const TAB_LABELS: Record<AdminTab, string> = {
   'chat': 'CHAT',
   'alerts': 'ALERTAS',
   'dashboard': 'PAINEL',
+  'expenses': 'DESPESAS',
   'companies': 'EMPRESAS',
   'requests': 'SOLICITAÇÕES',
-  'subscriptions': 'PLANOS / ASSINATURAS',
+  'subscriptions': 'PLANOS',
   'resets': 'SOLICITAÇÕES',
   'security': 'SEGURANÇA',
   'notifications': 'NOTIFICAÇÕES',
@@ -311,7 +313,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }: Admin
         >
           <DashboardEnvironmentBackground estilo={estiloFundo} />
           <div className="relative z-[1] p-3 sm:p-5 md:p-8">
-            <DashboardMotion motionKey={activeTab}>{children}</DashboardMotion>
+            {children}
           </div>
         </main>
       </div>

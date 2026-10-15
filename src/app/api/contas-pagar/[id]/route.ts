@@ -27,7 +27,7 @@ function dataLocal(valor: string) {
 export async function PATCH(request: NextRequest, context: RouteContext<'/api/contas-pagar/[id]'>) {
   const auth = await requireEmpresaAuth(request, { modulo: 'CONTAS_PAGAR', acao: 'ESCRITA' })
   if (auth.error || !auth.session) return NextResponse.json({ erro: auth.error }, { status: auth.status })
-  const limited = await applyRateLimit(request, `contas-pagar-write:${auth.session.userId}`, RATE_LIMITS.FILE_UPLOAD.limit, RATE_LIMITS.FILE_UPLOAD.windowMs)
+  const limited = await applyRateLimit(request, `contas-pagar-write:${auth.session.userId}`, RATE_LIMITS.ACCOUNT_PAYABLE_MUTATION.limit, RATE_LIMITS.ACCOUNT_PAYABLE_MUTATION.windowMs)
   if (limited) return limited
 
   const { id } = await context.params
@@ -36,6 +36,14 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/co
     const form = await lerFormularioLimitado(request)
     const acao = form.get('acao')
     if (acao !== 'PAGAR' && acao !== 'CANCELAR' && acao !== 'REABRIR' && acao !== 'EDITAR') return NextResponse.json({ erro: 'Ação inválida.' }, { status: 400 })
+    const arquivo = form.get('comprovante')
+    if (acao === 'PAGAR' && arquivo !== null && !(arquivo instanceof File)) {
+      return NextResponse.json({ erro: 'O comprovante enviado é inválido.' }, { status: 400 })
+    }
+    if (acao === 'PAGAR' && arquivo instanceof File && arquivo.size > 0) {
+      const uploadLimited = await applyRateLimit(request, `contas-pagar-file:${auth.session.userId}`, RATE_LIMITS.FILE_UPLOAD.limit, RATE_LIMITS.FILE_UPLOAD.windowMs)
+      if (uploadLimited) return uploadLimited
+    }
     const atual = await prisma.contaPagar.findFirst({
       where: { id, empresaId: auth.empresaId! },
       include: {
@@ -143,10 +151,6 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/co
       return NextResponse.json({ sucesso: true, status: 'CANCELADO' })
     }
 
-    const arquivo = form.get('comprovante')
-    if (arquivo !== null && !(arquivo instanceof File)) {
-      return NextResponse.json({ erro: 'O comprovante enviado é inválido.' }, { status: 400 })
-    }
     const comprovante = arquivo instanceof File && arquivo.size > 0
       ? await salvarArquivoContaPagar(auth.empresaId!, id, 'comprovante', arquivo)
       : null

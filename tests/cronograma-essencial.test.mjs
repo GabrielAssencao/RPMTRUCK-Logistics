@@ -21,6 +21,7 @@ function autenticar(plano, role = 'GESTOR_EMPRESA') {
     '@/lib/prisma': { prisma: { empresa: { findUnique: async () => ({ id: 'empresa-a', plano, status: 'ATIVO', modulos: ['TAREFAS'], excluidoEm: null }) } } },
     '@/utils/planos': planos,
     '@/lib/fieldEncryption': { exposeEmpresa: (value) => value },
+    '@/lib/financeiro/situacaoFinanceira': { rotaRegularizacaoFinanceira: () => false },
   }).requireEmpresaAuth
 }
 const request = { nextUrl: { pathname: '/api/tarefas' } }

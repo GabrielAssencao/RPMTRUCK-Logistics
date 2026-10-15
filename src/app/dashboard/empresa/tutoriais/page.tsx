@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { TUTORIAIS_MODULOS } from '@/data/tutoriais'
 import { TUTORIAIS_SUPORTE } from '@/lib/suporteBot'
+import { AuthenticatorRecommendations } from '@/components/security/AuthenticatorRecommendations'
 
 export default function TutoriaisPage() {
   return (
@@ -20,6 +21,7 @@ export default function TutoriaisPage() {
             <summary className="cursor-pointer text-sm font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{item.titulo}<span className="mt-1 block text-xs font-normal text-foreground-muted">{item.objetivo}</span></summary>
             <div className="mt-4 space-y-4 text-sm leading-relaxed">
               <ol className="list-decimal space-y-2 pl-5">{item.passos.map(passo => <li key={passo}>{passo}</li>)}</ol>
+              {item.mostrarAplicativosAutenticadores && <AuthenticatorRecommendations />}
               <p><strong>Como funciona: </strong>{item.logica}</p>
               <p className="text-foreground-muted"><strong>Dica prática: </strong>{item.dica}</p>
             </div>

@@ -53,7 +53,16 @@ export async function PATCH(request: NextRequest) {
 
   const atualizado = await executarComAuditoria(
     { usuarioId: auth.session.userId, origem: 'SUPERADMIN' },
-    (tx) => tx.planoComercial.updateMany({
+    async (tx) => {
+      const atual = await tx.planoComercial.findUnique({ where: { plano: parsed.data.plano } })
+      if (!atual || atual.versao !== parsed.data.versao) return { count: 0, recorrenciaAtiva: false }
+      const alteraMensalidade = Number(atual.precoBase) !== parsed.data.precoBase
+        || Number(atual.precoUsuarioAdicional) !== parsed.data.precoUsuarioAdicional
+        || Number(atual.precoVeiculoAdicional) !== parsed.data.precoVeiculoAdicional
+      if (alteraMensalidade && await tx.recorrenciaPagamento.count({
+        where: { status: { in: ['AGUARDANDO_ADESAO', 'ATIVA'] }, empresa: { plano: parsed.data.plano } },
+      })) return { count: 0, recorrenciaAtiva: true }
+      const resultado = await tx.planoComercial.updateMany({
       where: { plano: parsed.data.plano, versao: parsed.data.versao },
       data: {
         precoBase: parsed.data.precoBase,
@@ -62,9 +71,15 @@ export async function PATCH(request: NextRequest) {
         precoVeiculoAdicional: parsed.data.precoVeiculoAdicional,
         versao: { increment: 1 },
       },
-    }),
+      })
+      return { ...resultado, recorrenciaAtiva: false }
+    },
     { isolationLevel: 'Serializable' },
   )
+
+  if (atualizado.recorrenciaAtiva) {
+    return NextResponse.json({ erro: 'Há assinaturas recorrentes neste plano. Encerre ou migre cada assinatura no Asaas antes de alterar a mensalidade.' }, { status: 409 })
+  }
 
   if (atualizado.count !== 1) {
     return NextResponse.json(

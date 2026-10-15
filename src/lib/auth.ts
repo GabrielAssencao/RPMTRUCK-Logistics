@@ -4,7 +4,8 @@ import type { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { verificarAcessoFinanceiro } from '@/lib/financeiro/acessoFinanceiro'
-import { podeRegularizarFinanceiro } from '@/lib/financeiro/situacaoFinanceira'
+import { podeRegularizarFinanceiro, rotaRegularizacaoFinanceira } from '@/lib/financeiro/situacaoFinanceira'
+import { proximaMeiaNoiteBrasilia } from '@/lib/brasiliaTime'
 import {
   getJwtSecret,
   isAdminRole,
@@ -23,11 +24,15 @@ export {
 } from '@/lib/sessionToken'
 
 type SessionInput = Omit<SessionPayload, 'iat' | 'exp'>
-const SESSION_DURATION_MS = 24 * 60 * 60 * 1000
 const ACTIVITY_WRITE_INTERVAL_MS = 60 * 1000
 const activityWrites = new Map<string, number>()
 
-export async function createSession(payload: SessionInput, expiresAt = new Date(Date.now() + SESSION_DURATION_MS)) {
+function criadaHojeEmBrasilia(criadoEm: Date, agora = new Date()) {
+  const formatar = (data: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(data)
+  return formatar(criadoEm) === formatar(agora)
+}
+
+export async function createSession(payload: SessionInput, expiresAt = proximaMeiaNoiteBrasilia()) {
   const token = await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setIssuedAt()
@@ -40,7 +45,7 @@ export async function createSession(payload: SessionInput, expiresAt = new Date(
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     priority: 'high',
-    maxAge: 24 * 60 * 60,
+    maxAge: Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000)),
     expires: expiresAt,
     path: '/',
   })
@@ -52,6 +57,7 @@ export interface AuthResult {
   error: string | null
   status: number
   session: SessionPayload | null
+  acessoSomentePlano?: boolean
   usuario?: {
     id: string
     nome: string
@@ -78,6 +84,9 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
   const tokenSession = await verifySession(request)
   if (!tokenSession) {
     return { error: 'Não autenticado', status: 401, session: null }
+  }
+  if (isAdminRole(tokenSession.role) && tokenSession.mfaVerified !== true) {
+    return { error: 'Entre novamente e confirme o segundo fator.', status: 401, session: null }
   }
 
   // A identidade vem do JWT verificado; a autorização continua sendo revalidada
@@ -117,8 +126,8 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
           revogadaEm: null,
           expiraEm: { gt: new Date() },
         },
-        select: { usuario: { select: usuarioSelect } },
-      }))?.usuario
+        select: { criadoEm: true, usuario: { select: usuarioSelect } },
+      }).then(registro => registro && (!registro.criadoEm || criadaHojeEmBrasilia(registro.criadoEm)) ? registro.usuario : null))
     : await prisma.usuario.findUnique({ where: { id: tokenSession.userId }, select: usuarioSelect })
 
   if (
@@ -133,10 +142,14 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
     return { error: 'Sessão expirada ou revogada', status: 401, session: null }
   }
 
+  let acessoSomentePlano = false
   if (usuario.empresaId && !isAdminRole(usuario.role)) {
     const financeiro = await verificarAcessoFinanceiro(usuario.empresaId)
-    const regularizacao = request.nextUrl.pathname === '/api/empresa/assinatura'
+    const pathname = request.nextUrl.pathname
+    const rotaRegularizacao = rotaRegularizacaoFinanceira(pathname, request.method)
+    const regularizacao = rotaRegularizacao
       && podeRegularizarFinanceiro(usuario.role, 'situacao' in financeiro ? financeiro.situacao : undefined)
+    acessoSomentePlano = financeiro.bloqueado && regularizacao
     if (financeiro.bloqueado && !regularizacao) return { error: financeiro.mensagem, status: 403, session: null }
   }
 
@@ -160,6 +173,7 @@ async function validarSessaoAtual(request: NextRequest): Promise<AuthResult> {
   return {
     error: null,
     status: 200,
+    acessoSomentePlano,
     session: {
       ...tokenSession,
       email: usuario.email,

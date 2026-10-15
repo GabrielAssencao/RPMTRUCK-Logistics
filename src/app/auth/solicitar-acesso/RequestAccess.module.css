@@ -4,4 +4,84 @@
 .page button[aria-pressed] { border-radius: 6px; }
 .page button[aria-pressed="false"]:enabled:hover { border-color: var(--primary) !important; }
 .page button[aria-pressed="true"] { box-shadow: inset 3px 0 0 var(--primary); }
+
+.planSummary { isolation: isolate; }
+
+.promoTicket {
+  --promo-accent: var(--primary);
+  position: relative;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  width: 100%;
+  margin: 0 0 18px;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: var(--promo-accent);
+  background: var(--card);
+  background: linear-gradient(105deg, color-mix(in srgb, var(--promo-accent) 15%, var(--card)) 0%, var(--card) 72%);
+  border: 1px solid var(--promo-accent);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--promo-accent) 14%, transparent), inset 3px 0 0 color-mix(in srgb, var(--promo-accent) 55%, transparent);
+  clip-path: polygon(7px 0, calc(100% - 7px) 0, 100% 7px, 100% calc(100% - 7px), calc(100% - 7px) 100%, 7px 100%, 0 calc(100% - 7px), 0 7px);
+}
+
+.promoTicket::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  bottom: 5px;
+  left: 62px;
+  height: 1px;
+  background: repeating-linear-gradient(90deg, var(--promo-accent) 0 4px, transparent 4px 8px);
+  opacity: .35;
+}
+
+.promoTicketIcon {
+  display: grid;
+  place-items: center;
+  border-right: 1px dashed var(--promo-accent);
+  border-right: 1px dashed color-mix(in srgb, var(--promo-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--promo-accent) 10%, transparent);
+}
+
+.promoTicketContent {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  padding: 10px 14px 13px;
+  font-family: var(--font-mono), monospace;
+  text-transform: uppercase;
+}
+
+.promoTicketContent span {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  opacity: .8;
+}
+
+.promoTicketContent strong {
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.promoTicketContent small {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+@media (max-width: 640px) {
+  .promoTicket {
+    grid-template-columns: 46px minmax(0, 1fr);
+  }
+
+  .promoTicket::after {
+    left: 56px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { animation: none !important; transition: none !important; } }

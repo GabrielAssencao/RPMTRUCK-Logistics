@@ -22,8 +22,14 @@ test.describe('rotas públicas essenciais', () => {
   test('login permanece acessível e utilizável', async ({ page }) => {
     await page.goto('/auth/login')
 
-    await expect(page.getByLabel('E-mail')).toBeVisible()
-    await expect(page.getByRole('button', { name: /continuar/i })).toBeDisabled()
+    const email = page.getByLabel('E-mail')
+    const continuar = page.getByRole('button', { name: /continuar/i })
+    await expect(email).toBeVisible()
+    await expect(email).toHaveCSS('padding-top', '12px')
+    await expect(email).toHaveCSS('padding-left', '16px')
+    await expect(continuar).toBeDisabled()
+    await expect(continuar).toHaveCSS('padding-top', '16px')
+    await expect(continuar).toHaveCSS('font-weight', '900')
   })
 
   test('política de privacidade permanece acessível', async ({ page }) => {

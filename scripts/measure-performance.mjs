@@ -10,29 +10,35 @@ const label = process.argv[2] || 'current'
 if (!/^[a-z0-9-]+$/.test(label)) throw new Error('Invalid measurement label.')
 const browser = await chromium.launch()
 const results = []
-const demoToken = await new SignJWT({ userId: 'performance-demo', email: 'demo@example.invalid', role: 'ADMIN_RPM', sessionVersion: 0 })
+const demoToken = await new SignJWT({ userId: 'performance-demo', email: 'demo@example.invalid', role: 'ADMIN_RPM', sessionVersion: 0, mfaVerified: true })
   .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('5m')
   .sign(new TextEncoder().encode(process.env.JWT_SECRET))
 try {
   for (const profile of [
-    { name: 'desktop', cpu: 1, latency: 0, throughput: -1, width: 1440, height: 1000 },
-    { name: 'modest-pc', cpu: 4, latency: 40, throughput: 5_000_000 / 8, width: 1440, height: 1000 },
-    { name: 'mobile', cpu: 4, latency: 40, throughput: 5_000_000 / 8, width: 412, height: 915 },
-    { name: 'admin', cpu: 4, latency: 40, throughput: 5_000_000 / 8, width: 1440, height: 1000 },
+    { name: 'desktop', cpu: 1, latency: 0, throughput: -1, width: 1440, height: 1000, path: '/' },
+    { name: 'modest-pc', cpu: 4, latency: 40, throughput: 5_000_000 / 8, width: 1440, height: 1000, path: '/' },
+    { name: 'mobile', cpu: 4, latency: 40, throughput: 5_000_000 / 8, width: 412, height: 915, path: '/' },
+    { name: 'admin', cpu: 4, latency: 40, throughput: 5_000_000 / 8, width: 1440, height: 1000, path: '/dashboard/admin', admin: true, readyText: 'PAINEL ADMINISTRATIVO' },
+    { name: 'admin-mobile-chat', cpu: 4, latency: 40, throughput: 5_000_000 / 8, width: 412, height: 915, path: '/dashboard/admin?tab=chat', admin: true, readyText: 'CONVERSAS DAS EMPRESAS' },
   ]) {
     for (let run = 1; run <= 3; run++) {
       const context = await browser.newContext({ viewport: { width: profile.width, height: profile.height } })
       const page = await context.newPage()
-      if (profile.name === 'admin') {
+      if (profile.admin) {
         await context.addCookies([{ name: 'rpmtruck_session', value: demoToken, url: 'http://127.0.0.1:5500', httpOnly: true, sameSite: 'Lax' }])
         const companies = Array.from({ length: 1000 }, (_, index) => ({
           id: `demo-${index}`, nome: `Demo ${index}`, status: 'ATIVO', plano: 'ESSENCIAL',
           criado_em: new Date(2026, index % 9, 1).toISOString(), mensalidade: 200,
         }))
         await context.route('**/api/**', route => {
-          const path = new URL(route.request().url()).pathname
+          const url = new URL(route.request().url())
+          const path = url.pathname
           const body = path === '/api/empresas' ? companies
             : path === '/api/admin/stats' ? { resumo: { receitaTotal: 200000, solicitacoesPendentes: 0 } }
+            : path === '/api/admin/chat' ? {
+                tickets: [], empresas: [],
+                resumo: { ticketsAtivos: 0, mensagensNaoLidas: 0, extrasNoMes: 0, bugsConfirmadosNoMes: 0 },
+              }
             : { tickets: [], resumo: { mensagensNaoLidas: 0 }, naoLidas: 0, pendenciasPorModulo: {}, alertas: [] }
           return route.fulfill({ json: body })
         })
@@ -70,8 +76,8 @@ try {
           for (const entry of list.getEntries()) window.__measurement.blocking += Math.max(0, entry.duration - 50)
         }).observe({ type: 'longtask', buffered: true })
       })
-      await page.goto(`http://127.0.0.1:5500/${profile.name === 'admin' ? 'dashboard/admin' : ''}`, { waitUntil: 'load' })
-      if (profile.name === 'admin') await page.getByText('RECEITA TOTAL', { exact: true }).waitFor()
+      await page.goto(`http://127.0.0.1:5500${profile.path}`, { waitUntil: 'load' })
+      if (profile.readyText) await page.getByRole('heading', { name: profile.readyText, exact: true }).waitFor()
       await page.waitForTimeout(2500)
       const timing = await page.evaluate(() => {
         const navigation = performance.getEntriesByType('navigation')[0]
@@ -102,6 +108,6 @@ await mkdir('docs/performance', { recursive: true })
 await writeFile(`docs/performance/${label}.json`, JSON.stringify({
   mode: 'optimized production build, isolated local database',
   profiles: 'cold browser cache; modest-pc/mobile: CPU 4x slowdown, 5 Mbps, 40 ms latency',
-  adminData: '1000 synthetic companies; all authenticated APIs intercepted, no operational data read',
+  adminData: 'synthetic data only; 1000 companies on the admin dashboard; all authenticated APIs intercepted, no operational data read',
   results,
 }, null, 2) + '\n')

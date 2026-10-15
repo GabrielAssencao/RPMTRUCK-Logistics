@@ -17,7 +17,7 @@ const novoTicketSchema = z.object({
 }).strict()
 
 export async function POST(request: NextRequest) {
-  const auth = await requireEmpresaAuth(request, { acao: 'GESTAO' })
+  const auth = await requireEmpresaAuth(request)
   if (auth.error || !auth.session?.empresaId || !auth.empresa) {
     return NextResponse.json({ erro: auth.error }, { status: auth.status })
   }
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     try {
       const ticket = await prisma.$transaction(async (tx) => {
         const usados = await tx.conversaSuporte.count({
-          where: { empresaId, competencia, classificacaoCobranca: 'ATENDIMENTO' },
+          where: { empresaId, competencia, origem: 'EMPRESA', classificacaoCobranca: 'ATENDIMENTO' },
         })
         const cobertura = calcularCoberturaTicket(auth.empresa!.plano, usados)
         const mensagemInicialEm = new Date()

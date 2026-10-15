@@ -28,6 +28,8 @@ import {
   MessageSquare,
   BookOpen,
   Palette,
+  BrainCircuit,
+  ShieldCheck,
 } from 'lucide-react'
 import ThemeToggle from '@/components/landing/ThemeToggle'
 import NotificacoesPanel from '@/components/dashboard/NotificacoesPanel'
@@ -59,6 +61,7 @@ interface NavEmpresaItem {
   modulo: ModuloCodigo | null
   notificacaoModulo: string
   somenteGestor?: boolean
+  exigePersonalizacaoTema?: boolean
   visaoGeral?: boolean
 }
 
@@ -81,6 +84,7 @@ const NAVIGATION_ICONS: Record<string, LucideIcon> = {
   '/dashboard/empresa/motoristas': Users,
   '/dashboard/empresa/containers': ContainerIcon,
   '/dashboard/empresa/custos': DollarSign,
+  '/dashboard/empresa/inteligencia': BrainCircuit,
   '/dashboard/empresa/contas-pagar': ReceiptText,
   '/dashboard/empresa/cronograma': ClipboardList,
   '/dashboard/empresa/arquivos': Archive,
@@ -94,6 +98,7 @@ const NOTIFICATION_MODULES: Record<string, string> = {
   '/dashboard/empresa/motoristas': 'MOTORISTAS',
   '/dashboard/empresa/containers': 'CONTAINERS',
   '/dashboard/empresa/custos': 'CUSTOS',
+  '/dashboard/empresa/inteligencia': 'CUSTOS',
   '/dashboard/empresa/contas-pagar': 'CONTAS_PAGAR',
   '/dashboard/empresa/cronograma': 'TAREFAS',
   '/dashboard/empresa/arquivos': 'RELATORIOS',
@@ -110,8 +115,11 @@ const NAV_EMPRESA: NavEmpresaItem[] = EMPRESA_NAVIGATION_ITEMS.map((item) => ({
 
 const CONFIG_ITEM = { path: '/dashboard/empresa/configuracoes', icon: Settings, label: 'CONFIGURAÇÕES' }
 const NOTIFICACOES_ITEM: NavEmpresaItem = { path: '/dashboard/empresa/notificacoes', icon: Bell, label: 'NOTIFICAÇÕES', modulo: null, notificacaoModulo: 'TODAS' }
-const SUPORTE_ITEM: NavEmpresaItem = { path: '/dashboard/empresa/chat', icon: MessageSquare, label: 'SUPORTE E TICKETS', modulo: null, notificacaoModulo: 'CHAT', somenteGestor: true }
+const SUPORTE_ITEM: NavEmpresaItem = { path: '/dashboard/empresa/chat', icon: MessageSquare, label: 'SUPORTE E TICKETS', modulo: null, notificacaoModulo: 'CHAT' }
 const TUTORIAIS_ITEM: NavEmpresaItem = { path: '/dashboard/empresa/tutoriais', icon: BookOpen, label: 'TUTORIAIS', modulo: null, notificacaoModulo: 'GERAL' }
+const TEMA_ITEM: NavEmpresaItem = { path: '/dashboard/empresa/tema', icon: Palette, label: 'PERSONALIZAR TEMA', modulo: null, notificacaoModulo: 'GERAL', exigePersonalizacaoTema: true }
+const SEM_ACESSO_ITEM: NavEmpresaItem = { path: '/dashboard/empresa/sem-acesso', icon: ShieldCheck, label: 'ACESSO AOS MÓDULOS', modulo: null, notificacaoModulo: 'GERAL' }
+const ROTAS_EMPRESA = [...NAV_EMPRESA, NOTIFICACOES_ITEM, SUPORTE_ITEM, TUTORIAIS_ITEM, TEMA_ITEM, SEM_ACESSO_ITEM]
 
 // Larguras da sidebar recolhida (só ícones) e expandida (ícones + texto)
 const LARGURA_RECOLHIDA = '72px'
@@ -163,6 +171,10 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
       .then(async (response) => {
         const data = await response.json()
         if (!response.ok) throw new Error(data.erro || 'Acesso suspenso.')
+        if (data.acessoSomentePlano) {
+          router.replace('/dashboard/plano')
+          return
+        }
         setNomeEmpresa(data.empresa.nome)
         setModulosAtivos(normalizarModulos(data.usuario.modulosAcesso))
         setPerfilUsuario(data.usuario)
@@ -257,14 +269,14 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
   }
   const itemPermitido = useCallback((item: NavEmpresaItem) => {
     if (item.modulo && !modulosAtivos.includes(item.modulo)) return false
+    if (item.exigePersonalizacaoTema && !podePersonalizarTema) return false
     if (eGestor) return true
     if (item.somenteGestor) return false
     if (item.visaoGeral) return Boolean(perfilUsuario?.acessoDashboardGeral)
     return true
-  }, [eGestor, modulosAtivos, perfilUsuario?.acessoDashboardGeral])
+  }, [eGestor, modulosAtivos, perfilUsuario?.acessoDashboardGeral, podePersonalizarTema])
 
   const atualizarResumoSuporte = useCallback(async () => {
-    if (!eGestor) return
     try {
       const response = await fetch('/api/chat?resumo=true', { cache: 'no-store' })
       if (!response.ok) return
@@ -277,28 +289,29 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
     } catch {
       // O atalho permanece disponível mesmo se o contador não puder ser atualizado.
     }
-  }, [eGestor])
+  }, [])
 
   useEffect(() => {
-    if (!eGestor) return
     const initial = window.setTimeout(() => void atualizarResumoSuporte(), 0)
     const interval = window.setInterval(() => { if (!document.hidden) void atualizarResumoSuporte() }, 30_000)
     return () => { window.clearTimeout(initial); window.clearInterval(interval) }
-  }, [atualizarResumoSuporte, eGestor])
+  }, [atualizarResumoSuporte])
 
   useEffect(() => {
     if (!acessoCarregado || !perfilUsuario) return
-    const pagina = [...NAV_EMPRESA, NOTIFICACOES_ITEM, SUPORTE_ITEM, TUTORIAIS_ITEM]
+    const pagina = ROTAS_EMPRESA
       .sort((a, b) => b.path.length - a.path.length)
       .find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))
     const configuracaoBloqueada = pathname.startsWith(CONFIG_ITEM.path) && !eGestor
-    if (configuracaoBloqueada || (pagina && !itemPermitido(pagina))) {
-      const destino = NAV_EMPRESA.find(itemPermitido)?.path || '/auth/login'
+    const semModuloDeTrabalho = !eGestor && modulosAtivos.every((modulo) => modulo === 'NOTIFICACOES')
+    const deveMostrarOrientacao = semModuloDeTrabalho && pagina?.path === '/dashboard/empresa'
+    if (configuracaoBloqueada || deveMostrarOrientacao || (pagina && !itemPermitido(pagina))) {
+      const destino = NAV_EMPRESA.find(itemPermitido)?.path || SEM_ACESSO_ITEM.path
       router.replace(destino)
     }
-  }, [acessoCarregado, eGestor, itemPermitido, pathname, perfilUsuario, router])
+  }, [acessoCarregado, eGestor, itemPermitido, modulosAtivos, pathname, perfilUsuario, router])
 
-  const paginaAtual = [...NAV_EMPRESA, NOTIFICACOES_ITEM, SUPORTE_ITEM, TUTORIAIS_ITEM]
+  const paginaAtual = ROTAS_EMPRESA
     .sort((a, b) => b.path.length - a.path.length)
     .find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))
   const rotaAtualPermitida = Boolean(
@@ -579,7 +592,7 @@ function EmpresaLayoutInterno({ children }: { children: React.ReactNode }) {
 
           {/* Área de Ferramentas (Sininho, Theme e Infos) */}
           <div className="flex items-center gap-2 sm:gap-4">
-            {eGestor && <Link href={SUPORTE_ITEM.path} aria-label="Abrir suporte e tickets" title="Suporte e tickets" className="relative flex min-h-11 min-w-11 items-center justify-center border transition-colors hover:text-foreground" style={{ borderColor: pathname === SUPORTE_ITEM.path ? primary : 'var(--border)', color: pathname === SUPORTE_ITEM.path ? primary : 'var(--foreground-muted)' }}><MessageSquare size={18} />{ticketsNaoLidos > 0 && <span className="absolute -right-1.5 -top-1.5 min-w-5 rounded-full px-1 py-0.5 text-center text-[9px] font-black text-black" style={{ backgroundColor: primary }}>{ticketsNaoLidos > 99 ? '99+' : ticketsNaoLidos}</span>}</Link>}
+            <Link href={SUPORTE_ITEM.path} aria-label="Abrir suporte e tickets" title="Suporte e tickets" className="relative flex min-h-11 min-w-11 items-center justify-center border transition-colors hover:text-foreground" style={{ borderColor: pathname === SUPORTE_ITEM.path ? primary : 'var(--border)', color: pathname === SUPORTE_ITEM.path ? primary : 'var(--foreground-muted)' }}><MessageSquare size={18} />{ticketsNaoLidos > 0 && <span className="absolute -right-1.5 -top-1.5 min-w-5 rounded-full px-1 py-0.5 text-center text-[9px] font-black text-black" style={{ backgroundColor: primary }}>{ticketsNaoLidos > 99 ? '99+' : ticketsNaoLidos}</span>}</Link>
             <Link href={TUTORIAIS_ITEM.path} aria-label="Abrir tutoriais" aria-current={pathname === TUTORIAIS_ITEM.path ? 'page' : undefined} title="Tutoriais e ajuda" className="flex min-h-11 min-w-11 items-center justify-center border transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" style={{ borderColor: pathname === TUTORIAIS_ITEM.path ? primary : 'var(--border)', color: pathname === TUTORIAIS_ITEM.path ? primary : 'var(--foreground-muted)' }}><BookOpen size={18} /></Link>
             <NotificacoesPanel onPendenciasChange={setPendenciasPorModulo} />
             <ThemeToggle disabled={!podePersonalizarTema} onToggle={alterarModoTema} />

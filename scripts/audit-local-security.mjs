@@ -24,13 +24,16 @@ try {
   })
   console.log(`Tabelas operacionais verificadas: ${tables.length}.`)
   console.log(`Inconsistências RLS/permissões: ${failures.length}.`)
-  for (const table of failures) console.log(`Revisar proteção: ${table}`)
+  for (const table of failures) {
+    const row = results.find(item => item.tabela === table)
+    console.log(`Revisar proteção: ${table}; RLS=${row?.rls ?? 'ausente'}; grants diretos=${row?.acesso_direto ?? 'ausente'}.`)
+  }
   if (failures.length) process.exitCode = 1
   const buckets = await prisma.$queryRaw`
     SELECT id, public FROM storage.buckets
-    WHERE id IN ('motoristas-fotos', 'relatorios-privados', 'contas-pagar')
+    WHERE id IN ('motoristas-fotos', 'relatorios-privados', 'contas-pagar', 'cobrancas-pix-privadas')
   `
-  for (const id of ['motoristas-fotos', 'relatorios-privados', 'contas-pagar']) {
+  for (const id of ['motoristas-fotos', 'relatorios-privados', 'contas-pagar', 'cobrancas-pix-privadas']) {
     const bucket = buckets.find(item => item.id === id)
     console.log(`Bucket ${id}: ${!bucket ? 'ausente (configuração pendente)' : bucket.public ? 'PÚBLICO — revisar' : 'privado'}.`)
     if (bucket?.public) process.exitCode = 1

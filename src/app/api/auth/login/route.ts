@@ -1,3 +1,6 @@
+import { lerJsonLimitado, RequestBodyError } from '@/lib/requestBody'
+import { iniciarDesafioMfa } from '@/lib/adminMfa'
+import { isAdminRole } from '@/lib/sessionToken'
 // src/app/api/auth/login/route.ts
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -10,6 +13,8 @@ import { verifyBotToken } from '@/lib/botProtection';
 import { pseudonymize, recordSecurityEvent, safeUserAgent } from '@/lib/securityEvents';
 import { verificarAcessoFinanceiro } from '@/lib/financeiro/acessoFinanceiro';
 import { podeRegularizarFinanceiro } from '@/lib/financeiro/situacaoFinanceira';
+import { proximaMeiaNoiteBrasilia } from '@/lib/brasiliaTime';
+import { consumirDispositivoConfiavel } from '@/lib/trustedDevice';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Parsear e validar entrada com Zod
-    const parsed = loginSchema.safeParse(await request.json().catch(() => null));
+    const parsed = loginSchema.safeParse(await lerJsonLimitado(request));
     if (!parsed.success) {
       return NextResponse.json({ erro: 'Dados de entrada inválidos.' }, { status: 400 });
     }
@@ -50,6 +55,7 @@ export async function POST(request: NextRequest) {
     const usuario = await prisma.usuario.findUnique({
       where: { email },
       include: {
+        mfaAdmin: true,
         empresa: {
           select: {
             id: true,
@@ -163,8 +169,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const exigeMfaEmpresa = !isAdminRole(usuario.role) && Boolean(usuario.mfaAdmin?.obrigatorio || usuario.mfaAdmin?.ativadoEm);
+    if (isAdminRole(usuario.role) || (exigeMfaEmpresa && !await consumirDispositivoConfiavel(request, usuario.id))) {
+      return NextResponse.json(await iniciarDesafioMfa(usuario.id, usuario.email, sessionVersion), { status: 202, headers: { 'Cache-Control': 'no-store' } });
+    }
+
     // 7. Cria sessão segura com JWT em HttpOnly Cookie
-    const expiraEm = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const expiraEm = proximaMeiaNoiteBrasilia();
     const sessao = await prisma.sessaoUsuario.create({
       data: {
         usuarioId: usuario.id,
@@ -239,6 +250,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ erro: error.message }, { status: error.status });
     console.error('Erro no login:', error);
     return NextResponse.json(
       { erro: 'Erro interno do servidor' },

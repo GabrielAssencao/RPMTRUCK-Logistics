@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { AntimalwareError, verificarPdfArmazenado } from '@/lib/antimalware'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
 import { executarComAuditoria } from '@/lib/auditoria'
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
   }
 
   try {
+    await verificarPdfArmazenado(arquivo.bucket, arquivo.caminho_storage)
     const { data, error } = await getSupabaseAdmin()
       .storage
       .from(arquivo.bucket)
@@ -59,6 +61,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       { headers: { 'Cache-Control': 'private, no-store' } },
     )
   } catch (error) {
+    if (error instanceof AntimalwareError) return NextResponse.json({ erro: error.message }, { status: error.status })
     console.error('Erro ao acessar Storage:', error)
     return NextResponse.json({ erro: 'Storage privado não configurado no servidor.' }, { status: 500 })
   }

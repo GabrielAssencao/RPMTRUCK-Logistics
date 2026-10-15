@@ -164,6 +164,8 @@ export const RATE_LIMITS = {
   ALERT_READ: { limit: 60, windowMs: 60 * 1000 },
   ALERT_MUTATION: { limit: 30, windowMs: 60 * 1000 },
   FILE_UPLOAD: { limit: 10, windowMs: 60 * 60 * 1000 },
+  ACCOUNT_PAYABLE_MUTATION: { limit: 120, windowMs: 60 * 60 * 1000 },
+  ACCOUNT_PAYABLE_EXPORT: { limit: 12, windowMs: 60 * 60 * 1000 },
   BULK_MUTATION: { limit: 12, windowMs: 60 * 1000 },
   ADMIN_READ: { limit: 60, windowMs: 60 * 1000 },
   ADMIN_MUTATION: { limit: 20, windowMs: 60 * 1000 },

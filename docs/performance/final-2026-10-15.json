@@ -1,0 +1,2812 @@
+{
+  "mode": "optimized production build, isolated local database",
+  "profiles": "cold browser cache; modest-pc/mobile: CPU 4x slowdown, 5 Mbps, 40 ms latency",
+  "adminData": "synthetic data only; 1000 companies on the admin dashboard; all authenticated APIs intercepted, no operational data read",
+  "results": [
+    {
+      "profile": "desktop",
+      "run": 1,
+      "lcp": 460,
+      "cls": 0,
+      "blocking": 0,
+      "lcpElement": "IMG",
+      "fcp": 356,
+      "ttfb": 14.100000143051147,
+      "load": 147.90000009536743,
+      "canvasCount": 0,
+      "transferBytes": 472334,
+      "jsBytes": 208678,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/",
+          "type": "Document",
+          "bytes": 20871
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2j5zur5u7t7eh.css",
+          "type": "Stylesheet",
+          "bytes": 3749
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 19607
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/2ku4zb3q5n3_v.js",
+          "type": "Script",
+          "bytes": 1118
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/2ya0k6xw69kx0.js",
+          "type": "Script",
+          "bytes": 10206
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/_next/static/chunks/1wbv6i0nc_1z9.js",
+          "type": "Script",
+          "bytes": 23234
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 14764
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 22025
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 26901
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 21106
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 1683
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 1675
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/api/planos",
+          "type": "Fetch",
+          "bytes": 4120
+        },
+        {
+          "path": "/api/stats",
+          "type": "Fetch",
+          "bytes": 1501
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "desktop",
+      "run": 2,
+      "lcp": 428,
+      "cls": 0,
+      "blocking": 0,
+      "lcpElement": "IMG",
+      "fcp": 328,
+      "ttfb": 8.5,
+      "load": 131.10000014305115,
+      "canvasCount": 0,
+      "transferBytes": 474034,
+      "jsBytes": 208678,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/",
+          "type": "Document",
+          "bytes": 20874
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2j5zur5u7t7eh.css",
+          "type": "Stylesheet",
+          "bytes": 3749
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 19607
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/2ku4zb3q5n3_v.js",
+          "type": "Script",
+          "bytes": 1118
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/2ya0k6xw69kx0.js",
+          "type": "Script",
+          "bytes": 10206
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1wbv6i0nc_1z9.js",
+          "type": "Script",
+          "bytes": 23234
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 22025
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 14764
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 21106
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 26901
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 1683
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 1675
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 1697
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/api/planos",
+          "type": "Fetch",
+          "bytes": 4120
+        },
+        {
+          "path": "/api/stats",
+          "type": "Fetch",
+          "bytes": 1501
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "desktop",
+      "run": 3,
+      "lcp": 428,
+      "cls": 0,
+      "blocking": 0,
+      "lcpElement": "IMG",
+      "fcp": 340,
+      "ttfb": 9,
+      "load": 139,
+      "canvasCount": 0,
+      "transferBytes": 470653,
+      "jsBytes": 208678,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/",
+          "type": "Document",
+          "bytes": 20873
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2j5zur5u7t7eh.css",
+          "type": "Stylesheet",
+          "bytes": 3749
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 19607
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/2ku4zb3q5n3_v.js",
+          "type": "Script",
+          "bytes": 1118
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/2ya0k6xw69kx0.js",
+          "type": "Script",
+          "bytes": 10206
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/static/chunks/1wbv6i0nc_1z9.js",
+          "type": "Script",
+          "bytes": 23234
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 26901
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 21106
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 14764
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 22025
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 1675
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/api/planos",
+          "type": "Fetch",
+          "bytes": 4120
+        },
+        {
+          "path": "/api/stats",
+          "type": "Fetch",
+          "bytes": 1501
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "modest-pc",
+      "run": 1,
+      "lcp": 1084,
+      "cls": 0,
+      "blocking": 72,
+      "lcpElement": "IMG",
+      "fcp": 804,
+      "ttfb": 11.5,
+      "load": 1047.7999999523163,
+      "canvasCount": 0,
+      "transferBytes": 484822,
+      "jsBytes": 208678,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/",
+          "type": "Document",
+          "bytes": 20872
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/static/chunks/2j5zur5u7t7eh.css",
+          "type": "Stylesheet",
+          "bytes": 3749
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 19607
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/2ku4zb3q5n3_v.js",
+          "type": "Script",
+          "bytes": 1118
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/2ya0k6xw69kx0.js",
+          "type": "Script",
+          "bytes": 10206
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 14764
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 22025
+        },
+        {
+          "path": "/_next/static/chunks/1wbv6i0nc_1z9.js",
+          "type": "Script",
+          "bytes": 23234
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 21106
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 26901
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 1683
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 1675
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 1694
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 1697
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 2279
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 2272
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 2268
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 2277
+        },
+        {
+          "path": "/api/stats",
+          "type": "Fetch",
+          "bytes": 1501
+        },
+        {
+          "path": "/api/planos",
+          "type": "Fetch",
+          "bytes": 4120
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "modest-pc",
+      "run": 2,
+      "lcp": 1056,
+      "cls": 0,
+      "blocking": 74,
+      "lcpElement": "IMG",
+      "fcp": 772,
+      "ttfb": 8.5,
+      "load": 1012.6000001430511,
+      "canvasCount": 0,
+      "transferBytes": 484825,
+      "jsBytes": 208678,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/",
+          "type": "Document",
+          "bytes": 20873
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/chunks/2j5zur5u7t7eh.css",
+          "type": "Stylesheet",
+          "bytes": 3749
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 19607
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/2ku4zb3q5n3_v.js",
+          "type": "Script",
+          "bytes": 1118
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/2ya0k6xw69kx0.js",
+          "type": "Script",
+          "bytes": 10206
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 22025
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 14764
+        },
+        {
+          "path": "/_next/static/chunks/1wbv6i0nc_1z9.js",
+          "type": "Script",
+          "bytes": 23234
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 21106
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 26901
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 1683
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 1675
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 1694
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 1697
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 2281
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 2273
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 2267
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 2277
+        },
+        {
+          "path": "/api/planos",
+          "type": "Fetch",
+          "bytes": 4120
+        },
+        {
+          "path": "/api/stats",
+          "type": "Fetch",
+          "bytes": 1501
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "modest-pc",
+      "run": 3,
+      "lcp": 1244,
+      "cls": 0,
+      "blocking": 80,
+      "lcpElement": "IMG",
+      "fcp": 840,
+      "ttfb": 9.5,
+      "load": 1028,
+      "canvasCount": 0,
+      "transferBytes": 484823,
+      "jsBytes": 208678,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/",
+          "type": "Document",
+          "bytes": 20879
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/static/chunks/2j5zur5u7t7eh.css",
+          "type": "Stylesheet",
+          "bytes": 3749
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 19607
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/2ku4zb3q5n3_v.js",
+          "type": "Script",
+          "bytes": 1118
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/2ya0k6xw69kx0.js",
+          "type": "Script",
+          "bytes": 10206
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/static/chunks/1wbv6i0nc_1z9.js",
+          "type": "Script",
+          "bytes": 23234
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 22025
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 14764
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 26901
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 21106
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 1683
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 1675
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 1694
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 1697
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 2267
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 2268
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 2281
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 2274
+        },
+        {
+          "path": "/api/planos",
+          "type": "Fetch",
+          "bytes": 4120
+        },
+        {
+          "path": "/api/stats",
+          "type": "Fetch",
+          "bytes": 1501
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "mobile",
+      "run": 1,
+      "lcp": 804,
+      "cls": 0,
+      "blocking": 76,
+      "lcpElement": "IMG",
+      "fcp": 676,
+      "ttfb": 9.199999809265137,
+      "load": 946.8999998569489,
+      "canvasCount": 0,
+      "transferBytes": 417408,
+      "jsBytes": 208678,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/",
+          "type": "Document",
+          "bytes": 20873
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 7702
+        },
+        {
+          "path": "/_next/static/chunks/2j5zur5u7t7eh.css",
+          "type": "Stylesheet",
+          "bytes": 3749
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/2ku4zb3q5n3_v.js",
+          "type": "Script",
+          "bytes": 1118
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/2ya0k6xw69kx0.js",
+          "type": "Script",
+          "bytes": 10206
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/_next/static/chunks/1wbv6i0nc_1z9.js",
+          "type": "Script",
+          "bytes": 23234
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 6309
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 8621
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 8116
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 10196
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 1683
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 1694
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 1697
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 0
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 2270
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 2268
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 2277
+        },
+        {
+          "path": "/api/stats",
+          "type": "Fetch",
+          "bytes": 1501
+        },
+        {
+          "path": "/api/planos",
+          "type": "Fetch",
+          "bytes": 4120
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "mobile",
+      "run": 2,
+      "lcp": 796,
+      "cls": 0,
+      "blocking": 65,
+      "lcpElement": "IMG",
+      "fcp": 668,
+      "ttfb": 9.299999952316284,
+      "load": 919.9000000953674,
+      "canvasCount": 0,
+      "transferBytes": 421372,
+      "jsBytes": 208678,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/",
+          "type": "Document",
+          "bytes": 20882
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 7702
+        },
+        {
+          "path": "/_next/static/chunks/2j5zur5u7t7eh.css",
+          "type": "Stylesheet",
+          "bytes": 3749
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/chunks/2ku4zb3q5n3_v.js",
+          "type": "Script",
+          "bytes": 1118
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/2ya0k6xw69kx0.js",
+          "type": "Script",
+          "bytes": 10206
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/_next/static/chunks/1wbv6i0nc_1z9.js",
+          "type": "Script",
+          "bytes": 23234
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 6309
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 8116
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 8621
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 10196
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 1683
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 1675
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 1694
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 1697
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 2280
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 2271
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 2267
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 2277
+        },
+        {
+          "path": "/api/planos",
+          "type": "Fetch",
+          "bytes": 4120
+        },
+        {
+          "path": "/api/stats",
+          "type": "Fetch",
+          "bytes": 1501
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "mobile",
+      "run": 3,
+      "lcp": 804,
+      "cls": 0,
+      "blocking": 66,
+      "lcpElement": "IMG",
+      "fcp": 656,
+      "ttfb": 9.900000095367432,
+      "load": 926.4000000953674,
+      "canvasCount": 0,
+      "transferBytes": 421350,
+      "jsBytes": 208678,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/",
+          "type": "Document",
+          "bytes": 20861
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/static/chunks/2j5zur5u7t7eh.css",
+          "type": "Stylesheet",
+          "bytes": 3749
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 7702
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/2ku4zb3q5n3_v.js",
+          "type": "Script",
+          "bytes": 1118
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/2ya0k6xw69kx0.js",
+          "type": "Script",
+          "bytes": 10206
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 8116
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 6309
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 8621
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/static/chunks/1wbv6i0nc_1z9.js",
+          "type": "Script",
+          "bytes": 23234
+        },
+        {
+          "path": "/_next/image",
+          "type": "Image",
+          "bytes": 10196
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 1683
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 1675
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 1694
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 1697
+        },
+        {
+          "path": "/auth/solicitar-acesso",
+          "type": "Fetch",
+          "bytes": 2280
+        },
+        {
+          "path": "/auth/login",
+          "type": "Fetch",
+          "bytes": 2272
+        },
+        {
+          "path": "/privacidade",
+          "type": "Fetch",
+          "bytes": 2275
+        },
+        {
+          "path": "/cookies",
+          "type": "Fetch",
+          "bytes": 2267
+        },
+        {
+          "path": "/api/planos",
+          "type": "Fetch",
+          "bytes": 4120
+        },
+        {
+          "path": "/api/stats",
+          "type": "Fetch",
+          "bytes": 1501
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "admin",
+      "run": 1,
+      "lcp": 1908,
+      "cls": 0,
+      "blocking": 514,
+      "lcpElement": "H1",
+      "fcp": 456,
+      "ttfb": 9.099999904632568,
+      "load": 1012.1999998092651,
+      "canvasCount": 0,
+      "transferBytes": 642550,
+      "jsBytes": 372972,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/dashboard/admin",
+          "type": "Document",
+          "bytes": 8652
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/2x8ppar8wdct8.js",
+          "type": "Script",
+          "bytes": 1371
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/04c-soon_ninl.js",
+          "type": "Script",
+          "bytes": 10698
+        },
+        {
+          "path": "/_next/static/chunks/1z5hjet3e6fpn.js",
+          "type": "Script",
+          "bytes": 13962
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/static/chunks/1kciv_t69s6ka.js",
+          "type": "Script",
+          "bytes": 28358
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/0uc6xcru0tf2m.js",
+          "type": "Script",
+          "bytes": 25090
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/logos/RpmShieldIcon.svg",
+          "type": "Image",
+          "bytes": 4785
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/api/notificacoes",
+          "type": "Fetch",
+          "bytes": 163
+        },
+        {
+          "path": "/api/auth/activity",
+          "type": "Fetch",
+          "bytes": 163
+        },
+        {
+          "path": "/api/admin/chat",
+          "type": "Fetch",
+          "bytes": 186
+        },
+        {
+          "path": "/_next/static/chunks/3ej5a33ohm8e9.js",
+          "type": "Script",
+          "bytes": 6895
+        },
+        {
+          "path": "/_next/static/chunks/3kn5ey3xxfdgr.js",
+          "type": "Script",
+          "bytes": 10402
+        },
+        {
+          "path": "/_next/static/chunks/05f431hanrexa.js",
+          "type": "Script",
+          "bytes": 102076
+        },
+        {
+          "path": "/api/empresas",
+          "type": "Fetch",
+          "bytes": 129850
+        },
+        {
+          "path": "/api/admin/stats",
+          "type": "Fetch",
+          "bytes": 125
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "admin",
+      "run": 2,
+      "lcp": 1904,
+      "cls": 0,
+      "blocking": 483,
+      "lcpElement": "H1",
+      "fcp": 472,
+      "ttfb": 9.099999904632568,
+      "load": 1016.2000000476837,
+      "canvasCount": 0,
+      "transferBytes": 642551,
+      "jsBytes": 372972,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/dashboard/admin",
+          "type": "Document",
+          "bytes": 8653
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/2x8ppar8wdct8.js",
+          "type": "Script",
+          "bytes": 1371
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/1z5hjet3e6fpn.js",
+          "type": "Script",
+          "bytes": 13962
+        },
+        {
+          "path": "/_next/static/chunks/04c-soon_ninl.js",
+          "type": "Script",
+          "bytes": 10698
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/static/chunks/0uc6xcru0tf2m.js",
+          "type": "Script",
+          "bytes": 25090
+        },
+        {
+          "path": "/_next/static/chunks/1kciv_t69s6ka.js",
+          "type": "Script",
+          "bytes": 28358
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/logos/RpmShieldIcon.svg",
+          "type": "Image",
+          "bytes": 4785
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/api/notificacoes",
+          "type": "Fetch",
+          "bytes": 163
+        },
+        {
+          "path": "/api/auth/activity",
+          "type": "Fetch",
+          "bytes": 163
+        },
+        {
+          "path": "/api/admin/chat",
+          "type": "Fetch",
+          "bytes": 186
+        },
+        {
+          "path": "/_next/static/chunks/3ej5a33ohm8e9.js",
+          "type": "Script",
+          "bytes": 6895
+        },
+        {
+          "path": "/_next/static/chunks/3kn5ey3xxfdgr.js",
+          "type": "Script",
+          "bytes": 10402
+        },
+        {
+          "path": "/_next/static/chunks/05f431hanrexa.js",
+          "type": "Script",
+          "bytes": 102076
+        },
+        {
+          "path": "/api/empresas",
+          "type": "Fetch",
+          "bytes": 129850
+        },
+        {
+          "path": "/api/admin/stats",
+          "type": "Fetch",
+          "bytes": 125
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "admin",
+      "run": 3,
+      "lcp": 1876,
+      "cls": 0,
+      "blocking": 491,
+      "lcpElement": "H1",
+      "fcp": 460,
+      "ttfb": 8.5,
+      "load": 993,
+      "canvasCount": 0,
+      "transferBytes": 642546,
+      "jsBytes": 372972,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/dashboard/admin",
+          "type": "Document",
+          "bytes": 8648
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/2x8ppar8wdct8.js",
+          "type": "Script",
+          "bytes": 1371
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/1z5hjet3e6fpn.js",
+          "type": "Script",
+          "bytes": 13962
+        },
+        {
+          "path": "/_next/static/chunks/04c-soon_ninl.js",
+          "type": "Script",
+          "bytes": 10698
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/static/chunks/1kciv_t69s6ka.js",
+          "type": "Script",
+          "bytes": 28358
+        },
+        {
+          "path": "/_next/static/chunks/0uc6xcru0tf2m.js",
+          "type": "Script",
+          "bytes": 25090
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/logos/RpmShieldIcon.svg",
+          "type": "Image",
+          "bytes": 4785
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/api/notificacoes",
+          "type": "Fetch",
+          "bytes": 163
+        },
+        {
+          "path": "/api/auth/activity",
+          "type": "Fetch",
+          "bytes": 163
+        },
+        {
+          "path": "/api/admin/chat",
+          "type": "Fetch",
+          "bytes": 186
+        },
+        {
+          "path": "/_next/static/chunks/3ej5a33ohm8e9.js",
+          "type": "Script",
+          "bytes": 6895
+        },
+        {
+          "path": "/_next/static/chunks/3kn5ey3xxfdgr.js",
+          "type": "Script",
+          "bytes": 10402
+        },
+        {
+          "path": "/_next/static/chunks/05f431hanrexa.js",
+          "type": "Script",
+          "bytes": 102076
+        },
+        {
+          "path": "/api/empresas",
+          "type": "Fetch",
+          "bytes": 129850
+        },
+        {
+          "path": "/api/admin/stats",
+          "type": "Fetch",
+          "bytes": 125
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "admin-mobile-chat",
+      "run": 1,
+      "lcp": 1316,
+      "cls": 0,
+      "blocking": 166,
+      "lcpElement": "P",
+      "fcp": 448,
+      "ttfb": 10.200000047683716,
+      "load": 986.7000000476837,
+      "canvasCount": 0,
+      "transferBytes": 519527,
+      "jsBytes": 384503,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/dashboard/admin",
+          "type": "Document",
+          "bytes": 8672
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/chunks/2x8ppar8wdct8.js",
+          "type": "Script",
+          "bytes": 1371
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/1z5hjet3e6fpn.js",
+          "type": "Script",
+          "bytes": 13962
+        },
+        {
+          "path": "/_next/static/chunks/04c-soon_ninl.js",
+          "type": "Script",
+          "bytes": 10698
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1kciv_t69s6ka.js",
+          "type": "Script",
+          "bytes": 28358
+        },
+        {
+          "path": "/_next/static/chunks/0uc6xcru0tf2m.js",
+          "type": "Script",
+          "bytes": 25090
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/api/notificacoes",
+          "type": "Fetch",
+          "bytes": 163
+        },
+        {
+          "path": "/api/auth/activity",
+          "type": "Fetch",
+          "bytes": 163
+        },
+        {
+          "path": "/api/admin/chat",
+          "type": "Fetch",
+          "bytes": 186
+        },
+        {
+          "path": "/_next/static/chunks/3ej5a33ohm8e9.js",
+          "type": "Script",
+          "bytes": 6895
+        },
+        {
+          "path": "/_next/static/chunks/3kn5ey3xxfdgr.js",
+          "type": "Script",
+          "bytes": 10402
+        },
+        {
+          "path": "/_next/static/chunks/2qq3ny0hi20b5.js",
+          "type": "Script",
+          "bytes": 11531
+        },
+        {
+          "path": "/api/admin/chat",
+          "type": "Fetch",
+          "bytes": 186
+        },
+        {
+          "path": "/_next/static/chunks/05f431hanrexa.js",
+          "type": "Script",
+          "bytes": 102076
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "admin-mobile-chat",
+      "run": 2,
+      "lcp": 1332,
+      "cls": 0,
+      "blocking": 176,
+      "lcpElement": "P",
+      "fcp": 448,
+      "ttfb": 7.799999952316284,
+      "load": 1017.5999999046326,
+      "canvasCount": 0,
+      "transferBytes": 519522,
+      "jsBytes": 384503,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/dashboard/admin",
+          "type": "Document",
+          "bytes": 8667
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/2x8ppar8wdct8.js",
+          "type": "Script",
+          "bytes": 1371
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/04c-soon_ninl.js",
+          "type": "Script",
+          "bytes": 10698
+        },
+        {
+          "path": "/_next/static/chunks/1z5hjet3e6fpn.js",
+          "type": "Script",
+          "bytes": 13962
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/static/chunks/1kciv_t69s6ka.js",
+          "type": "Script",
+          "bytes": 28358
+        },
+        {
+          "path": "/_next/static/chunks/0uc6xcru0tf2m.js",
+          "type": "Script",
+          "bytes": 25090
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/api/notificacoes",
+          "type": "Fetch",
+          "bytes": 163
+        },
+        {
+          "path": "/api/auth/activity",
+          "type": "Fetch",
+          "bytes": 163
+        },
+        {
+          "path": "/api/admin/chat",
+          "type": "Fetch",
+          "bytes": 186
+        },
+        {
+          "path": "/_next/static/chunks/3ej5a33ohm8e9.js",
+          "type": "Script",
+          "bytes": 6895
+        },
+        {
+          "path": "/_next/static/chunks/3kn5ey3xxfdgr.js",
+          "type": "Script",
+          "bytes": 10402
+        },
+        {
+          "path": "/_next/static/chunks/2qq3ny0hi20b5.js",
+          "type": "Script",
+          "bytes": 11531
+        },
+        {
+          "path": "/api/admin/chat",
+          "type": "Fetch",
+          "bytes": 186
+        },
+        {
+          "path": "/_next/static/chunks/05f431hanrexa.js",
+          "type": "Script",
+          "bytes": 102076
+        }
+      ],
+      "errors": []
+    },
+    {
+      "profile": "admin-mobile-chat",
+      "run": 3,
+      "lcp": 1348,
+      "cls": 0,
+      "blocking": 180,
+      "lcpElement": "P",
+      "fcp": 480,
+      "ttfb": 7.799999952316284,
+      "load": 1005.7999999523163,
+      "canvasCount": 0,
+      "transferBytes": 519520,
+      "jsBytes": 384503,
+      "modelRequests": 0,
+      "resources": [
+        {
+          "path": "/dashboard/admin",
+          "type": "Document",
+          "bytes": 8665
+        },
+        {
+          "path": "/_next/static/chunks/0k-4l6z_2ym2o.css",
+          "type": "Stylesheet",
+          "bytes": 2265
+        },
+        {
+          "path": "/_next/static/chunks/2jwgx7tdj2o0i.css",
+          "type": "Stylesheet",
+          "bytes": 18653
+        },
+        {
+          "path": "/_next/static/media/278cbb97e75e04e2-s.p.3frbiw4nltldc.woff2",
+          "type": "Font",
+          "bytes": 9723
+        },
+        {
+          "path": "/_next/static/media/3206eb66b875a5b3-s.p.201eoo3y6c5_i.woff2",
+          "type": "Font",
+          "bytes": 10059
+        },
+        {
+          "path": "/_next/static/media/a079e02bba5bf7ab-s.p.3f6zc4f4lqyuc.woff2",
+          "type": "Font",
+          "bytes": 9719
+        },
+        {
+          "path": "/_next/static/chunks/2jjnafy-v_mvn.js",
+          "type": "Script",
+          "bytes": 4919
+        },
+        {
+          "path": "/_next/static/media/d23f31b94ad01e54-s.p.0teq8rsbqpt0q.woff2",
+          "type": "Font",
+          "bytes": 10155
+        },
+        {
+          "path": "/_next/static/media/051742360c26797e-s.p.1bkzbscqrt8rl.woff2",
+          "type": "Font",
+          "bytes": 32096
+        },
+        {
+          "path": "/_next/static/media/1b99372b3eaef0c8-s.p.1gsd1jahc5dg_.woff2",
+          "type": "Font",
+          "bytes": 32984
+        },
+        {
+          "path": "/_next/static/chunks/2nsn2slz5emql.js",
+          "type": "Script",
+          "bytes": 9201
+        },
+        {
+          "path": "/_next/static/chunks/turbopack-2c3mg3r-05n1w.js",
+          "type": "Script",
+          "bytes": 5243
+        },
+        {
+          "path": "/_next/static/chunks/2x8ppar8wdct8.js",
+          "type": "Script",
+          "bytes": 1371
+        },
+        {
+          "path": "/_next/static/chunks/3018wow58kg1-.js",
+          "type": "Script",
+          "bytes": 7359
+        },
+        {
+          "path": "/_next/static/chunks/1z5hjet3e6fpn.js",
+          "type": "Script",
+          "bytes": 13962
+        },
+        {
+          "path": "/_next/static/chunks/04c-soon_ninl.js",
+          "type": "Script",
+          "bytes": 10698
+        },
+        {
+          "path": "/_next/static/chunks/01r-h8flivqj6.js",
+          "type": "Script",
+          "bytes": 45018
+        },
+        {
+          "path": "/_next/static/chunks/0uc6xcru0tf2m.js",
+          "type": "Script",
+          "bytes": 25090
+        },
+        {
+          "path": "/_next/static/chunks/1kciv_t69s6ka.js",
+          "type": "Script",
+          "bytes": 28358
+        },
+        {
+          "path": "/_next/static/chunks/1vinr2494e4mx.js",
+          "type": "Script",
+          "bytes": 16980
+        },
+        {
+          "path": "/_next/static/chunks/0xqn3cpp47vrp.js",
+          "type": "Script",
+          "bytes": 12813
+        },
+        {
+          "path": "/_next/static/chunks/2nn7kihcf5ahp.js",
+          "type": "Script",
+          "bytes": 72587
+        },
+        {
+          "path": "/api/notificacoes",
+          "type": "Fetch",
+          "bytes": 163
+        },
+        {
+          "path": "/api/auth/activity",
+          "type": "Fetch",
+          "bytes": 163
+        },
+        {
+          "path": "/api/admin/chat",
+          "type": "Fetch",
+          "bytes": 186
+        },
+        {
+          "path": "/_next/static/chunks/3ej5a33ohm8e9.js",
+          "type": "Script",
+          "bytes": 6895
+        },
+        {
+          "path": "/_next/static/chunks/3kn5ey3xxfdgr.js",
+          "type": "Script",
+          "bytes": 10402
+        },
+        {
+          "path": "/_next/static/chunks/2qq3ny0hi20b5.js",
+          "type": "Script",
+          "bytes": 11531
+        },
+        {
+          "path": "/api/admin/chat",
+          "type": "Fetch",
+          "bytes": 186
+        },
+        {
+          "path": "/_next/static/chunks/05f431hanrexa.js",
+          "type": "Script",
+          "bytes": 102076
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

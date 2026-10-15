@@ -32,8 +32,8 @@ organizacionais aplicáveis.
 
 | Camada | Tecnologia |
 | --- | --- |
-| Aplicação | Next.js 16.3, React 19.2, TypeScript 5.6 |
-| Interface | Tailwind CSS, Framer Motion, GSAP, Lucide React |
+| Aplicação | Next.js 16.4, React 19.2, TypeScript 5.6 |
+| Interface | Tailwind CSS 4, Framer Motion, GSAP, Lucide React |
 | 3D | Three.js, React Three Fiber, Drei, Draco |
 | Backend | Next.js Route Handlers e Proxy |
 | Dados | PostgreSQL, Supabase e Prisma 6 |
@@ -266,6 +266,7 @@ A aplicação ficará disponível em `http://localhost:3000`.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | público | sim | chave pública do Supabase |
 | `SUPABASE_SECRET_KEY` | servidor | Storage | acesso privilegiado aos buckets privados |
 | `RELATORIOS_STORAGE_SOFT_LIMIT_BYTES` | servidor | não | teto preventivo; padrão de 700 MiB |
+| `DATABASE_STORAGE_SOFT_LIMIT_BYTES` | servidor | não | teto operacional para alertas de capacidade do PostgreSQL; padrão de 500 MiB |
 | `NEXT_PUBLIC_SITE_URL` | público | produção | origem canônica da aplicação |
 | `PRIVACY_CONTACT_EMAIL` | servidor | produção | canal público exibido na Política de Privacidade |
 | `ENABLE_SPEED_INSIGHTS` | servidor | opcional | use `true` somente após habilitar e revisar cobrança na Vercel |
@@ -282,6 +283,21 @@ A aplicação ficará disponível em `http://localhost:3000`.
 | `DATA_ENCRYPTION_PREVIOUS_VERSION` | servidor | rotação | versão anterior temporária |
 | `DATA_ENCRYPTION_PREVIOUS_MASTER_KEY` | servidor | rotação | chave mestra anterior |
 | `DATA_BLIND_INDEX_PREVIOUS_KEY` | servidor | rotação | chave de índice anterior |
+| `ASAAS_ENABLED` | servidor | não | habilita emissão de cobranças pelo Asaas |
+| `ASAAS_AUTO_ISSUE_ENABLED` | servidor | não | emite automaticamente no Asaas as mensalidades futuras geradas pela rotina diária; o cliente escolhe o meio de pagamento na página do Asaas |
+| `ASAAS_RECURRING_ENABLED` | servidor | não | habilita a adesão opcional ao cartão recorrente após validar o webhook e a URL pública HTTPS |
+| `ASAAS_CALLBACK_BASE_URL` | servidor | cartão recorrente | origem pública HTTPS do túnel local ou do site, usada somente nos retornos do Checkout Asaas; mantenha `NEXT_PUBLIC_SITE_URL` local durante os testes |
+| `ASAAS_ENVIRONMENT` | servidor | Asaas | `sandbox` durante testes; `production` somente no ambiente produtivo |
+| `ASAAS_API_KEY` | servidor | Asaas | chave privada da API; nunca use prefixo `NEXT_PUBLIC_` |
+| `ASAAS_WEBHOOK_TOKEN` | servidor | Asaas | segredo exclusivo usado para autenticar eventos de pagamento |
+
+Para testar a recorrência **somente no sandbox**, mantenha `ASAAS_ENVIRONMENT=sandbox` e `NEXT_PUBLIC_SITE_URL=http://127.0.0.1:5500`. O iniciador automatizado expõe somente o proxy restrito da porta 5501: ele aceita o `POST /api/webhooks/asaas` e o retorno exato do Checkout, que redireciona o navegador para a aplicação local; as demais rotas públicas retornam 404. No webhook do sandbox, use a URL pública `/api/webhooks/asaas`, o mesmo `ASAAS_WEBHOOK_TOKEN` e inclua eventos `CHECKOUT_PAID`, `CHECKOUT_CANCELED`, `CHECKOUT_EXPIRED`, `SUBSCRIPTION_CREATED`, `SUBSCRIPTION_UPDATED`, `SUBSCRIPTION_INACTIVATED`, `PAYMENT_CREATED`, `PAYMENT_CONFIRMED`, `PAYMENT_RECEIVED` e `PAYMENT_REFUNDED`. Ative `ASAAS_RECURRING_ENABLED=true` apenas depois de testar a conciliação do cartão. `ASAAS_AUTO_ISSUE_ENABLED=true` emite mensalidades avulsas nos cinco dias anteriores ao vencimento para empresas sem adesão ativa; a confirmação de pagamento sempre vem do webhook. O Pix Automático depende de habilitação específica da conta Asaas e não é oferecido pela interface enquanto essa etapa não estiver homologada.
+
+Para iniciar todos os serviços de teste de pagamentos com um único comando, use `npm.cmd run dev:payments`. O iniciador valida que o ambiente é local e que o Asaas está no sandbox, inicia aplicação, proxy restrito e Cloudflare Tunnel, testa a rota pública e atualiza somente o webhook sandbox existente. A URL pública também é aplicada em memória ao retorno do Checkout, sem reescrever `.env.local`. Pressione `Ctrl+C` para encerrar os três processos. Use `npm.cmd run dev:payments:check` para validar os pré-requisitos e localizar o webhook sem iniciar serviços ou alterar sua configuração. Se houver mais de um webhook apontando para `/api/webhooks/asaas`, informe o identificador correto em `ASAAS_WEBHOOK_ID` no `.env.local`.
+
+O cartão recorrente é somente uma facilidade de pagamento. A empresa precisa ter a primeira mensalidade paga e não pode possuir cobrança vencida para aderir ou autorizar outro cartão. `PAYMENT_OVERDUE` inativa a assinatura no Asaas para impedir novas cobranças automáticas, sem remover a fatura já emitida. Depois de regularizar as pendências, a empresa pode realizar uma nova adesão; ela recebe uma nova referência para que eventos atrasados da assinatura anterior não alterem a atual.
+
+O vencimento mensal é um dia fixo entre 1 e 28. A rotina diária cria a fatura interna da competência e, para empresas sem pagamento automático ativo, a cobrança avulsa é emitida no Asaas durante os cinco dias anteriores ao vencimento quando `ASAAS_AUTO_ISSUE_ENABLED=true`. A empresa pode solicitar outro dia em Plano e pagamentos, mas a mudança só é aplicada após aprovação do SuperAdmin e vale apenas para os ciclos futuros. Faturas já emitidas não são remarcadas. Se houver pagamento automático ativo ou aguardando adesão, ele deve ser encerrado antes da aprovação e autorizado novamente com o novo vencimento.
 
 Gere segredos independentes. Exemplos:
 
@@ -438,6 +454,8 @@ O workflow em `.github/workflows/ci.yml` executa essas verificações em pushes 
 pull requests. Dependabot acompanha npm e GitHub Actions.
 
 ## Deploy na Vercel
+
+Antes do deploy desta versão, aplique a migration de MFA e operações financeiras no banco do ambiente correspondente. O primeiro login do superadmin passa a exigir cadastro de um autenticador TOTP; guarde os códigos de recuperação fora do sistema. Configure um serviço ClamAV `clamd` privado e atualizado para `CLAMAV_HOST`/`CLAMAV_PORT`. A conexão TCP sem TLS é permitida apenas em loopback; para scanner remoto use um proxy TLS com certificado de cliente. Sem scanner acessível, uploads e visualizações de PDF retornam erro de indisponibilidade. Confirme a conectividade a partir do ambiente de execução antes de publicar. Operações financeiras com resposta incerta do Asaas permanecem bloqueadas até conciliação manual, para evitar cobranças duplicadas. A exclusão de empresa com recorrência requer confirmação de cancelamento no Asaas.
 
 O arquivo `vercel.json` usa `npm run vercel-build`, que gera o Prisma Client e
 executa o build. Migrations não são executadas automaticamente no build para

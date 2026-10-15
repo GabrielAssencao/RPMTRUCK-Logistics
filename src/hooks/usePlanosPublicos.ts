@@ -17,6 +17,7 @@ export interface PlanoPublico {
   restricted: boolean
   featured: boolean
   version: number
+  promotion?: { name: string; months: number; remainingSlots: number | null }
 }
 
 interface PlanoApi {
@@ -34,6 +35,7 @@ interface PlanoApi {
   restrito: boolean
   destaque: boolean
   versao: number
+  promocao?: { nome: string; meses: number; vagasRestantes: number | null }
 }
 
 export function usePlanosPublicos() {
@@ -64,6 +66,7 @@ export function usePlanosPublicos() {
         restricted: plano.restrito,
         featured: plano.destaque,
         version: plano.versao,
+        promotion: plano.promocao ? { name: plano.promocao.nome, months: plano.promocao.meses, remainingSlots: plano.promocao.vagasRestantes } : undefined,
       })))
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return

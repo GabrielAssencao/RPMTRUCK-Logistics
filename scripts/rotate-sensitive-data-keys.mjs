@@ -103,7 +103,7 @@ function assertUnique(values, message) {
   if (new Set(present).size !== present.length) throw new Error(message)
 }
 
-function prepare(empresas, motoristas, contasPagar, importacoes) {
+function prepare(empresas, motoristas, contasPagar, importacoes, mfa) {
   const preparedEmpresas = empresas.map((empresa) => {
     const cnpj = decrypt(empresa.cnpj, empresa.id, 'empresa.cnpj')
     const telefone = decrypt(empresa.telefone, empresa.id, 'empresa.telefone')
@@ -153,7 +153,8 @@ function prepare(empresas, motoristas, contasPagar, importacoes) {
     assertUnique(tenant.map((motorista) => motorista.cnhHash), 'Existem CNHs duplicadas em uma empresa após normalização.')
   }
   const preparedImportacoes = importacoes.map(item => ({ id: item.id, dados: encryptActive(item.dados, decrypt(item.dados, item.empresaId, 'importacaoInicial.dados'), item.empresaId, 'importacaoInicial.dados') }))
-  return { preparedEmpresas, preparedMotoristas, preparedContasPagar, preparedImportacoes }
+  const preparedMfa = mfa.map(item => ({ usuarioId: item.usuarioId, segredo: encryptActive(item.segredo, decrypt(item.segredo, item.usuarioId, 'mfa.segredo'), item.usuarioId, 'mfa.segredo') }))
+  return { preparedEmpresas, preparedMotoristas, preparedContasPagar, preparedImportacoes, preparedMfa }
 }
 
 async function readData(client) {
@@ -164,6 +165,7 @@ async function readData(client) {
     }),
     client.contaPagar.findMany({ select: { id: true, empresaId: true, linha_digitavel: true } }),
     client.importacaoInicial.findMany({ where: { status: 'PENDENTE' }, select: { id: true, empresaId: true, dados: true } }),
+    client.mfaAdmin.findMany({ select: { usuarioId: true, segredo: true } }),
   ])
 }
 
@@ -178,7 +180,8 @@ function assertActiveVersion(value, message) {
   if (value && encryptedValueVersion(value) !== activeVersion) throw new Error(message)
 }
 
-function verifyRotated(empresas, motoristas, contasPagar, importacoes) {
+function verifyRotated(empresas, motoristas, contasPagar, importacoes, mfa) {
+  for (const item of mfa) { assertActiveVersion(item.segredo, 'MFA secret was not rotated.'); decrypt(item.segredo, item.usuarioId, 'mfa.segredo') }
   for (const item of importacoes) { assertActiveVersion(item.dados, 'Pending import data was not rotated.'); decrypt(item.dados, item.empresaId, 'importacaoInicial.dados') }
   for (const empresa of empresas) {
     for (const [field, value] of [['empresa.cnpj', empresa.cnpj], ['empresa.telefone', empresa.telefone]]) {
@@ -220,14 +223,15 @@ function verifyRotated(empresas, motoristas, contasPagar, importacoes) {
 }
 
 try {
-  const [empresas, motoristas, contasPagar, importacoes] = await readData(prisma)
+  const [empresas, motoristas, contasPagar, importacoes, mfa] = await readData(prisma)
   const versions = countVersions([
     ...empresas.flatMap((empresa) => [empresa.cnpj, empresa.telefone]),
     ...motoristas.flatMap((motorista) => [motorista.cpf, motorista.rg, motorista.cnh]),
     ...contasPagar.map((conta) => conta.linha_digitavel),
     ...importacoes.map(item => item.dados),
+    ...mfa.map(item => item.segredo),
   ])
-  prepare(empresas, motoristas, contasPagar, importacoes)
+  prepare(empresas, motoristas, contasPagar, importacoes, mfa)
 
   process.stdout.write(
     `Rotação ${previousVersion} -> ${activeVersion} ${apply ? 'APLICAR' : 'SIMULAÇÃO'} em ${targetEnvironment}: `
@@ -274,6 +278,7 @@ try {
       }
       for (const item of current.preparedImportacoes) await tx.importacaoInicial.update({ where: { id: item.id }, data: { dados: item.dados } })
 
+      for (const item of current.preparedMfa) await tx.mfaAdmin.update({ where: { usuarioId: item.usuarioId }, data: { segredo: item.segredo } })
       const rotatedData = await readData(tx)
       verifyRotated(...rotatedData)
     }, { isolationLevel: 'Serializable', maxWait: 15_000, timeout: 300_000 })

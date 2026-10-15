@@ -47,7 +47,8 @@ export default function PrivacyPage() {
           <li>dados de usuários da Plataforma: credenciais protegidas por hash, papel, permissões, empresa vinculada e histórico de acesso;</li>
           <li>dados de motoristas: nome, CPF, RG, CNH, categoria, validade, fotografia, situação operacional e veículo associado;</li>
           <li>dados operacionais: veículos, placas, localizações ou bases informadas, quilometragem, manutenção, custos, tarefas, containers, relatórios e arquivos enviados;</li>
-          <li>dados técnicos e de segurança: endereço IP pseudonimizado, navegador, dispositivo, horários, identificadores de sessão, tentativas de acesso e registros de auditoria;</li>
+          <li>dados financeiros mínimos para cobrança contratual: plano, valor, vencimento, situação da fatura e comprovante de pagamento enviado pelo gestor;</li>
+          <li>dados técnicos e de segurança: endereço IP pseudonimizado, UF aproximada derivada do IP, navegador, dispositivo, horários, identificadores de sessão, tentativas de acesso e registros de auditoria;</li>
           <li>métricas agregadas de audiência e desempenho: página acessada, país ou região aproximada, navegador, dispositivo e indicadores Core Web Vitals, sem envio intencional de nomes, e-mails ou identificadores de conta;</li>
           <li>informações fornecidas em mensagens, solicitações de suporte, acesso, plano ou redefinição de senha.</li>
         </ul>
@@ -63,6 +64,7 @@ export default function PrivacyPage() {
           <li>analisar solicitações, criar contas e executar o contrato da Plataforma;</li>
           <li>autenticar usuários, aplicar permissões e manter a continuidade da sessão;</li>
           <li>viabilizar a gestão de frota, motoristas, manutenção, custos, containers, tarefas, notificações e relatórios;</li>
+          <li>registrar cobranças, receber comprovantes de pagamento e permitir a conferência manual pelo administrador autorizado;</li>
           <li>prevenir fraude, abuso, acessos indevidos e incidentes, além de produzir trilhas de auditoria;</li>
           <li>atender solicitações de suporte, direitos de titulares e obrigações legais ou regulatórias;</li>
           <li>manter, diagnosticar e melhorar confiabilidade, segurança e desempenho da Plataforma.</li>
@@ -99,7 +101,10 @@ export default function PrivacyPage() {
           Como regra operacional, eventos de acesso e segurança são mantidos por até 6 meses. Enquanto a conta estiver ativa, a auditoria detalhada segue a cobertura histórica do plano contratado: 1 ano no Essencial, 2 anos no Avançado e 3 anos no Enterprise ou Preview. Registros técnicos do próprio sistema são mantidos por até 12 meses.
         </p>
         <p className="mt-4">
-          O gestor da empresa pode acessar Configurações &gt; Exclusão de conta. O fluxo gera primeiro um arquivo Excel com os dados vinculados à empresa e exige confirmação do download, senha atual e frase de segurança antes do expurgo. A exportação não inclui senhas, hashes de autenticação ou segredos técnicos. A exclusão remove os dados operacionais e arquivos privados; os cadastros anonimizados e as trilhas técnicas associadas são eliminados em até 6 meses. Um comprovante mínimo, sem nome, e-mail ou documento, é conservado por 5 anos para demonstrar a solicitação e sua execução. Prazos podem ser suspensos quando houver obrigação legal, ordem de preservação ou necessidade de exercício regular de direitos. Antes de utilizar a exclusão, o cliente deve avaliar obrigações fiscais, trabalhistas, contratuais e regulatórias que possam autorizar ou exigir conservação nos termos do art. 16 da LGPD.
+          Comprovantes de pagamento ficam em armazenamento privado, acessível somente ao gestor da empresa titular e a administradores autorizados, por URL temporária. Eles não confirmam automaticamente a quitação. A guarda segue o contrato e as obrigações fiscais ou legais aplicáveis; quando não houver necessidade de conservação, devem ser eliminados no fluxo de exclusão da conta.
+        </p>
+        <p className="mt-4">
+          O gestor da empresa pode acessar Configurações &gt; Exclusão de conta. Um administrador autorizado também pode executar o encerramento por motivo documentado no módulo de empresas. O fluxo gera primeiro um arquivo Excel com os dados vinculados à empresa e exige confirmação do download, reautenticação e frase de segurança antes do expurgo. A exportação não inclui senhas, hashes de autenticação ou segredos técnicos, mas contém dados pessoais e deve ser entregue por canal protegido. A exclusão remove os dados operacionais e arquivos privados; os cadastros anonimizados e as trilhas técnicas associadas são eliminados em até 6 meses. Um comprovante mínimo, sem nome, e-mail ou documento, é conservado por 5 anos para demonstrar a solicitação e sua execução. Prazos podem ser suspensos quando houver obrigação legal, ordem de preservação ou necessidade de exercício regular de direitos. Antes de utilizar a exclusão, o cliente deve avaliar obrigações fiscais, trabalhistas, contratuais e regulatórias que possam autorizar ou exigir conservação nos termos do art. 16 da LGPD.
         </p>
       </section>
 

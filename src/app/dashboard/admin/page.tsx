@@ -1,12 +1,14 @@
 'use client'
 
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { DashboardMotion } from '@/components/motion/DashboardMotion'
 
 // Layout do Admin (a "casca" que arrumamos no Passo 1)
 import AdminLayout, { type AdminTab } from './_estrutura/AdminLayout'
 
 // Importação dos módulos com o alias padrão do Next.js @/
 const DashboardModule = lazy(() => import('./_modulos/visao-geral/DashboardModule'))
+const ExpensesModule = lazy(() => import('./_modulos/despesas/ExpensesModule'))
 const CompaniesModule = lazy(() => import('./_modulos/empresas/CompaniesModule'))
 const PasswordResetsModule = lazy(() => import('./_modulos/redefinicoes-senha/AdminPasswordResets'))
 const AdminRequests = lazy(() => import('./_modulos/solicitacoes/AdminRequests'))
@@ -47,6 +49,8 @@ export default function AdminPage() {
         return <CronogramaModule key="cronograma" />
       case 'dashboard':
         return <DashboardModule key="dashboard" />
+      case 'expenses':
+        return <ExpensesModule key="expenses" />
       case 'companies':
         return <CompaniesModule key="companies" />
       case 'resets':
@@ -75,7 +79,9 @@ export default function AdminPage() {
     <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab}>
       {/* O módulo escolhido entra aqui e é repassado como 'children' para o layout */}
       <Suspense fallback={<div className="h-64 flex items-center justify-center font-bold animate-pulse tracking-widest" role="status">CARREGANDO MÓDULO...</div>}>
-        {renderModule()}
+        <DashboardMotion key={activeTab} motionKey={activeTab}>
+          {renderModule()}
+        </DashboardMotion>
       </Suspense>
     </AdminLayout>
   )

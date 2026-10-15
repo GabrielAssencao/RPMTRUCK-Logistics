@@ -3,9 +3,8 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-export default function DashboardChart({ data, selectedYear, onYearChange }) {
+export default function DashboardChart({ data, selectedYear, currentYear, onYearChange }) {
   const START_YEAR = 2026;
-  const currentYear = new Date().getFullYear();
   const years = Array.from({ length: currentYear - START_YEAR + 1 }, (_, i) => START_YEAR + i);
 
   const total = data.reduce((sum, item) => sum + Number(item.total || 0), 0);

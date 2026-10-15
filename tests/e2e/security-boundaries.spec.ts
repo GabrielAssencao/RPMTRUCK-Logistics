@@ -28,3 +28,15 @@ test('retenção não executa com autorização inválida', async ({ request }) 
   // Ausência do segredo também fecha a rotina, com 503.
   expect([401, 503]).toContain(response.status())
 })
+
+test('financeiro e comprovantes recusam acesso sem sessão e webhook recusa token forjado', async ({ request }) => {
+  const id = '11111111-1111-4111-8111-111111111111'
+  for (const path of ['/api/admin/despesas', '/api/admin/promocoes', '/api/empresa/recorrencia', `/api/empresa/faturas/${id}/comprovante`]) {
+    expect((await request.get(path)).status(), path).toBe(401)
+  }
+  const webhook = await request.post('/api/webhooks/asaas', {
+    headers: { 'asaas-access-token': 'deliberately-invalid-webhook-token' },
+    data: { event: 'PAYMENT_RECEIVED', payment: { id, value: 150 } },
+  })
+  expect(webhook.status()).toBe(401)
+})

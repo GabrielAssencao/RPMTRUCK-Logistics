@@ -35,6 +35,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
         senhaAlteradaEm: true,
         criado_em: true,
         atualizado_em: true
+        ,mfaAdmin: { select: { obrigatorio: true, ativadoEm: true } }
       },
       orderBy: {
         nome: 'asc'

@@ -74,8 +74,8 @@ test('tarefas e lembretes de dia inteiro comparam o dia local e omitem horário'
 })
 
 test('backup e exclusão da empresa abrangem ocorrências e conformidades', () => {
-  const backup = read('src/app/api/empresa/exclusao-conta/exportar/route.ts')
-  const deletion = read('src/app/api/empresa/exclusao-conta/route.ts')
+  const backup = read('src/lib/empresaBackup.ts')
+  const deletion = read('src/lib/empresaExclusao.ts')
   assert.match(backup, /prisma\.ocorrenciaVeiculo\.findMany/)
   assert.match(backup, /prisma\.conformidadeMotorista\.findMany/)
   assert.match(deletion, /ocorrenciaVeiculo\.deleteMany[\s\S]*conformidadeMotorista\.deleteMany[\s\S]*veiculo\.deleteMany/)

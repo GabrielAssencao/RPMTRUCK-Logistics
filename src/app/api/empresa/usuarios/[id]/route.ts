@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { hashPassword } from '@/lib/password'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
-import { MODULOS, normalizarModulos } from '@/utils/planos'
+import { MODULOS, moduloDelegavelParaOperador, normalizarModulos } from '@/utils/planos'
 
 const atualizarPermissoesSchema = z.object({
   acessoDashboardGeral: z.boolean().optional(),
@@ -58,7 +58,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     return NextResponse.json({ erro: 'Não é permitido conceder módulos fora do plano da empresa.' }, { status: 403 })
   }
   const modulosAcesso = modulosSolicitados
-    ? modulosEmpresa.filter((modulo) => modulo === 'NOTIFICACOES' || modulosSolicitados.includes(modulo))
+    ? modulosEmpresa.filter((modulo) => moduloDelegavelParaOperador(modulo) && (modulo === 'NOTIFICACOES' || modulosSolicitados.includes(modulo)))
     : undefined
 
   const agora = new Date()

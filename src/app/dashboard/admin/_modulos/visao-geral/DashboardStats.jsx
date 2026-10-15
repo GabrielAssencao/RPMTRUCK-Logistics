@@ -28,7 +28,7 @@ export default function DashboardStats({ empresas, solicitacoesPendentes, receit
       bg: 'rgba(245, 158, 11, 0.12)',
     },
     {
-      label: 'RECEITA TOTAL',
+      label: 'TOTAL RECEBIDO EM FATURAS',
       value: `R$ ${receita.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
       icon: DollarSign,
       color: '#38bdf8',
@@ -57,7 +57,7 @@ export default function DashboardStats({ empresas, solicitacoesPendentes, receit
               <s.icon size={16} style={{ color: s.color }} />
             </div>
           </div>
-          <div className="font-black text-xl tracking-tight" style={{ color: 'var(--foreground)' }}>
+          <div className="min-w-0 break-words font-black text-xl tracking-tight tabular-nums [overflow-wrap:anywhere]" style={{ color: 'var(--foreground)' }}>
             {s.value}
           </div>
         </motion.div>

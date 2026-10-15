@@ -26,10 +26,11 @@ interface ChatWorkspaceProps {
   title: string
   protocolo: string
   status: StatusTicketSuporte
+  respostasEmpresaHabilitadas?: boolean
   onMessageSent?: () => void
 }
 
-export default function ChatWorkspace({ ticketId, empresaId, title, protocolo, status, onMessageSent }: ChatWorkspaceProps) {
+export default function ChatWorkspace({ ticketId, empresaId, title, protocolo, status, respostasEmpresaHabilitadas = true, onMessageSent }: ChatWorkspaceProps) {
   const { primary } = useTheme()
   const reduzirMovimento = useReducedMotion()
   const [mensagens, setMensagens] = useState<ChatMessage[]>([])
@@ -50,6 +51,7 @@ export default function ChatWorkspace({ ticketId, empresaId, title, protocolo, s
   const rolarAoFinalRef = useRef(false)
   const frameRolagemRef = useRef<number | null>(null)
   const encerrado = status === 'FECHADO' || status === 'RESOLVIDO'
+  const respostaPausada = !empresaId && !respostasEmpresaHabilitadas
 
   useEffect(() => {
     try {
@@ -152,7 +154,7 @@ export default function ChatWorkspace({ ticketId, empresaId, title, protocolo, s
   const enviar = async (event: FormEvent) => {
     event.preventDefault()
     const mensagem = texto.trim()
-    if (!mensagem || sending || encerrado) return
+    if (!mensagem || sending || encerrado || respostaPausada) return
     setSending(true)
     setError('')
     try {
@@ -298,7 +300,7 @@ export default function ChatWorkspace({ ticketId, empresaId, title, protocolo, s
 
       <form onSubmit={enviar} className="border-t p-3" style={{ borderColor: 'var(--border)' }}>
         {error && <p role="alert" className="mb-2 text-xs text-red-500">{error}</p>}
-        {encerrado ? <p className="p-3 text-center text-xs font-bold text-foreground-muted">Ticket encerrado. Abra um novo chamado para continuar o atendimento.</p> : <>
+        {encerrado ? <p className="p-3 text-center text-xs font-bold text-foreground-muted">Conversa encerrada. Abra um novo chamado se precisar de atendimento.</p> : respostaPausada ? <p className="p-3 text-center text-xs font-bold text-foreground-muted">O atendimento pausou as respostas desta conversa. O histórico continua disponível.</p> : <>
           <div className="flex items-end gap-2">
             <label className="sr-only" htmlFor={`ticket-message-${ticketId}`}>Mensagem</label>
             <textarea id={`ticket-message-${ticketId}`} value={texto} onChange={(event) => setTexto(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} maxLength={2000} rows={2} disabled={sending} placeholder="Acrescente informações ao ticket..." className="min-h-12 flex-1 resize-y border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 disabled:opacity-60" style={{ borderColor: 'var(--border)', '--tw-ring-color': primary } as React.CSSProperties} />

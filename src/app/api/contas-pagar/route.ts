@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireEmpresaAuth(request, { modulo: 'CONTAS_PAGAR', acao: 'ESCRITA' })
   if (auth.error || !auth.session || !auth.empresa) return NextResponse.json({ erro: auth.error }, { status: auth.status })
-  const limited = await applyRateLimit(request, `contas-pagar-upload:${auth.session.userId}`, RATE_LIMITS.FILE_UPLOAD.limit, RATE_LIMITS.FILE_UPLOAD.windowMs)
+  const limited = await applyRateLimit(request, `contas-pagar-create:${auth.session.userId}`, RATE_LIMITS.ACCOUNT_PAYABLE_MUTATION.limit, RATE_LIMITS.ACCOUNT_PAYABLE_MUTATION.windowMs)
   if (limited) return limited
 
   let arquivoSalvo: string | null = null
@@ -163,6 +163,10 @@ export async function POST(request: NextRequest) {
     const id = randomUUID()
     const vencimento = dataLocal(parsed.data.vencimento)
     const arquivo = form.get('boleto')
+    if (arquivo instanceof File && arquivo.size > 0) {
+      const uploadLimited = await applyRateLimit(request, `contas-pagar-file:${auth.session.userId}`, RATE_LIMITS.FILE_UPLOAD.limit, RATE_LIMITS.FILE_UPLOAD.windowMs)
+      if (uploadLimited) return uploadLimited
+    }
     const boleto = arquivo instanceof File && arquivo.size > 0
       ? await salvarArquivoContaPagar(auth.empresaId!, id, 'boleto', arquivo)
       : null

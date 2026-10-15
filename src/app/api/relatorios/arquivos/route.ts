@@ -1,6 +1,7 @@
 import { lerFormularioLimitado, RequestBodyError } from '@/lib/requestBody'
 import { createHash, randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
+import { AntimalwareError, verificarPdf } from '@/lib/antimalware'
 import { TipoRelatorioArquivo } from '@prisma/client'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
@@ -17,6 +18,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { notificarAdmins, notificarUsuariosDaEmpresa } from '@/lib/notificacoes'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
+import { getDatabaseSoftLimitBytes } from '@/lib/storageCapacity'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -106,7 +108,7 @@ export async function GET(request: NextRequest) {
     prisma.$queryRaw<Array<{ bytes: bigint }>>`SELECT pg_database_size(current_database())::bigint AS bytes`,
   ])
 
-  const limiteBancoBytes = 500 * 1024 * 1024
+  const limiteBancoBytes = getDatabaseSoftLimitBytes()
   const bancoBytes = Number(tamanhoBanco[0]?.bytes ?? 0)
   const usoGlobalBytes = usoGlobal._sum.tamanho_bytes ?? 0
   const limiteStorageBytes = getRelatoriosSoftLimitBytes()
@@ -207,6 +209,7 @@ export async function POST(request: NextRequest) {
     if (!validarConteudoRelatorio(conteudo, arquivo.type)) {
       return NextResponse.json({ erro: 'O conteúdo do arquivo não corresponde ao formato informado.' }, { status: 415 })
     }
+    if (arquivo.type === 'application/pdf') await verificarPdf(conteudo)
     const checksum = createHash('sha256').update(conteudo).digest('hex')
     const extensao = RELATORIO_MIME_TYPES[arquivo.type]
     const caminho = `${auth.empresaId}/${periodoInicio.getUTCFullYear()}/${randomUUID()}.${extensao}`
@@ -251,7 +254,7 @@ export async function POST(request: NextRequest) {
       throw error
     }
   } catch (error) {
-    if (error instanceof RequestBodyError) return NextResponse.json({ erro: error.message }, { status: error.status })
+    if (error instanceof RequestBodyError || error instanceof AntimalwareError) return NextResponse.json({ erro: error.message }, { status: error.status })
     console.error('Erro ao arquivar relatório:', error)
     const message = error instanceof Error && error.message === 'SUPABASE_STORAGE_NOT_CONFIGURED'
       ? 'Configure NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SECRET_KEY somente no servidor.'

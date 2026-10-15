@@ -33,10 +33,11 @@ export async function GET(request: NextRequest) {
             modulos: true,
             usuarios_adicionais: true,
             veiculos_adicionais: true,
+            diaVencimento: true,
             _count: { select: { usuarios: true, veiculos_frota: true } },
           },
         },
-        fatura: { select: { id: true, mes: true, ano: true, tipo: true, valor: true, status: true } },
+        fatura: { select: { id: true, mes: true, ano: true, tipo: true, valor: true, status: true, gatewayPaymentId: true, gatewayStatus: true } },
       },
     }),
   ])
@@ -46,13 +47,25 @@ export async function GET(request: NextRequest) {
     const planoAtual = planosPorId.get(solicitacao.empresa.plano)
     const planoDestinoId = solicitacao.planoSolicitado ?? solicitacao.empresa.plano
     const planoDestino = planosPorId.get(planoDestinoId)
-    const estadoAlterado = solicitacao.tipo !== 'NEGOCIAR_PAGAMENTO' && (
+    const impactoVencimento = solicitacao.tipo === 'ALTERAR_VENCIMENTO'
+      && solicitacao.impacto && typeof solicitacao.impacto === 'object' && !Array.isArray(solicitacao.impacto)
+      ? solicitacao.impacto : null
+    const diaVencimentoOriginal = impactoVencimento && 'diaVencimentoAtual' in impactoVencimento
+      ? impactoVencimento.diaVencimentoAtual : null
+    const estadoAlterado = solicitacao.tipo === 'ALTERAR_VENCIMENTO'
+      ? diaVencimentoOriginal !== solicitacao.empresa.diaVencimento
+      : solicitacao.tipo !== 'NEGOCIAR_PAGAMENTO' && (
       solicitacao.empresa.plano !== solicitacao.planoAtual
       || solicitacao.empresa.usuarios_adicionais !== solicitacao.usuariosAdicionaisAtuais
       || solicitacao.empresa.veiculos_adicionais !== solicitacao.veiculosAdicionaisAtuais
-    )
+      )
+    const impactoNegociacao = solicitacao.tipo === 'NEGOCIAR_PAGAMENTO'
+      && solicitacao.impacto && typeof solicitacao.impacto === 'object' && !Array.isArray(solicitacao.impacto)
+      ? solicitacao.impacto : null
+    const pedeNovaData = Boolean(impactoNegociacao && 'vencimentoProposto' in impactoNegociacao && impactoNegociacao.vencimentoProposto)
     const faturaNegociavel = solicitacao.tipo !== 'NEGOCIAR_PAGAMENTO'
-      || solicitacao.fatura?.status === 'PENDENTE'
+      || (solicitacao.fatura?.status === 'PENDENTE'
+        && (!pedeNovaData || solicitacao.fatura.gatewayStatus !== 'CREATING'))
 
     const proposta = planoAtual && planoDestino
       ? calcularPropostaAssinatura(
@@ -90,7 +103,9 @@ export async function GET(request: NextRequest) {
       mensalidadeAtual: Number(solicitacao.mensalidadeAtual),
       mensalidadeProposta: Number(solicitacao.mensalidadeProposta),
       mensalidadeVigente: proposta?.mensalidadeProposta ?? Number(solicitacao.mensalidadeProposta),
-      impacto: proposta?.impacto ?? solicitacao.impacto,
+      impacto: solicitacao.tipo === 'NEGOCIAR_PAGAMENTO' || solicitacao.tipo === 'ALTERAR_VENCIMENTO'
+        ? solicitacao.impacto
+        : proposta?.impacto ?? solicitacao.impacto,
       aprovavel: !estadoAlterado && faturaNegociavel && (proposta?.bloqueios.length ?? 0) === 0,
       estadoAlterado,
       mensagem: solicitacao.mensagem,

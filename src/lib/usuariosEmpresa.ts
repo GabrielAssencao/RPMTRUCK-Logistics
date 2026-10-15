@@ -1,5 +1,5 @@
 import { Prisma, type Role } from '@prisma/client'
-import { normalizarModulos, PLANOS_CONFIG, type ModuloCodigo } from '@/utils/planos'
+import { moduloDelegavelParaOperador, normalizarModulos, PLANOS_CONFIG, type ModuloCodigo } from '@/utils/planos'
 import { executarComAuditoria } from '@/lib/auditoria'
 import { COR_TEMA_PADRAO, normalizarCorTema } from '@/data/temasELogos'
 
@@ -53,7 +53,7 @@ export async function criarUsuarioEmpresaComLimite(input: CriarUsuarioEmpresaInp
       throw new ModulosUsuarioInvalidosError('Um ou mais módulos não pertencem ao plano da empresa.')
     }
     const modulosAcesso = modulosEmpresa.filter((modulo) =>
-      modulo === 'NOTIFICACOES' || solicitados.includes(modulo),
+      moduloDelegavelParaOperador(modulo) && (modulo === 'NOTIFICACOES' || solicitados.includes(modulo)),
     )
 
     const criador = await tx.usuario.findFirst({

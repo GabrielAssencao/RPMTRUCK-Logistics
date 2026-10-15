@@ -208,6 +208,7 @@ function RequestAccessForm() {
                             {plan.name}
                           </div>
                           <div className="text-xs mb-3 font-sans" style={{ color: 'var(--foreground-muted)' }}>{plan.desc}</div>
+                          {plan.promotion && <div className="mb-2 text-[9px] font-bold uppercase tracking-widest" style={{ color: primary }}>{plan.promotion.name} · {plan.promotion.months} meses</div>}
                           
                           {!plan.restricted && (
                             <div className="flex flex-col gap-1 mt-2 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
@@ -271,8 +272,7 @@ function RequestAccessForm() {
             <FormSection label="Vencimento da mensalidade" primary={primary}>
               <label className="block text-xs font-bold" htmlFor="dia-vencimento">Dia de pagamento após a primeira mensalidade</label>
               <select id="dia-vencimento" value={form.diaVencimento} onChange={event => setForm(current => ({ ...current, diaVencimento: Number(event.target.value) }))} className="mt-2 w-full border border-border bg-background-secondary p-3 text-foreground">
-                <option value={28}>Todo dia 28 (padrão)</option>
-                <option value={5}>Todo dia 5</option>
+                {Array.from({ length: 28 }, (_, index) => index + 1).map(dia => <option key={dia} value={dia}>Todo dia {dia}{dia === 28 ? ' (padrão)' : ''}</option>)}
               </select>
               <p className="mt-2 text-xs text-foreground-muted">Após a aprovação, você terá três dias para pagar a primeira mensalidade e a implantação. As próximas mensalidades vencem no dia escolhido.</p>
             </FormSection>
@@ -295,17 +295,36 @@ function RequestAccessForm() {
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.2 }} className="space-y-4">
             <AnimatePresence mode="wait">
               {selectedPlan ? (
-                <motion.div key={selectedPlan} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="border p-6" style={{ borderColor: primary, backgroundColor: 'var(--card)' }}>
+                <motion.div key={selectedPlan} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className={`relative border p-6 ${styles.planSummary}`} style={{ borderColor: primary, backgroundColor: 'var(--card)' }}>
                   <div className="text-xs uppercase tracking-widest mb-3 font-bold font-mono" style={{ color: primary }}>Resumo do Investimento</div>
                   {(() => {
                     const plan = planos.find(p => p.id === selectedPlan)
                     if (!plan) return null
                     return (
                       <>
+                        {plan.promotion && (
+                          <div
+                            className={styles.promoTicket}
+                            style={{ '--promo-accent': primary } as React.CSSProperties}
+                            aria-label={`Promoção ativa: ${plan.promotion.name}`}
+                          >
+                            <div className={styles.promoTicketIcon} aria-hidden="true"><Star size={17} /></div>
+                            <div className={styles.promoTicketContent}>
+                              <span>Promoção ativa</span>
+                              <strong>{plan.promotion.name}</strong>
+                              <small>
+                                {plan.promotion.remainingSlots !== null
+                                  ? `${plan.promotion.remainingSlots} ${plan.promotion.remainingSlots === 1 ? 'vaga restante' : 'vagas restantes'}`
+                                  : `${plan.promotion.months} meses de condição especial`}
+                              </small>
+                            </div>
+                          </div>
+                        )}
                         <h3 className="text-2xl font-black mb-1 font-rajdhani" style={{ color: primary }}>{plan.name}</h3>
                         <p className="text-xs mb-4 font-sans" style={{ color: 'var(--foreground-muted)' }}>{plan.desc}</p>
                         
                         <div className="bg-background-secondary border p-4 mb-4" style={{ borderColor: 'var(--border)' }}>
+                           {plan.promotion && <p className="mb-3 text-[10px] font-bold uppercase tracking-widest" style={{ color: primary }}>Condição especial para novas empresas</p>}
                            <div className="flex justify-between items-end mb-2">
                              <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Mensalidade</span>
                              <span className="font-mono font-black">{moeda.format(plan.price)}</span>

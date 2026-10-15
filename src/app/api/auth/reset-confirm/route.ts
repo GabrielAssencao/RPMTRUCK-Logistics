@@ -1,3 +1,4 @@
+import { lerJsonLimitado, RequestBodyError } from '@/lib/requestBody'
 import { hashPassword } from '@/lib/password'
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
@@ -23,7 +24,12 @@ export async function POST(request: NextRequest) {
   )
   if (bloqueio) return bloqueio
 
-  const parsed = schema.safeParse(await request.json())
+  let body: unknown
+  try { body = await lerJsonLimitado(request) } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ erro: error.message }, { status: error.status })
+    throw error
+  }
+  const parsed = schema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json(
       { erro: parsed.error.issues[0]?.message ?? 'Dados de redefinição inválidos.' },

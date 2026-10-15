@@ -9,6 +9,7 @@ import {
   type PlanoTipo,
 } from '@/utils/planos'
 import { exposeEmpresa } from '@/lib/fieldEncryption'
+import { rotaRegularizacaoFinanceira } from '@/lib/financeiro/situacaoFinanceira'
 
 interface EmpresaAuthOptions {
   modulo?: ModuloCodigo
@@ -83,7 +84,7 @@ export async function requireEmpresaAuth(request: NextRequest, options: EmpresaA
     return { error: 'Empresa não encontrada', status: 404, session: null, empresa: null }
   }
 
-  const regularizacao = request.nextUrl.pathname === '/api/empresa/assinatura'
+  const regularizacao = rotaRegularizacaoFinanceira(request.nextUrl.pathname, request.method)
     && empresa.status === 'INADIMPLENTE'
     && (auth.session.role === 'GESTOR_EMPRESA' || auth.session.role === 'GESTOR')
   if (empresa.status !== 'ATIVO' && !regularizacao) {
@@ -124,6 +125,7 @@ export async function requireEmpresaAuth(request: NextRequest, options: EmpresaA
     status: 200,
     session: auth.session,
     usuario: auth.usuario,
+    acessoSomentePlano: auth.acessoSomentePlano,
     empresaId: empresa.id,
     empresa: {
       ...empresaExposta,
