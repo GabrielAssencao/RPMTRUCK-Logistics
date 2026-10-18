@@ -10,7 +10,7 @@ import { ActionConfirmDialog } from '@/components/dashboard/ActionConfirmDialog'
 import { BRAZIL_STATE_PATHS } from '@/lib/brazilStatesMap'
 
 type PeriodoFiltro = '24H' | '7D' | '30D' | '90D'
-type EventoFiltro = 'TODOS' | 'LOGIN_SUCESSO' | 'LOGIN_FALHA' | 'LOGOUT' | 'RATE_LIMIT' | 'BOT_REJEITADO' | 'SESSAO_REVOGADA'
+type EventoFiltro = 'TODOS' | 'LOGIN_SUCESSO' | 'LOGIN_FALHA' | 'LOGOUT' | 'RATE_LIMIT' | 'BOT_REJEITADO' | 'SESSAO_REVOGADA' | 'MUDANCA_UF'
 
 type SecurityData = {
   paginacao: Record<SecaoLogAdmin, { pagina: number; temProxima: boolean }>
@@ -83,6 +83,13 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('pt-BR', {
   timeStyle: 'medium',
 }).format(new Date(value))
 
+function formatarUltimoSinal(value: string, agora: number) {
+  const segundos = Math.max(0, Math.floor((agora - new Date(value).getTime()) / 1000))
+  if (segundos < 60) return `Último sinal recebido há ${segundos} segundo${segundos === 1 ? '' : 's'}`
+  const minutos = Math.floor(segundos / 60)
+  return `Último sinal recebido há ${minutos} minuto${minutos === 1 ? '' : 's'}`
+}
+
 const formatBytes = (value: number) => {
   if (!Number.isFinite(value) || value <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -99,6 +106,18 @@ function describeDevice(userAgent: string | null) {
 
 const paginasIniciais: Record<SecaoLogAdmin, number> = { SESSOES: 1, EVENTOS: 1, AUDITORIA: 1, EXCLUSOES: 1 }
 
+async function readJsonResponse(response: Response): Promise<Record<string, unknown>> {
+  const text = await response.text()
+  if (!text) return {}
+
+  try {
+    const body: unknown = JSON.parse(text)
+    return body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {}
+  } catch {
+    return {}
+  }
+}
+
 async function fetchSecurityData(filters: {
   empresaId: string
   paginas: Record<SecaoLogAdmin, number>
@@ -112,9 +131,9 @@ async function fetchSecurityData(filters: {
   query.set('tipoEvento', filters.tipoEvento)
   if (filters.busca) query.set('busca', filters.busca)
   const response = await fetch(`/api/admin/seguranca?${query}`, { cache: 'no-store', signal })
-  const body = await response.json()
-  if (!response.ok) throw new Error(body.erro || 'Falha ao carregar os registros de segurança.')
-  return body
+  const body = await readJsonResponse(response)
+  if (!response.ok) throw new Error(typeof body.erro === 'string' ? body.erro : 'Falha ao carregar os registros de segurança.')
+  return body as SecurityData
 }
 
 export default function SecurityModule() {
@@ -228,8 +247,8 @@ export default function SecurityModule() {
     setError('')
     try {
       const response = await fetch(`/api/admin/seguranca/sessoes/${sessaoParaRevogar.id}`, { method: 'DELETE' })
-      const body = await response.json()
-      if (!response.ok) throw new Error(body.erro || 'Não foi possível encerrar a sessão.')
+      const body = await readJsonResponse(response)
+      if (!response.ok) throw new Error(typeof body.erro === 'string' ? body.erro : 'Não foi possível encerrar a sessão.')
       setSessaoParaRevogar(null)
       await load(true)
     } catch (cause) {
@@ -295,6 +314,7 @@ export default function SecurityModule() {
                 <option value="LOGIN_FALHA">Falha de login</option>
                 <option value="RATE_LIMIT">Limite excedido</option>
                 <option value="SESSAO_REVOGADA">Sessão revogada</option>
+                <option value="MUDANCA_UF">Mudança de UF</option>
                 <option value="LOGOUT">Logout</option>
                 <option value="BOT_REJEITADO">Automação rejeitada</option>
               </select>
@@ -332,10 +352,10 @@ export default function SecurityModule() {
           </div>
         </div>
 
-        <LogTable title="Acessando agora" pagination={navigation('SESSOES')} visible={secoesVisiveis.SESSOES} onToggle={() => alternarSecao('SESSOES')} empty="Nenhum usuário com presença confirmada agora." columns={['Usuário', 'Empresa', 'Papel', 'Estado', 'Dispositivo', 'IP correlacionado', 'Tempo conectado', 'Última atividade', 'Ação']} rows={(data?.sessoes || []).map((item) => [
+        <LogTable title="Acessando agora" pagination={navigation('SESSOES')} visible={secoesVisiveis.SESSOES} onToggle={() => alternarSecao('SESSOES')} empty="Nenhum usuário com presença confirmada agora." columns={['Usuário', 'Empresa', 'Papel', 'Estado', 'Dispositivo', 'IP correlacionado', 'Tempo conectado', 'Último sinal', 'Ação']} rows={(data?.sessoes || []).map((item) => [
           `${item.usuario.nome} · ${item.usuario.email}`, item.empresa?.nome || 'RPMTruck', item.usuario.role,
           sessaoEstaOnline(item.ultimaAtividade, agora) ? '● Conectado agora' : 'Sem atividade recente', describeDevice(item.userAgent),
-          item.ipCorrelacao ? `IP#${item.ipCorrelacao}` : 'Não disponível', formatarDuracaoSessao(agora - new Date(item.criadoEm).getTime()), formatDate(item.ultimaAtividade),
+          item.ipCorrelacao ? `IP#${item.ipCorrelacao}` : 'Não disponível', formatarDuracaoSessao(agora - new Date(item.criadoEm).getTime()), <span title={formatDate(item.ultimaAtividade)}>{formatarUltimoSinal(item.ultimaAtividade, agora)}</span>,
           item.atual ? <span className="text-[10px] font-bold uppercase text-foreground-muted">Sessão atual</span> : <button type="button" onClick={() => setSessaoParaRevogar(item)} className="min-h-9 border border-red-500/50 px-3 text-[9px] font-black uppercase text-red-500 hover:bg-red-500/10">Encerrar sessão</button>,
         ])} />
 
@@ -402,7 +422,7 @@ function GeoSecurityPanel({ data, primary, periodo }: { data: SecurityData | nul
 
       <aside className="space-y-4">
         <div className="border p-4" style={{ borderColor: selectedShape ? baseColor : 'var(--border)', backgroundColor: 'var(--background-secondary)' }}><p className="text-[9px] font-black uppercase tracking-widest text-foreground-muted">UF selecionada</p><h3 className="mt-2 font-rajdhani text-xl font-black uppercase">{selectedShape?.nome || 'Selecione no mapa'}</h3>{selectedShape && <div className="mt-3 grid grid-cols-2 gap-3"><div><span className="text-[9px] uppercase text-foreground-muted">Acessos</span><strong className="block text-xl">{selectedData?.acessos || 0}</strong></div><div><span className="text-[9px] uppercase text-foreground-muted">Alertas</span><strong className="block text-xl text-red-500">{selectedData?.alertas || 0}</strong></div></div>}</div>
-        <div className="border p-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}><h3 className="font-rajdhani text-sm font-black uppercase tracking-widest">Estados com maior volume</h3>{ranked.length === 0 ? <p className="mt-3 text-xs leading-relaxed text-foreground-muted">Ainda não há eventos com UF confiável neste período. Em ambiente local isso é esperado; a Vercel fornece a UF nos novos acessos de produção.</p> : <ol className="mt-3 space-y-2">{ranked.slice(0, 10).map((state, index) => <li key={state.uf} className="flex items-center justify-between gap-3 border-t pt-2 text-xs first:border-0 first:pt-0" style={{ borderColor: 'var(--border)' }}><button type="button" onClick={() => setSelectedUf(state.uf)} className="min-w-0 text-left hover:underline"><span className="mr-2 text-foreground-muted">{index + 1}.</span>{state.nome}</button><strong>{state.value}</strong></li>)}</ol>}</div>
+        <div className="border p-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background-secondary)' }}><h3 className="font-rajdhani text-sm font-black uppercase tracking-widest">Estados com maior volume</h3>{ranked.length === 0 ? <p className="mt-3 text-xs leading-relaxed text-foreground-muted">Não há eventos com UF confiável neste período. A distribuição será exibida conforme novos acessos forem registrados.</p> : <ol className="mt-3 space-y-2">{ranked.slice(0, 10).map((state, index) => <li key={state.uf} className="flex items-center justify-between gap-3 border-t pt-2 text-xs first:border-0 first:pt-0" style={{ borderColor: 'var(--border)' }}><button type="button" onClick={() => setSelectedUf(state.uf)} className="min-w-0 text-left hover:underline"><span className="mr-2 text-foreground-muted">{index + 1}.</span>{state.nome}</button><strong>{state.value}</strong></li>)}</ol>}</div>
         <div className="border border-amber-500/40 bg-amber-500/5 p-4 text-[10px] leading-relaxed text-foreground-muted"><strong className="block uppercase tracking-wider text-amber-500">Leitura responsável</strong><span className="mt-1 block">“Possíveis riscos” reúne falhas de login, rate limits e automações rejeitadas. Não significa que todos os eventos sejam ataques. {data?.geografia.total ? `${data.geografia.total - data.geografia.geolocalizados} evento(s) ficaram sem UF confiável.` : ''}</span></div>
       </aside>
     </div>

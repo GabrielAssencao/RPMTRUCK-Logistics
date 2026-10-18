@@ -54,6 +54,15 @@ enum EventoSegurancaTipo {
   RATE_LIMIT
   BOT_REJEITADO
   SESSAO_REVOGADA
+  MUDANCA_UF
+}
+
+enum StatusArquivoAntimalware {
+  PENDENTE
+  EM_ANALISE
+  LIMPO
+  BLOQUEADO
+  FALHA
 }
 
 enum StatusFatura {
@@ -470,7 +479,9 @@ model DispositivoConfiavel {
   tokenHash        String    @unique @map("token_hash")
   userAgentHash    String    @map("user_agent_hash")
   ipHash           String?   @map("ip_hash")
-  acessosRestantes Int       @default(10) @map("acessos_restantes")
+  pais             String?   @db.VarChar(2)
+  uf               String?   @db.VarChar(2)
+  acessosRestantes Int       @default(5) @map("acessos_restantes")
   expiraEm         DateTime  @map("expira_em")
   ultimoAcessoEm   DateTime  @default(now()) @map("ultimo_acesso_em")
   criadoEm         DateTime  @default(now()) @map("criado_em")
@@ -1350,6 +1361,35 @@ model RateLimit {
 
   @@index([expiraEm])
   @@map("rate_limits")
+}
+
+model ConfiguracaoSistema {
+  id                                String   @id @default("global")
+  verificacaoAntimalwareObrigatoria Boolean  @default(true) @map("verificacao_antimalware_obrigatoria")
+  atualizadoEm                      DateTime @updatedAt @map("atualizado_em")
+
+  @@map("configuracoes_sistema")
+}
+
+model ArquivoAntimalware {
+  id           String                   @id @default(uuid())
+  empresaId    String                   @map("empresa_id")
+  usuarioId    String?                  @map("usuario_id")
+  bucket       String
+  caminho      String                   @unique
+  nome         String
+  mime         String
+  origem       String
+  origemId     String                   @map("origem_id")
+  status       StatusArquivoAntimalware @default(PENDENTE)
+  detalhe      String?                  @db.VarChar(500)
+  criadoEm     DateTime                 @default(now()) @map("criado_em")
+  verificadoEm DateTime?                @map("verificado_em")
+
+  @@index([status, criadoEm])
+  @@index([empresaId, criadoEm])
+  @@index([usuarioId, criadoEm])
+  @@map("arquivos_antimalware")
 }
 
 model AuditoriaLog {

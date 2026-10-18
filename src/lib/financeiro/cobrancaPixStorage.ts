@@ -28,8 +28,9 @@ export async function salvarArquivoCobrancaPix(arquivo: File, prefixo: string, f
   if (arquivo.size <= 0 || arquivo.size > maximo) throw new ArquivoCobrancaPixError(`O arquivo deve ter no máximo ${maximo / 1024 / 1024} MB.`, 413)
   const conteudo = Buffer.from(await arquivo.arrayBuffer())
   if (!assinaturaValida(conteudo, arquivo.type)) throw new ArquivoCobrancaPixError('O conteúdo do arquivo não corresponde ao formato informado.', 415)
+  let antimalwareVerificado = true
   if (arquivo.type === PDF) {
-    try { await verificarPdf(conteudo) } catch (error) {
+    try { antimalwareVerificado = await verificarPdf(conteudo) } catch (error) {
       if (error instanceof AntimalwareError) throw new ArquivoCobrancaPixError(error.message, error.status)
       throw error
     }
@@ -37,7 +38,7 @@ export async function salvarArquivoCobrancaPix(arquivo: File, prefixo: string, f
   const caminho = `${prefixo}/${finalidade}-${randomUUID()}.${extensao(arquivo.type)}`
   const resultado = await getSupabaseAdmin().storage.from(COBRANCAS_PIX_BUCKET).upload(caminho, conteudo, { contentType: arquivo.type, cacheControl: '3600', upsert: false })
   if (resultado.error) throw new ArquivoCobrancaPixError('Não foi possível armazenar o arquivo privado.', 502)
-  return { caminho, nome: arquivo.name.slice(0, 180), mime: arquivo.type, tamanho: arquivo.size }
+  return { caminho, nome: arquivo.name.slice(0, 180), mime: arquivo.type, tamanho: arquivo.size, antimalwareVerificado }
 }
 
 export async function criarUrlAssinadaCobrancaPix(caminho: string, download?: string) {

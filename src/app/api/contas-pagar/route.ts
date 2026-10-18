@@ -19,6 +19,7 @@ import {
   somenteDigitosBoleto,
 } from '@/lib/financeiro/contasPagar'
 import { ArquivoContaPagarError, removerArquivosContaPagar, salvarArquivoContaPagar } from '@/lib/financeiro/contasPagarStorage'
+import { registrarArquivoSemVarredura } from '@/lib/antimalwareBacklog'
 import { categoriaContaPagarRequerVeiculo, VALORES_CATEGORIA_CONTA_PAGAR } from '@/lib/financeiro/categoriasContaPagar'
 
 const schema = z.object({
@@ -236,6 +237,11 @@ export async function POST(request: NextRequest) {
         },
       })
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+    if (boleto) await registrarArquivoSemVarredura({
+      verificado: boleto.antimalwareVerificado, empresaId: auth.empresaId!, usuarioId: auth.session.userId,
+      bucket: 'contas-pagar', caminho: boleto.caminho, nome: boleto.nome, mime: boleto.mime,
+      origem: 'CONTA_BOLETO', origemId: id,
+    })
     return NextResponse.json({ conta: serializar(conta, auth.empresaId!), aviso: 'Confirme beneficiário, vencimento e valor no aplicativo do banco antes de pagar.' }, { status: 201 })
   } catch (error) {
     if (error instanceof RequestBodyError) return NextResponse.json({ erro: error.message }, { status: error.status })
