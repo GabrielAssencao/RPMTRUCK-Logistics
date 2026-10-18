@@ -2,6 +2,7 @@ import { lerFormularioLimitado, RequestBodyError } from '@/lib/requestBody'
 import { createHash, randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { AntimalwareError, verificarPdf } from '@/lib/antimalware'
+import { registrarArquivoSemVarredura } from '@/lib/antimalwareBacklog'
 import { TipoRelatorioArquivo } from '@prisma/client'
 import { requireEmpresaAuth } from '@/lib/empresaAuth'
 import { prisma } from '@/lib/prisma'
@@ -209,7 +210,7 @@ export async function POST(request: NextRequest) {
     if (!validarConteudoRelatorio(conteudo, arquivo.type)) {
       return NextResponse.json({ erro: 'O conteúdo do arquivo não corresponde ao formato informado.' }, { status: 415 })
     }
-    if (arquivo.type === 'application/pdf') await verificarPdf(conteudo)
+    const antimalwareVerificado = arquivo.type === 'application/pdf' ? await verificarPdf(conteudo) : true
     const checksum = createHash('sha256').update(conteudo).digest('hex')
     const extensao = RELATORIO_MIME_TYPES[arquivo.type]
     const caminho = `${auth.empresaId}/${periodoInicio.getUTCFullYear()}/${randomUUID()}.${extensao}`
@@ -247,6 +248,12 @@ export async function POST(request: NextRequest) {
           criadoPorId: auth.session.userId,
         },
       }))
+
+      await registrarArquivoSemVarredura({
+        verificado: antimalwareVerificado, empresaId: auth.empresaId, usuarioId: auth.session.userId,
+        bucket: RELATORIOS_BUCKET, caminho, nome: nomeArquivo, mime: arquivo.type,
+        origem: 'RELATORIO', origemId: registro.id,
+      })
 
       return NextResponse.json(registro, { status: 201 })
     } catch (error) {

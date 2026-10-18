@@ -10,7 +10,7 @@ import { applyRateLimit, getClientIp } from '@/lib/rateLimit'
 import { pseudonymize, safeUserAgent, recordSecurityEvent } from '@/lib/securityEvents'
 import { lerJsonLimitado, RequestBodyError } from '@/lib/requestBody'
 import { proximaMeiaNoiteBrasilia } from '@/lib/brasiliaTime'
-import { registrarDispositivoConfiavel, revogarDispositivosConfiaveis } from '@/lib/trustedDevice'
+import { obterMudancaUfConfiavel, registrarDispositivoConfiavel, revogarDispositivosConfiaveis } from '@/lib/trustedDevice'
 import { verificarAcessoFinanceiro } from '@/lib/financeiro/acessoFinanceiro'
 import { podeRegularizarFinanceiro } from '@/lib/financeiro/situacaoFinanceira'
 
@@ -84,6 +84,17 @@ export async function POST(request: NextRequest) {
     }
     const response = NextResponse.json({ sucesso: true, codigosRecuperacao: codes, usuario: { id: user.id, nome: user.nome, email: user.email, role: user.role, empresa: null, empresaInfo: null, acessoSomentePlano } }, { headers: { 'Cache-Control': 'no-store' } })
     if (!isAdminRole(user.role)) {
+      const mudancaUf = await obterMudancaUfConfiavel(request, user.id)
+      if (mudancaUf) {
+        await recordSecurityEvent({
+          tipo: 'MUDANCA_UF',
+          request,
+          usuarioId: user.id,
+          empresaId: user.empresaId,
+          ip,
+          contexto: { etapa: 'MFA', ...mudancaUf },
+        })
+      }
       await revogarDispositivosConfiaveis(user.id)
       await registrarDispositivoConfiavel(request, response, user.id)
     }

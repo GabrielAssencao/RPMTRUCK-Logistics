@@ -9,6 +9,7 @@ import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { encryptSensitive } from '@/lib/fieldEncryption'
 import { linhaDigitavelDoCodigoBarras, linhaDigitavelEstruturalmenteValida, linhaDigitavelValida, somenteDigitosBoleto } from '@/lib/financeiro/contasPagar'
 import { ArquivoContaPagarError, removerArquivosContaPagar, salvarArquivoContaPagar } from '@/lib/financeiro/contasPagarStorage'
+import { registrarArquivoSemVarredura } from '@/lib/antimalwareBacklog'
 
 const editarSchema = z.object({
   descricao: z.string().trim().min(3).max(160),
@@ -173,6 +174,11 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/co
         data: { status: 'PAGO' },
       })
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+    if (comprovante) await registrarArquivoSemVarredura({
+      verificado: comprovante.antimalwareVerificado, empresaId: auth.empresaId!, usuarioId: auth.session.userId,
+      bucket: 'contas-pagar', caminho: comprovante.caminho, nome: comprovante.nome, mime: comprovante.mime,
+      origem: 'CONTA_COMPROVANTE', origemId: id,
+    })
     caminhoNovo = null
     return NextResponse.json({ sucesso: true, status: 'PAGO' })
   } catch (error) {

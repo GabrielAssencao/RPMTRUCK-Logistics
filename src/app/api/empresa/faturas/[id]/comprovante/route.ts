@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit'
 import { lerFormularioLimitado } from '@/lib/requestBody'
 import { ArquivoCobrancaPixError, criarUrlAssinadaCobrancaPix, removerArquivoCobrancaPix, salvarArquivoCobrancaPix } from '@/lib/financeiro/cobrancaPixStorage'
+import { registrarArquivoSemVarredura } from '@/lib/antimalwareBacklog'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +38,11 @@ export async function POST(request: NextRequest, context: RouteContext<'/api/emp
     try {
       await prisma.fatura.update({ where: { id }, data: { comprovantePath: salvo.caminho, comprovanteNome: salvo.nome, comprovanteMime: salvo.mime, comprovanteTamanho: salvo.tamanho, comprovanteEnviadoEm: new Date(), comprovanteEnviadoPorId: auth.session.userId } })
     } catch (erro) { await removerArquivoCobrancaPix(salvo.caminho); throw erro }
+    await registrarArquivoSemVarredura({
+      verificado: salvo.antimalwareVerificado, empresaId: auth.session.empresaId, usuarioId: auth.session.userId,
+      bucket: 'cobrancas-pix-privadas', caminho: salvo.caminho, nome: salvo.nome, mime: salvo.mime,
+      origem: 'FATURA_COMPROVANTE', origemId: id,
+    })
     await removerArquivoCobrancaPix(fatura.comprovantePath)
     return NextResponse.json({ sucesso: true, mensagem: 'Comprovante enviado. O pagamento será confirmado pelo administrador.' })
   } catch (erro) {
