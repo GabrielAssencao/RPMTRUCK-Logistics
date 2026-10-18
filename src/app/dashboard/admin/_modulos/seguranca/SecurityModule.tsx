@@ -355,7 +355,7 @@ export default function SecurityModule() {
         <LogTable title="Acessando agora" pagination={navigation('SESSOES')} visible={secoesVisiveis.SESSOES} onToggle={() => alternarSecao('SESSOES')} empty="Nenhum usuário com presença confirmada agora." columns={['Usuário', 'Empresa', 'Papel', 'Estado', 'Dispositivo', 'IP correlacionado', 'Tempo conectado', 'Último sinal', 'Ação']} rows={(data?.sessoes || []).map((item) => [
           `${item.usuario.nome} · ${item.usuario.email}`, item.empresa?.nome || 'RPMTruck', item.usuario.role,
           sessaoEstaOnline(item.ultimaAtividade, agora) ? '● Conectado agora' : 'Sem atividade recente', describeDevice(item.userAgent),
-          item.ipCorrelacao ? `IP#${item.ipCorrelacao}` : 'Não disponível', formatarDuracaoSessao(agora - new Date(item.criadoEm).getTime()), <span title={formatDate(item.ultimaAtividade)}>{formatarUltimoSinal(item.ultimaAtividade, agora)}</span>,
+          item.ipCorrelacao ? `IP#${item.ipCorrelacao}` : 'Não disponível', formatarDuracaoSessao(agora - new Date(item.criadoEm).getTime()), <span key={`ultimo-sinal-${item.id}`} title={formatDate(item.ultimaAtividade)}>{formatarUltimoSinal(item.ultimaAtividade, agora)}</span>,
           item.atual ? <span className="text-[10px] font-bold uppercase text-foreground-muted">Sessão atual</span> : <button type="button" onClick={() => setSessaoParaRevogar(item)} className="min-h-9 border border-red-500/50 px-3 text-[9px] font-black uppercase text-red-500 hover:bg-red-500/10">Encerrar sessão</button>,
         ])} />
 
