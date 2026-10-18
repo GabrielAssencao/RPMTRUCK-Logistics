@@ -559,7 +559,7 @@ export default function CompanyFinancialControl({ empresa, onUpdate, onDeleted }
                 </label>
                 <label className="block text-[10px] font-black uppercase tracking-wider">
                   Motivo do encerramento
-                  <textarea value={motivoExclusao} onChange={event => setMotivoExclusao(event.target.value)} minLength={5} maxLength={500} rows={3} placeholder="Ex.: ambiente de teste encerrado" className="mt-2 w-full resize-y border bg-background p-3 text-sm font-normal normal-case tracking-normal text-foreground outline-none focus:border-red-500" style={{borderColor: 'var(--border)'}} />
+                  <textarea value={motivoExclusao} onChange={event => setMotivoExclusao(event.target.value)} minLength={5} maxLength={300} rows={3} placeholder="Ex.: cadastro não concluído ou encerramento solicitado pelo cliente" className="mt-2 w-full resize-y border bg-background p-3 text-sm font-normal normal-case tracking-normal text-foreground outline-none focus:border-red-500" style={{borderColor: 'var(--border)'}} />
                 </label>
                 <label className="block text-[10px] font-black uppercase tracking-wider">
                   Digite exatamente: <span className="select-all text-red-500">{fraseExclusao}</span>

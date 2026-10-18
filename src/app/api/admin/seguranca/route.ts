@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
   )
   if (limited) return limited
 
+  try {
   const tamanhoPagina = 20
   const paginasSchema = z.object({
     SESSOES: z.coerce.number().int().min(1).max(100000),
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
   const filtros = z.object({
     empresaId: z.union([z.literal('SISTEMA'), z.string().uuid()]).nullable(),
     periodo: z.enum(['24H', '7D', '30D', '90D']).default('7D'),
-    tipoEvento: z.enum(['TODOS', 'LOGIN_SUCESSO', 'LOGIN_FALHA', 'LOGOUT', 'RATE_LIMIT', 'BOT_REJEITADO', 'SESSAO_REVOGADA']).default('TODOS'),
+    tipoEvento: z.enum(['TODOS', 'LOGIN_SUCESSO', 'LOGIN_FALHA', 'LOGOUT', 'RATE_LIMIT', 'BOT_REJEITADO', 'SESSAO_REVOGADA', 'MUDANCA_UF']).default('TODOS'),
     busca: z.string().trim().max(80).default(''),
   }).safeParse({
     empresaId: request.nextUrl.searchParams.get('empresaId'),
@@ -110,7 +111,7 @@ export async function GET(request: NextRequest) {
   const empresaGeoSql = filtros.data.empresaId === 'SISTEMA'
     ? Prisma.sql`AND empresa_id IS NULL`
     : filtros.data.empresaId
-      ? Prisma.sql`AND empresa_id = ${filtros.data.empresaId}::uuid`
+      ? Prisma.sql`AND empresa_id = ${filtros.data.empresaId}`
       : Prisma.empty
 
   const [sessoes, eventos, auditoria, exclusoes, falhasLogin, loginsSucesso, bloqueiosRateLimit, sessoesAtivas, eventos24h, limitesAtivos, acessosPorUsuario, origensSuspeitas, tamanhoBanco, usoRelatorios, geoEstados, geoCobertura, empresas] = await Promise.all([
@@ -195,7 +196,7 @@ export async function GET(request: NextRequest) {
     }),
     prisma.eventoSeguranca.groupBy({
       by: ['ipHash'],
-      where: { ...porEmpresa, tipo: { in: ['LOGIN_FALHA', 'RATE_LIMIT'] }, ipHash: { not: null }, criadoEm: { gte: ultimas24h } },
+      where: { ...porEmpresa, tipo: { in: ['LOGIN_FALHA', 'RATE_LIMIT', 'MUDANCA_UF'] }, ipHash: { not: null }, criadoEm: { gte: ultimas24h } },
       _count: { id: true },
       orderBy: { _count: { id: 'desc' } },
       take: 5,
@@ -206,13 +207,13 @@ export async function GET(request: NextRequest) {
       SELECT
         UPPER(contexto #>> '{geo,region}') AS uf,
         COUNT(*) FILTER (WHERE tipo = 'LOGIN_SUCESSO')::integer AS acessos,
-        COUNT(*) FILTER (WHERE tipo IN ('LOGIN_FALHA', 'RATE_LIMIT', 'BOT_REJEITADO'))::integer AS alertas
+        COUNT(*) FILTER (WHERE tipo IN ('LOGIN_FALHA', 'RATE_LIMIT', 'BOT_REJEITADO', 'MUDANCA_UF'))::integer AS alertas
       FROM eventos_seguranca
       WHERE criado_em >= ${desde}
         ${empresaGeoSql}
         AND contexto #>> '{geo,country}' = 'BR'
         AND UPPER(contexto #>> '{geo,region}') ~ '^[A-Z]{2}$'
-        AND tipo IN ('LOGIN_SUCESSO', 'LOGIN_FALHA', 'RATE_LIMIT', 'BOT_REJEITADO')
+        AND tipo IN ('LOGIN_SUCESSO', 'LOGIN_FALHA', 'RATE_LIMIT', 'BOT_REJEITADO', 'MUDANCA_UF')
       GROUP BY UPPER(contexto #>> '{geo,region}')
     `),
     prisma.$queryRaw<Array<{ total: number; geolocalizados: number }>>(Prisma.sql`
@@ -225,7 +226,7 @@ export async function GET(request: NextRequest) {
       FROM eventos_seguranca
       WHERE criado_em >= ${desde}
         ${empresaGeoSql}
-        AND tipo IN ('LOGIN_SUCESSO', 'LOGIN_FALHA', 'RATE_LIMIT', 'BOT_REJEITADO')
+        AND tipo IN ('LOGIN_SUCESSO', 'LOGIN_FALHA', 'RATE_LIMIT', 'BOT_REJEITADO', 'MUDANCA_UF')
     `),
     prisma.empresa.findMany({ orderBy: { nome: 'asc' }, select: { id: true, nome: true, excluidoEm: true } }),
   ])
@@ -327,4 +328,11 @@ export async function GET(request: NextRequest) {
     },
     { headers: { 'Cache-Control': 'private, no-store' } },
   )
+  } catch (error) {
+    console.error('Falha ao carregar a central de segurança:', error)
+    return NextResponse.json(
+      { erro: 'Não foi possível carregar os registros de segurança. Tente novamente.' },
+      { status: 500, headers: { 'Cache-Control': 'private, no-store' } },
+    )
+  }
 }

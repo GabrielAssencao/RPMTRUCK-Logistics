@@ -31,17 +31,18 @@ export async function validarArquivoContaPagar(arquivo: File) {
   if (arquivo.size <= 0 || arquivo.size > CONTA_PAGAR_MAX_FILE_BYTES) throw new ArquivoContaPagarError('O arquivo deve ter no máximo 5 MB.', 413)
   const conteudo = Buffer.from(await arquivo.arrayBuffer())
   if (!assinaturaValida(conteudo, arquivo.type)) throw new ArquivoContaPagarError('O conteúdo do arquivo não corresponde ao formato informado.', 415)
+  let antimalwareVerificado = true
   if (arquivo.type === 'application/pdf') {
-    try { await verificarPdf(conteudo) } catch (error) {
+    try { antimalwareVerificado = await verificarPdf(conteudo) } catch (error) {
       if (error instanceof AntimalwareError) throw new ArquivoContaPagarError(error.message, error.status)
       throw error
     }
   }
-  return conteudo
+  return { conteudo, antimalwareVerificado }
 }
 
 export async function salvarArquivoContaPagar(empresaId: string, contaId: string, tipo: 'boleto' | 'comprovante', arquivo: File) {
-  const conteudo = await validarArquivoContaPagar(arquivo)
+  const { conteudo, antimalwareVerificado } = await validarArquivoContaPagar(arquivo)
   const caminho = `${empresaId}/${contaId}/${tipo}-${randomUUID()}.${extensaoPorMime(arquivo.type)}`
   const resultado = await getSupabaseAdmin().storage.from(CONTAS_PAGAR_BUCKET).upload(caminho, conteudo, {
     contentType: arquivo.type,
@@ -52,7 +53,7 @@ export async function salvarArquivoContaPagar(empresaId: string, contaId: string
     console.error('Erro ao armazenar documento financeiro:', resultado.error.message)
     throw new ArquivoContaPagarError('Não foi possível armazenar o documento no bucket privado.', 502)
   }
-  return { caminho, nome: arquivo.name.slice(0, 180), mime: arquivo.type, tamanho: arquivo.size }
+  return { caminho, nome: arquivo.name.slice(0, 180), mime: arquivo.type, tamanho: arquivo.size, antimalwareVerificado }
 }
 
 export async function removerArquivosContaPagar(caminhos: Array<string | null | undefined>) {
